@@ -1,0 +1,1884 @@
+[
+  {
+    "name": "Agder",
+    "slug": "agder",
+    "count": 828,
+    "kommuner": [
+      {
+        "name": "Arendal",
+        "slug": "arendal",
+        "count": 9
+      },
+      {
+        "name": "Birkenes",
+        "slug": "birkenes",
+        "count": 21
+      },
+      {
+        "name": "Bygland",
+        "slug": "bygland",
+        "count": 25
+      },
+      {
+        "name": "Bykle",
+        "slug": "bykle",
+        "count": 58
+      },
+      {
+        "name": "Evje og Hornnes",
+        "slug": "evje-og-hornnes",
+        "count": 15
+      },
+      {
+        "name": "Farsund",
+        "slug": "farsund",
+        "count": 33
+      },
+      {
+        "name": "Flekkefjord",
+        "slug": "flekkefjord",
+        "count": 62
+      },
+      {
+        "name": "Froland",
+        "slug": "froland",
+        "count": 12
+      },
+      {
+        "name": "Gjerstad",
+        "slug": "gjerstad",
+        "count": 16
+      },
+      {
+        "name": "Grimstad",
+        "slug": "grimstad",
+        "count": 19
+      },
+      {
+        "name": "Hægebostad",
+        "slug": "haegebostad",
+        "count": 33
+      },
+      {
+        "name": "Iveland",
+        "slug": "iveland",
+        "count": 1
+      },
+      {
+        "name": "Kristiansand",
+        "slug": "kristiansand",
+        "count": 101
+      },
+      {
+        "name": "Kvinesdal",
+        "slug": "kvinesdal",
+        "count": 64
+      },
+      {
+        "name": "Lillesand",
+        "slug": "lillesand",
+        "count": 19
+      },
+      {
+        "name": "Lindesnes",
+        "slug": "lindesnes",
+        "count": 45
+      },
+      {
+        "name": "Lyngdal",
+        "slug": "lyngdal",
+        "count": 94
+      },
+      {
+        "name": "Risør",
+        "slug": "risoer",
+        "count": 8
+      },
+      {
+        "name": "Sirdal",
+        "slug": "sirdal",
+        "count": 89
+      },
+      {
+        "name": "Tvedestrand",
+        "slug": "tvedestrand",
+        "count": 8
+      },
+      {
+        "name": "Valle",
+        "slug": "valle",
+        "count": 58
+      },
+      {
+        "name": "Vegårshei",
+        "slug": "vegaarshei",
+        "count": 2
+      },
+      {
+        "name": "Vennesla",
+        "slug": "vennesla",
+        "count": 13
+      },
+      {
+        "name": "Åmli",
+        "slug": "aamli",
+        "count": 6
+      },
+      {
+        "name": "Åseral",
+        "slug": "aaseral",
+        "count": 17
+      }
+    ]
+  },
+  {
+    "name": "Akershus",
+    "slug": "akershus",
+    "count": 222,
+    "kommuner": [
+      {
+        "name": "Asker",
+        "slug": "asker",
+        "count": 26
+      },
+      {
+        "name": "Aurskog-Høland",
+        "slug": "aurskog-hoeland",
+        "count": 7
+      },
+      {
+        "name": "Bærum",
+        "slug": "baerum",
+        "count": 30
+      },
+      {
+        "name": "Eidsvoll",
+        "slug": "eidsvoll",
+        "count": 17
+      },
+      {
+        "name": "Enebakk",
+        "slug": "enebakk",
+        "count": 2
+      },
+      {
+        "name": "Gjerdrum",
+        "slug": "gjerdrum",
+        "count": 4
+      },
+      {
+        "name": "Hurdal",
+        "slug": "hurdal",
+        "count": 4
+      },
+      {
+        "name": "Jevnaker",
+        "slug": "jevnaker",
+        "count": 3
+      },
+      {
+        "name": "Lillestrøm",
+        "slug": "lillestroem",
+        "count": 25
+      },
+      {
+        "name": "Lunner",
+        "slug": "lunner",
+        "count": 6
+      },
+      {
+        "name": "Lørenskog",
+        "slug": "loerenskog",
+        "count": 19
+      },
+      {
+        "name": "Nannestad",
+        "slug": "nannestad",
+        "count": 9
+      },
+      {
+        "name": "Nes",
+        "slug": "nes",
+        "count": 3
+      },
+      {
+        "name": "Nesodden",
+        "slug": "nesodden",
+        "count": 1
+      },
+      {
+        "name": "Nittedal",
+        "slug": "nittedal",
+        "count": 22
+      },
+      {
+        "name": "Nordre Follo",
+        "slug": "nordre-follo",
+        "count": 9
+      },
+      {
+        "name": "Rælingen",
+        "slug": "raelingen",
+        "count": 28
+      },
+      {
+        "name": "Ullensaker",
+        "slug": "ullensaker",
+        "count": 6
+      },
+      {
+        "name": "Ås",
+        "slug": "aas",
+        "count": 1
+      }
+    ]
+  },
+  {
+    "name": "Buskerud",
+    "slug": "buskerud",
+    "count": 809,
+    "kommuner": [
+      {
+        "name": "Drammen",
+        "slug": "drammen",
+        "count": 25
+      },
+      {
+        "name": "Flesberg",
+        "slug": "flesberg",
+        "count": 24
+      },
+      {
+        "name": "Flå",
+        "slug": "flaa",
+        "count": 24
+      },
+      {
+        "name": "Gol",
+        "slug": "gol",
+        "count": 39
+      },
+      {
+        "name": "Hemsedal",
+        "slug": "hemsedal",
+        "count": 70
+      },
+      {
+        "name": "Hol",
+        "slug": "hol",
+        "count": 262
+      },
+      {
+        "name": "Hole",
+        "slug": "hole",
+        "count": 3
+      },
+      {
+        "name": "Kongsberg",
+        "slug": "kongsberg",
+        "count": 37
+      },
+      {
+        "name": "Krødsherad",
+        "slug": "kroedsherad",
+        "count": 5
+      },
+      {
+        "name": "Lier",
+        "slug": "lier",
+        "count": 22
+      },
+      {
+        "name": "Modum",
+        "slug": "modum",
+        "count": 5
+      },
+      {
+        "name": "Nesbyen",
+        "slug": "nesbyen",
+        "count": 27
+      },
+      {
+        "name": "Nore og Uvdal",
+        "slug": "nore-og-uvdal",
+        "count": 90
+      },
+      {
+        "name": "Ringerike",
+        "slug": "ringerike",
+        "count": 21
+      },
+      {
+        "name": "Rollag",
+        "slug": "rollag",
+        "count": 11
+      },
+      {
+        "name": "Sigdal",
+        "slug": "sigdal",
+        "count": 43
+      },
+      {
+        "name": "Øvre Eiker",
+        "slug": "oevre-eiker",
+        "count": 8
+      },
+      {
+        "name": "Ål",
+        "slug": "aal",
+        "count": 93
+      }
+    ]
+  },
+  {
+    "name": "Finnmark",
+    "slug": "finnmark",
+    "count": 119,
+    "kommuner": [
+      {
+        "name": "Alta",
+        "slug": "alta",
+        "count": 34
+      },
+      {
+        "name": "Berlevåg",
+        "slug": "berlevaag",
+        "count": 3
+      },
+      {
+        "name": "Båtsfjord",
+        "slug": "baatsfjord",
+        "count": 3
+      },
+      {
+        "name": "Deatnu",
+        "slug": "deatnu",
+        "count": 1
+      },
+      {
+        "name": "Gamvik",
+        "slug": "gamvik",
+        "count": 1
+      },
+      {
+        "name": "Guovdageaidnu",
+        "slug": "guovdageaidnu",
+        "count": 3
+      },
+      {
+        "name": "Hammerfest",
+        "slug": "hammerfest",
+        "count": 16
+      },
+      {
+        "name": "Hasvik",
+        "slug": "hasvik",
+        "count": 1
+      },
+      {
+        "name": "Kárášjohka",
+        "slug": "k-r-johka",
+        "count": 2
+      },
+      {
+        "name": "Lebesby",
+        "slug": "lebesby",
+        "count": 1
+      },
+      {
+        "name": "Loppa",
+        "slug": "loppa",
+        "count": 7
+      },
+      {
+        "name": "Måsøy",
+        "slug": "maasoey",
+        "count": 3
+      },
+      {
+        "name": "Nordkapp",
+        "slug": "nordkapp",
+        "count": 7
+      },
+      {
+        "name": "Porsanger",
+        "slug": "porsanger",
+        "count": 15
+      },
+      {
+        "name": "Sør-Varanger",
+        "slug": "soer-varanger",
+        "count": 14
+      },
+      {
+        "name": "Unjárga",
+        "slug": "unj-rga",
+        "count": 1
+      },
+      {
+        "name": "Vadsø",
+        "slug": "vadsoe",
+        "count": 1
+      },
+      {
+        "name": "Vardø",
+        "slug": "vardoe",
+        "count": 6
+      }
+    ]
+  },
+  {
+    "name": "Innlandet",
+    "slug": "innlandet",
+    "count": 1339,
+    "kommuner": [
+      {
+        "name": "Alvdal",
+        "slug": "alvdal",
+        "count": 33
+      },
+      {
+        "name": "Dovre",
+        "slug": "dovre",
+        "count": 60
+      },
+      {
+        "name": "Eidskog",
+        "slug": "eidskog",
+        "count": 7
+      },
+      {
+        "name": "Elverum",
+        "slug": "elverum",
+        "count": 14
+      },
+      {
+        "name": "Engerdal",
+        "slug": "engerdal",
+        "count": 26
+      },
+      {
+        "name": "Etnedal",
+        "slug": "etnedal",
+        "count": 4
+      },
+      {
+        "name": "Folldal",
+        "slug": "folldal",
+        "count": 55
+      },
+      {
+        "name": "Gausdal",
+        "slug": "gausdal",
+        "count": 27
+      },
+      {
+        "name": "Gjøvik",
+        "slug": "gjoevik",
+        "count": 4
+      },
+      {
+        "name": "Gran",
+        "slug": "gran",
+        "count": 6
+      },
+      {
+        "name": "Grue",
+        "slug": "grue",
+        "count": 6
+      },
+      {
+        "name": "Hamar",
+        "slug": "hamar",
+        "count": 6
+      },
+      {
+        "name": "Kongsvinger",
+        "slug": "kongsvinger",
+        "count": 2
+      },
+      {
+        "name": "Lesja",
+        "slug": "lesja",
+        "count": 62
+      },
+      {
+        "name": "Lillehammer",
+        "slug": "lillehammer",
+        "count": 10
+      },
+      {
+        "name": "Lom",
+        "slug": "lom",
+        "count": 173
+      },
+      {
+        "name": "Løten",
+        "slug": "loeten",
+        "count": 5
+      },
+      {
+        "name": "Nord-Aurdal",
+        "slug": "nord-aurdal",
+        "count": 30
+      },
+      {
+        "name": "Nord-Fron",
+        "slug": "nord-fron",
+        "count": 71
+      },
+      {
+        "name": "Nordre Land",
+        "slug": "nordre-land",
+        "count": 6
+      },
+      {
+        "name": "Os",
+        "slug": "os",
+        "count": 7
+      },
+      {
+        "name": "Rendalen",
+        "slug": "rendalen",
+        "count": 33
+      },
+      {
+        "name": "Ringebu",
+        "slug": "ringebu",
+        "count": 45
+      },
+      {
+        "name": "Ringsaker",
+        "slug": "ringsaker",
+        "count": 22
+      },
+      {
+        "name": "Sel",
+        "slug": "sel",
+        "count": 87
+      },
+      {
+        "name": "Skjåk",
+        "slug": "skjaak",
+        "count": 68
+      },
+      {
+        "name": "Stange",
+        "slug": "stange",
+        "count": 1
+      },
+      {
+        "name": "Stor-Elvdal",
+        "slug": "stor-elvdal",
+        "count": 48
+      },
+      {
+        "name": "Søndre Land",
+        "slug": "soendre-land",
+        "count": 2
+      },
+      {
+        "name": "Sør-Aurdal",
+        "slug": "soer-aurdal",
+        "count": 16
+      },
+      {
+        "name": "Sør-Fron",
+        "slug": "soer-fron",
+        "count": 21
+      },
+      {
+        "name": "Sør-Odal",
+        "slug": "soer-odal",
+        "count": 1
+      },
+      {
+        "name": "Tolga",
+        "slug": "tolga",
+        "count": 17
+      },
+      {
+        "name": "Trysil",
+        "slug": "trysil",
+        "count": 24
+      },
+      {
+        "name": "Tynset",
+        "slug": "tynset",
+        "count": 41
+      },
+      {
+        "name": "Vang",
+        "slug": "vang",
+        "count": 125
+      },
+      {
+        "name": "Vestre Slidre",
+        "slug": "vestre-slidre",
+        "count": 14
+      },
+      {
+        "name": "Vestre Toten",
+        "slug": "vestre-toten",
+        "count": 1
+      },
+      {
+        "name": "Vågå",
+        "slug": "vaagaa",
+        "count": 81
+      },
+      {
+        "name": "Østre Toten",
+        "slug": "oestre-toten",
+        "count": 2
+      },
+      {
+        "name": "Øyer",
+        "slug": "oeyer",
+        "count": 19
+      },
+      {
+        "name": "Øystre Slidre",
+        "slug": "oeystre-slidre",
+        "count": 46
+      },
+      {
+        "name": "Åmot",
+        "slug": "aamot",
+        "count": 9
+      },
+      {
+        "name": "Åsnes",
+        "slug": "aasnes",
+        "count": 2
+      }
+    ]
+  },
+  {
+    "name": "Møre og Romsdal",
+    "slug": "moere-og-romsdal",
+    "count": 1000,
+    "kommuner": [
+      {
+        "name": "Aukra",
+        "slug": "aukra",
+        "count": 1
+      },
+      {
+        "name": "Aure",
+        "slug": "aure",
+        "count": 11
+      },
+      {
+        "name": "Averøy",
+        "slug": "averoey",
+        "count": 11
+      },
+      {
+        "name": "Fjord",
+        "slug": "fjord",
+        "count": 96
+      },
+      {
+        "name": "Giske",
+        "slug": "giske",
+        "count": 10
+      },
+      {
+        "name": "Gjemnes",
+        "slug": "gjemnes",
+        "count": 10
+      },
+      {
+        "name": "Haram",
+        "slug": "haram",
+        "count": 23
+      },
+      {
+        "name": "Hareid",
+        "slug": "hareid",
+        "count": 11
+      },
+      {
+        "name": "Herøy",
+        "slug": "heroey",
+        "count": 23
+      },
+      {
+        "name": "Hustadvika",
+        "slug": "hustadvika",
+        "count": 26
+      },
+      {
+        "name": "Kristiansund",
+        "slug": "kristiansund",
+        "count": 12
+      },
+      {
+        "name": "Molde",
+        "slug": "molde",
+        "count": 71
+      },
+      {
+        "name": "Rauma",
+        "slug": "rauma",
+        "count": 185
+      },
+      {
+        "name": "Sande",
+        "slug": "sande",
+        "count": 21
+      },
+      {
+        "name": "Smøla",
+        "slug": "smoela",
+        "count": 3
+      },
+      {
+        "name": "Stranda",
+        "slug": "stranda",
+        "count": 61
+      },
+      {
+        "name": "Sula",
+        "slug": "sula",
+        "count": 10
+      },
+      {
+        "name": "Sunndal",
+        "slug": "sunndal",
+        "count": 61
+      },
+      {
+        "name": "Surnadal",
+        "slug": "surnadal",
+        "count": 43
+      },
+      {
+        "name": "Sykkylven",
+        "slug": "sykkylven",
+        "count": 38
+      },
+      {
+        "name": "Tingvoll",
+        "slug": "tingvoll",
+        "count": 11
+      },
+      {
+        "name": "Ulstein",
+        "slug": "ulstein",
+        "count": 14
+      },
+      {
+        "name": "Vanylven",
+        "slug": "vanylven",
+        "count": 39
+      },
+      {
+        "name": "Vestnes",
+        "slug": "vestnes",
+        "count": 23
+      },
+      {
+        "name": "Volda",
+        "slug": "volda",
+        "count": 90
+      },
+      {
+        "name": "Ørsta",
+        "slug": "oersta",
+        "count": 69
+      },
+      {
+        "name": "Ålesund",
+        "slug": "aalesund",
+        "count": 27
+      }
+    ]
+  },
+  {
+    "name": "Nordland",
+    "slug": "nordland",
+    "count": 882,
+    "kommuner": [
+      {
+        "name": "Alstahaug",
+        "slug": "alstahaug",
+        "count": 10
+      },
+      {
+        "name": "Andøy",
+        "slug": "andoey",
+        "count": 9
+      },
+      {
+        "name": "Beiarn",
+        "slug": "beiarn",
+        "count": 28
+      },
+      {
+        "name": "Bindal",
+        "slug": "bindal",
+        "count": 3
+      },
+      {
+        "name": "Bodø",
+        "slug": "bodoe",
+        "count": 61
+      },
+      {
+        "name": "Brønnøy",
+        "slug": "broennoey",
+        "count": 10
+      },
+      {
+        "name": "Bø",
+        "slug": "boe",
+        "count": 18
+      },
+      {
+        "name": "Dønna",
+        "slug": "doenna",
+        "count": 10
+      },
+      {
+        "name": "Evenes",
+        "slug": "evenes",
+        "count": 5
+      },
+      {
+        "name": "Fauske",
+        "slug": "fauske",
+        "count": 43
+      },
+      {
+        "name": "Flakstad",
+        "slug": "flakstad",
+        "count": 4
+      },
+      {
+        "name": "Gildeskål",
+        "slug": "gildeskaal",
+        "count": 8
+      },
+      {
+        "name": "Grane",
+        "slug": "grane",
+        "count": 10
+      },
+      {
+        "name": "Hábmer",
+        "slug": "h-bmer",
+        "count": 31
+      },
+      {
+        "name": "Hadsel",
+        "slug": "hadsel",
+        "count": 34
+      },
+      {
+        "name": "Hemnes",
+        "slug": "hemnes",
+        "count": 26
+      },
+      {
+        "name": "Herøy",
+        "slug": "heroey",
+        "count": 2
+      },
+      {
+        "name": "Leirfjord",
+        "slug": "leirfjord",
+        "count": 2
+      },
+      {
+        "name": "Lurøy",
+        "slug": "luroey",
+        "count": 9
+      },
+      {
+        "name": "Lødingen",
+        "slug": "loedingen",
+        "count": 5
+      },
+      {
+        "name": "Meløy",
+        "slug": "meloey",
+        "count": 26
+      },
+      {
+        "name": "Moskenes",
+        "slug": "moskenes",
+        "count": 3
+      },
+      {
+        "name": "Narvik",
+        "slug": "narvik",
+        "count": 169
+      },
+      {
+        "name": "Nesna",
+        "slug": "nesna",
+        "count": 4
+      },
+      {
+        "name": "Rana",
+        "slug": "rana",
+        "count": 75
+      },
+      {
+        "name": "Rødøy",
+        "slug": "roedoey",
+        "count": 11
+      },
+      {
+        "name": "Saltdal",
+        "slug": "saltdal",
+        "count": 40
+      },
+      {
+        "name": "Sortland",
+        "slug": "sortland",
+        "count": 15
+      },
+      {
+        "name": "Steigen",
+        "slug": "steigen",
+        "count": 45
+      },
+      {
+        "name": "Sømna",
+        "slug": "soemna",
+        "count": 3
+      },
+      {
+        "name": "Sørfold",
+        "slug": "soerfold",
+        "count": 26
+      },
+      {
+        "name": "Træna",
+        "slug": "traena",
+        "count": 3
+      },
+      {
+        "name": "Vefsn",
+        "slug": "vefsn",
+        "count": 13
+      },
+      {
+        "name": "Vega",
+        "slug": "vega",
+        "count": 8
+      },
+      {
+        "name": "Vestvågøy",
+        "slug": "vestvaagoey",
+        "count": 31
+      },
+      {
+        "name": "Vevelstad",
+        "slug": "vevelstad",
+        "count": 6
+      },
+      {
+        "name": "Værøy",
+        "slug": "vaeroey",
+        "count": 4
+      },
+      {
+        "name": "Vågan",
+        "slug": "vaagan",
+        "count": 35
+      },
+      {
+        "name": "Øksnes",
+        "slug": "oeksnes",
+        "count": 19
+      },
+      {
+        "name": "Aarborte",
+        "slug": "aarborte",
+        "count": 18
+      }
+    ]
+  },
+  {
+    "name": "Oslo",
+    "slug": "oslo",
+    "count": 82,
+    "kommuner": [
+      {
+        "name": "Oslo",
+        "slug": "oslo",
+        "count": 82
+      }
+    ]
+  },
+  {
+    "name": "Rogaland",
+    "slug": "rogaland",
+    "count": 1636,
+    "kommuner": [
+      {
+        "name": "Bjerkreim",
+        "slug": "bjerkreim",
+        "count": 118
+      },
+      {
+        "name": "Bokn",
+        "slug": "bokn",
+        "count": 10
+      },
+      {
+        "name": "Eigersund",
+        "slug": "eigersund",
+        "count": 107
+      },
+      {
+        "name": "Gjesdal",
+        "slug": "gjesdal",
+        "count": 107
+      },
+      {
+        "name": "Haugesund",
+        "slug": "haugesund",
+        "count": 23
+      },
+      {
+        "name": "Hjelmeland",
+        "slug": "hjelmeland",
+        "count": 221
+      },
+      {
+        "name": "Hå",
+        "slug": "haa",
+        "count": 24
+      },
+      {
+        "name": "Karmøy",
+        "slug": "karmoey",
+        "count": 61
+      },
+      {
+        "name": "Klepp",
+        "slug": "klepp",
+        "count": 5
+      },
+      {
+        "name": "Kvitsøy",
+        "slug": "kvitsoey",
+        "count": 2
+      },
+      {
+        "name": "Lund",
+        "slug": "lund",
+        "count": 56
+      },
+      {
+        "name": "Randaberg",
+        "slug": "randaberg",
+        "count": 1
+      },
+      {
+        "name": "Sandnes",
+        "slug": "sandnes",
+        "count": 211
+      },
+      {
+        "name": "Sauda",
+        "slug": "sauda",
+        "count": 59
+      },
+      {
+        "name": "Sokndal",
+        "slug": "sokndal",
+        "count": 44
+      },
+      {
+        "name": "Sola",
+        "slug": "sola",
+        "count": 4
+      },
+      {
+        "name": "Stavanger",
+        "slug": "stavanger",
+        "count": 40
+      },
+      {
+        "name": "Strand",
+        "slug": "strand",
+        "count": 180
+      },
+      {
+        "name": "Suldal",
+        "slug": "suldal",
+        "count": 173
+      },
+      {
+        "name": "Time",
+        "slug": "time",
+        "count": 35
+      },
+      {
+        "name": "Tysvær",
+        "slug": "tysvaer",
+        "count": 41
+      },
+      {
+        "name": "Utsira",
+        "slug": "utsira",
+        "count": 3
+      },
+      {
+        "name": "Vindafjord",
+        "slug": "vindafjord",
+        "count": 111
+      }
+    ]
+  },
+  {
+    "name": "Svalbard",
+    "slug": "svalbard",
+    "count": 6,
+    "kommuner": [
+      {
+        "name": "Svalbard",
+        "slug": "svalbard",
+        "count": 6
+      }
+    ]
+  },
+  {
+    "name": "Telemark",
+    "slug": "telemark",
+    "count": 674,
+    "kommuner": [
+      {
+        "name": "Bamble",
+        "slug": "bamble",
+        "count": 5
+      },
+      {
+        "name": "Drangedal",
+        "slug": "drangedal",
+        "count": 38
+      },
+      {
+        "name": "Fyresdal",
+        "slug": "fyresdal",
+        "count": 25
+      },
+      {
+        "name": "Hjartdal",
+        "slug": "hjartdal",
+        "count": 47
+      },
+      {
+        "name": "Kragerø",
+        "slug": "krageroe",
+        "count": 20
+      },
+      {
+        "name": "Kviteseid",
+        "slug": "kviteseid",
+        "count": 6
+      },
+      {
+        "name": "Midt-Telemark",
+        "slug": "midt-telemark",
+        "count": 39
+      },
+      {
+        "name": "Nissedal",
+        "slug": "nissedal",
+        "count": 19
+      },
+      {
+        "name": "Nome",
+        "slug": "nome",
+        "count": 57
+      },
+      {
+        "name": "Notodden",
+        "slug": "notodden",
+        "count": 119
+      },
+      {
+        "name": "Porsgrunn",
+        "slug": "porsgrunn",
+        "count": 7
+      },
+      {
+        "name": "Seljord",
+        "slug": "seljord",
+        "count": 29
+      },
+      {
+        "name": "Siljan",
+        "slug": "siljan",
+        "count": 2
+      },
+      {
+        "name": "Skien",
+        "slug": "skien",
+        "count": 26
+      },
+      {
+        "name": "Tinn",
+        "slug": "tinn",
+        "count": 78
+      },
+      {
+        "name": "Tokke",
+        "slug": "tokke",
+        "count": 16
+      },
+      {
+        "name": "Vinje",
+        "slug": "vinje",
+        "count": 141
+      }
+    ]
+  },
+  {
+    "name": "Troms",
+    "slug": "troms",
+    "count": 534,
+    "kommuner": [
+      {
+        "name": "Balsfjord",
+        "slug": "balsfjord",
+        "count": 27
+      },
+      {
+        "name": "Bardu",
+        "slug": "bardu",
+        "count": 60
+      },
+      {
+        "name": "Dielddanuorri",
+        "slug": "dielddanuorri",
+        "count": 22
+      },
+      {
+        "name": "Dyrøy",
+        "slug": "dyroey",
+        "count": 7
+      },
+      {
+        "name": "Gáivuotna",
+        "slug": "g-ivuotna",
+        "count": 5
+      },
+      {
+        "name": "Gratangen",
+        "slug": "gratangen",
+        "count": 7
+      },
+      {
+        "name": "Harstad",
+        "slug": "harstad",
+        "count": 31
+      },
+      {
+        "name": "Ibestad",
+        "slug": "ibestad",
+        "count": 9
+      },
+      {
+        "name": "Karlsøy",
+        "slug": "karlsoey",
+        "count": 8
+      },
+      {
+        "name": "Kvæfjord",
+        "slug": "kvaefjord",
+        "count": 3
+      },
+      {
+        "name": "Kvænangen",
+        "slug": "kvaenangen",
+        "count": 5
+      },
+      {
+        "name": "Loabák",
+        "slug": "loab-k",
+        "count": 5
+      },
+      {
+        "name": "Lyngen",
+        "slug": "lyngen",
+        "count": 17
+      },
+      {
+        "name": "Målselv",
+        "slug": "maalselv",
+        "count": 40
+      },
+      {
+        "name": "Nordreisa",
+        "slug": "nordreisa",
+        "count": 14
+      },
+      {
+        "name": "Salangen",
+        "slug": "salangen",
+        "count": 9
+      },
+      {
+        "name": "Senja",
+        "slug": "senja",
+        "count": 90
+      },
+      {
+        "name": "Skjervøy",
+        "slug": "skjervoey",
+        "count": 8
+      },
+      {
+        "name": "Storfjord",
+        "slug": "storfjord",
+        "count": 24
+      },
+      {
+        "name": "Sørreisa",
+        "slug": "soerreisa",
+        "count": 28
+      },
+      {
+        "name": "Tromsø",
+        "slug": "tromsoe",
+        "count": 115
+      }
+    ]
+  },
+  {
+    "name": "Trøndelag",
+    "slug": "troendelag",
+    "count": 812,
+    "kommuner": [
+      {
+        "name": "Flatanger",
+        "slug": "flatanger",
+        "count": 7
+      },
+      {
+        "name": "Frosta",
+        "slug": "frosta",
+        "count": 5
+      },
+      {
+        "name": "Frøya",
+        "slug": "froeya",
+        "count": 3
+      },
+      {
+        "name": "Grong",
+        "slug": "grong",
+        "count": 3
+      },
+      {
+        "name": "Heim",
+        "slug": "heim",
+        "count": 21
+      },
+      {
+        "name": "Hitra",
+        "slug": "hitra",
+        "count": 6
+      },
+      {
+        "name": "Holtålen",
+        "slug": "holtaalen",
+        "count": 10
+      },
+      {
+        "name": "Høylandet",
+        "slug": "hoeylandet",
+        "count": 2
+      },
+      {
+        "name": "Inderøy",
+        "slug": "inderoey",
+        "count": 6
+      },
+      {
+        "name": "Indre Fosen",
+        "slug": "indre-fosen",
+        "count": 31
+      },
+      {
+        "name": "Leka",
+        "slug": "leka",
+        "count": 19
+      },
+      {
+        "name": "Levanger",
+        "slug": "levanger",
+        "count": 17
+      },
+      {
+        "name": "Lierne",
+        "slug": "lierne",
+        "count": 19
+      },
+      {
+        "name": "Malvik",
+        "slug": "malvik",
+        "count": 14
+      },
+      {
+        "name": "Melhus",
+        "slug": "melhus",
+        "count": 18
+      },
+      {
+        "name": "Meråker",
+        "slug": "meraaker",
+        "count": 24
+      },
+      {
+        "name": "Midtre Gauldal",
+        "slug": "midtre-gauldal",
+        "count": 29
+      },
+      {
+        "name": "Namsos",
+        "slug": "namsos",
+        "count": 43
+      },
+      {
+        "name": "Namsskogan",
+        "slug": "namsskogan",
+        "count": 2
+      },
+      {
+        "name": "Nærøysund",
+        "slug": "naeroeysund",
+        "count": 11
+      },
+      {
+        "name": "Oppdal",
+        "slug": "oppdal",
+        "count": 99
+      },
+      {
+        "name": "Orkland",
+        "slug": "orkland",
+        "count": 46
+      },
+      {
+        "name": "Osen",
+        "slug": "osen",
+        "count": 5
+      },
+      {
+        "name": "Overhalla",
+        "slug": "overhalla",
+        "count": 1
+      },
+      {
+        "name": "Rennebu",
+        "slug": "rennebu",
+        "count": 31
+      },
+      {
+        "name": "Rindal",
+        "slug": "rindal",
+        "count": 12
+      },
+      {
+        "name": "Rosse",
+        "slug": "rosse",
+        "count": 8
+      },
+      {
+        "name": "Røros",
+        "slug": "roeros",
+        "count": 10
+      },
+      {
+        "name": "Raarvihke",
+        "slug": "raarvihke",
+        "count": 16
+      },
+      {
+        "name": "Selbu",
+        "slug": "selbu",
+        "count": 13
+      },
+      {
+        "name": "Skaun",
+        "slug": "skaun",
+        "count": 20
+      },
+      {
+        "name": "Snåase",
+        "slug": "snaaase",
+        "count": 9
+      },
+      {
+        "name": "Steinkjer",
+        "slug": "steinkjer",
+        "count": 15
+      },
+      {
+        "name": "Stjørdal",
+        "slug": "stjoerdal",
+        "count": 80
+      },
+      {
+        "name": "Trondheim",
+        "slug": "trondheim",
+        "count": 29
+      },
+      {
+        "name": "Tydal",
+        "slug": "tydal",
+        "count": 38
+      },
+      {
+        "name": "Verdal",
+        "slug": "verdal",
+        "count": 19
+      },
+      {
+        "name": "Ørland",
+        "slug": "oerland",
+        "count": 18
+      },
+      {
+        "name": "Åfjord",
+        "slug": "aafjord",
+        "count": 53
+      }
+    ]
+  },
+  {
+    "name": "Vestfold",
+    "slug": "vestfold",
+    "count": 72,
+    "kommuner": [
+      {
+        "name": "Færder",
+        "slug": "faerder",
+        "count": 3
+      },
+      {
+        "name": "Holmestrand",
+        "slug": "holmestrand",
+        "count": 25
+      },
+      {
+        "name": "Horten",
+        "slug": "horten",
+        "count": 7
+      },
+      {
+        "name": "Larvik",
+        "slug": "larvik",
+        "count": 17
+      },
+      {
+        "name": "Sandefjord",
+        "slug": "sandefjord",
+        "count": 13
+      },
+      {
+        "name": "Tønsberg",
+        "slug": "toensberg",
+        "count": 7
+      }
+    ]
+  },
+  {
+    "name": "Vestland",
+    "slug": "vestland",
+    "count": 6246,
+    "kommuner": [
+      {
+        "name": "Alver",
+        "slug": "alver",
+        "count": 95
+      },
+      {
+        "name": "Askvoll",
+        "slug": "askvoll",
+        "count": 90
+      },
+      {
+        "name": "Askøy",
+        "slug": "askoey",
+        "count": 45
+      },
+      {
+        "name": "Aurland",
+        "slug": "aurland",
+        "count": 108
+      },
+      {
+        "name": "Austevoll",
+        "slug": "austevoll",
+        "count": 26
+      },
+      {
+        "name": "Austrheim",
+        "slug": "austrheim",
+        "count": 7
+      },
+      {
+        "name": "Bergen",
+        "slug": "bergen",
+        "count": 236
+      },
+      {
+        "name": "Bjørnafjorden",
+        "slug": "bjoernafjorden",
+        "count": 272
+      },
+      {
+        "name": "Bremanger",
+        "slug": "bremanger",
+        "count": 104
+      },
+      {
+        "name": "Bømlo",
+        "slug": "boemlo",
+        "count": 65
+      },
+      {
+        "name": "Eidfjord",
+        "slug": "eidfjord",
+        "count": 133
+      },
+      {
+        "name": "Etne",
+        "slug": "etne",
+        "count": 81
+      },
+      {
+        "name": "Fedje",
+        "slug": "fedje",
+        "count": 7
+      },
+      {
+        "name": "Fitjar",
+        "slug": "fitjar",
+        "count": 60
+      },
+      {
+        "name": "Fjaler",
+        "slug": "fjaler",
+        "count": 53
+      },
+      {
+        "name": "Gloppen",
+        "slug": "gloppen",
+        "count": 127
+      },
+      {
+        "name": "Gulen",
+        "slug": "gulen",
+        "count": 62
+      },
+      {
+        "name": "Hyllestad",
+        "slug": "hyllestad",
+        "count": 23
+      },
+      {
+        "name": "Høyanger",
+        "slug": "hoeyanger",
+        "count": 125
+      },
+      {
+        "name": "Kinn",
+        "slug": "kinn",
+        "count": 138
+      },
+      {
+        "name": "Kvam",
+        "slug": "kvam",
+        "count": 341
+      },
+      {
+        "name": "Kvinnherad",
+        "slug": "kvinnherad",
+        "count": 369
+      },
+      {
+        "name": "Luster",
+        "slug": "luster",
+        "count": 549
+      },
+      {
+        "name": "Lærdal",
+        "slug": "laerdal",
+        "count": 104
+      },
+      {
+        "name": "Masfjorden",
+        "slug": "masfjorden",
+        "count": 42
+      },
+      {
+        "name": "Modalen",
+        "slug": "modalen",
+        "count": 42
+      },
+      {
+        "name": "Osterøy",
+        "slug": "osteroey",
+        "count": 90
+      },
+      {
+        "name": "Samnanger",
+        "slug": "samnanger",
+        "count": 80
+      },
+      {
+        "name": "Sogndal",
+        "slug": "sogndal",
+        "count": 349
+      },
+      {
+        "name": "Solund",
+        "slug": "solund",
+        "count": 29
+      },
+      {
+        "name": "Stad",
+        "slug": "stad",
+        "count": 175
+      },
+      {
+        "name": "Stord",
+        "slug": "stord",
+        "count": 66
+      },
+      {
+        "name": "Stryn",
+        "slug": "stryn",
+        "count": 113
+      },
+      {
+        "name": "Sunnfjord",
+        "slug": "sunnfjord",
+        "count": 480
+      },
+      {
+        "name": "Sveio",
+        "slug": "sveio",
+        "count": 29
+      },
+      {
+        "name": "Tysnes",
+        "slug": "tysnes",
+        "count": 92
+      },
+      {
+        "name": "Ullensvang",
+        "slug": "ullensvang",
+        "count": 265
+      },
+      {
+        "name": "Ulvik",
+        "slug": "ulvik",
+        "count": 118
+      },
+      {
+        "name": "Vaksdal",
+        "slug": "vaksdal",
+        "count": 157
+      },
+      {
+        "name": "Vik",
+        "slug": "vik",
+        "count": 128
+      },
+      {
+        "name": "Voss",
+        "slug": "voss",
+        "count": 485
+      },
+      {
+        "name": "Øygarden",
+        "slug": "oeygarden",
+        "count": 95
+      },
+      {
+        "name": "Årdal",
+        "slug": "aardal",
+        "count": 191
+      }
+    ]
+  },
+  {
+    "name": "Østfold",
+    "slug": "oestfold",
+    "count": 31,
+    "kommuner": [
+      {
+        "name": "Aremark",
+        "slug": "aremark",
+        "count": 1
+      },
+      {
+        "name": "Fredrikstad",
+        "slug": "fredrikstad",
+        "count": 3
+      },
+      {
+        "name": "Halden",
+        "slug": "halden",
+        "count": 6
+      },
+      {
+        "name": "Hvaler",
+        "slug": "hvaler",
+        "count": 2
+      },
+      {
+        "name": "Indre Østfold",
+        "slug": "indre-oestfold",
+        "count": 3
+      },
+      {
+        "name": "Marker",
+        "slug": "marker",
+        "count": 3
+      },
+      {
+        "name": "Moss",
+        "slug": "moss",
+        "count": 2
+      },
+      {
+        "name": "Rakkestad",
+        "slug": "rakkestad",
+        "count": 1
+      },
+      {
+        "name": "Råde",
+        "slug": "raade",
+        "count": 2
+      },
+      {
+        "name": "Sarpsborg",
+        "slug": "sarpsborg",
+        "count": 6
+      },
+      {
+        "name": "Skiptvet",
+        "slug": "skiptvet",
+        "count": 1
+      },
+      {
+        "name": "Våler",
+        "slug": "vaaler",
+        "count": 1
+      }
+    ]
+  }
+]
