@@ -8,13 +8,15 @@ En moderne, rask og installérbar **Progressive Web App (PWA)** bygget med **Vue
 
 ### 1. 🗺️ 100 % Gratis kartlag uten API-nøkler
 
-Bytt sømløst mellom fem ulike kartvisninger tilpasset turgåing og navigasjon:
+Bytt sømløst mellom sju ulike kartvisninger tilpasset turgåing, båtliv og navigasjon:
 
 - **Standard OpenStreetMap**: Det klassiske, åpne verdenskartet.
 - **Kartverket Norgeskart**: Statens kartverk sitt offisielle topografiske norgeskart (høyt detaljnivå med stedsnavn, terreng og høydekoter i Norge).
+- **Kartverket Sjøkart**: Statens kartverk sitt offisielle sjøkart (hovedkartserien) med nøyaktige dybdetall, dybdekoter, fyrlykter, lyssektorer, staker, bøyer og farleder.
 - **Tur- & Sykkelkart (CyclOSM)**: Friluftskart optimalisert for stier, merkede turruter og sykkelveier.
 - **Topografisk (OpenTopoMap)**: Globalt topografisk kart med markante høydekurver og skyggelegging.
-- **Satellitt & Flyfoto (Esri)**: Høyoppløselige satellitt- og flyfotobilder.
+- **OpenSeaMap Sjøkart**: Globalt nautisk kart med internasjonale sjømerker og navigasjonsmerker.
+- **Satellitt & Flyfoto (Esri)**: Høyoppløselige satellitt- og flyfotobilder (inkluderer offisielle Geovekst-flyfoto i Norge).
 
 ### 2. 📍 Geolokasjon & Posisjonsvisning («Hvor er jeg?»)
 

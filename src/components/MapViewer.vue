@@ -28,13 +28,14 @@ let map: L.Map | null = null
 let userMarker: L.Marker | null = null
 let accuracyCircle: L.Circle | null = null
 let currentTileLayer: L.TileLayer | null = null
+let currentOverlayLayer: L.TileLayer | null = null
 let turpostsLayerGroup: L.LayerGroup | null = null
 let geoJsonLayer: L.GeoJSON | null = null
 let geoJsonData: any = null
 const markerMap = new Map<string, L.Marker>()
 
 // Definisjoner av 100% gratis kartlag uten API-nøkkel
-const tileLayers: Record<string, { url: string; attribution: string; maxZoom: number; subdomains?: string }> = {
+const tileLayers: Record<string, { url: string; overlayUrl?: string; attribution: string; maxZoom: number; subdomains?: string }> = {
   standard: {
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> bidragsytere',
@@ -44,6 +45,11 @@ const tileLayers: Record<string, { url: string; attribution: string; maxZoom: nu
   norgeskart: {
     url: 'https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png',
     attribution: '&copy; <a href="https://www.kartverket.no" target="_blank">Kartverket</a>',
+    maxZoom: 18
+  },
+  kartverket_sjokart: {
+    url: 'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png',
+    attribution: '&copy; <a href="https://www.kartverket.no" target="_blank">Kartverket Sjødivisjonen</a>',
     maxZoom: 18
   },
   tur: {
@@ -56,6 +62,13 @@ const tileLayers: Record<string, { url: string; attribution: string; maxZoom: nu
     url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
     attribution: 'Kartdata: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>, SRTM | Visning: &copy; <a href="https://opentopomap.org" target="_blank">OpenTopoMap</a>',
     maxZoom: 17,
+    subdomains: 'abc'
+  },
+  seamap: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    overlayUrl: 'https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> | Sjømerker: &copy; <a href="http://www.openseamap.org" target="_blank">OpenSeaMap</a>',
+    maxZoom: 18,
     subdomains: 'abc'
   },
   satellite: {
@@ -108,6 +121,12 @@ const switchLayer = (layerKey: string) => {
 
   if (currentTileLayer) {
     map.removeLayer(currentTileLayer)
+    currentTileLayer = null
+  }
+
+  if (currentOverlayLayer) {
+    map.removeLayer(currentOverlayLayer)
+    currentOverlayLayer = null
   }
 
   currentTileLayer = L.tileLayer(config.url, {
@@ -115,6 +134,12 @@ const switchLayer = (layerKey: string) => {
     maxZoom: config.maxZoom,
     subdomains: config.subdomains || 'abc'
   }).addTo(map)
+
+  if (config.overlayUrl) {
+    currentOverlayLayer = L.tileLayer(config.overlayUrl, {
+      maxZoom: config.maxZoom
+    }).addTo(map)
+  }
 }
 
 const updateUserMarker = (loc: GeoLocationState | null) => {
@@ -402,6 +427,7 @@ watch(
     switchLayer(newLayer)
   }
 )
+
 
 watch(
   () => props.turposter,

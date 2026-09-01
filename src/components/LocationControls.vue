@@ -9,10 +9,10 @@ import {
   Loader2, 
   Download, 
   Check, 
-  Info,
-  LocateFixed,
-  Mountain,
-  Map as MapIcon
+  Info, 
+  LocateFixed, 
+  Mountain, 
+  Map as MapIcon 
 } from 'lucide-vue-next'
 import type { GeoLocationState } from '@/composables/useGeolocation'
 
@@ -46,8 +46,10 @@ const isInstalled = ref(false)
 const availableLayers = [
   { id: 'standard', name: 'Standard OpenStreetMap', desc: 'Klassisk detaljert verdenskart' },
   { id: 'norgeskart', name: 'Kartverket Norgeskart', desc: 'Offisielt detaljert norgeskart (Kartverket)' },
+  { id: 'kartverket_sjokart', name: 'Kartverket Sjøkart', desc: 'Offisielt norsk sjøkart med dybder, fyr og merker' },
   { id: 'tur', name: 'Tur- & Sykkelkart (CyclOSM)', desc: 'Stier, turruter og terreng' },
   { id: 'topo', name: 'Topografisk (OpenTopoMap)', desc: 'Høydekurver og terrengformasjoner' },
+  { id: 'seamap', name: 'OpenSeaMap Sjøkart', desc: 'Globalt sjøkart med fyr, bøyer og sjømerker' },
   { id: 'satellite', name: 'Satellitt & Flyfoto (Esri)', desc: 'Ekte fly- og satellittbilder' }
 ]
 
@@ -106,17 +108,19 @@ const handleInstallClick = async () => {
           @click="emit('toggle-turposter')"
           title="Vis turposter etter fylke og kommune"
         >
-          <Mountain :size="16" />
-          <span class="btn-tur-text">{{ activeKommuneName ? activeKommuneName : 'Turposter' }}</span>
-          <span v-if="turpostCount > 0" class="badge-count">{{ turpostCount }}</span>
+          <Mountain :size="16" class="mountain-icon" />
+          <span v-if="activeKommuneName" class="kommune-tag">
+            {{ activeKommuneName }} ({{ turpostCount }})
+          </span>
+          <span v-else>Turposter</span>
         </button>
 
-        <!-- Kommunegrenser-knapp (Klikk-i-kart for å velge kommune) -->
+        <!-- Kommunegrenser-knapp -->
         <button 
           class="icon-btn" 
           :class="{ active: showMunicipalities }"
-          @click="emit('toggle-municipalities')" 
-          title="Vis kommunegrenser (klikk i kartet for å velge kommune)"
+          @click="emit('toggle-municipalities')"
+          title="Slå av/på visning av kommunegrenser"
         >
           <MapIcon :size="18" />
         </button>
@@ -125,8 +129,8 @@ const handleInstallClick = async () => {
         <button 
           class="icon-btn" 
           :class="{ active: showLayerMenu }"
-          @click="toggleLayerMenu" 
-          title="Velg kartlag"
+          @click="toggleLayerMenu"
+          title="Bytt kartlag"
         >
           <Layers :size="18" />
         </button>
@@ -134,6 +138,7 @@ const handleInstallClick = async () => {
         <!-- Info-knapp -->
         <button 
           class="icon-btn" 
+          :class="{ active: showInfoModal }"
           @click="showInfoModal = !showInfoModal"
           title="Om appen"
         >
@@ -157,11 +162,11 @@ const handleInstallClick = async () => {
     <transition name="fade-slide">
       <div v-if="showLayerMenu" class="layer-modal glass-panel">
         <div class="layer-modal-header">
-          <h3>Velg kartvisning (100% gratis)</h3>
+          <h3>Velg kartvisning</h3>
           <button class="btn-close" @click="showLayerMenu = false">✕</button>
         </div>
         <div class="layer-options">
-          <button 
+          <button
             v-for="layer in availableLayers" 
             :key="layer.id"
             class="layer-item"
@@ -207,8 +212,8 @@ const handleInstallClick = async () => {
               <span><strong>Turposter i Norge:</strong> Utforsk over 15 000 turposter sortert etter fylke og kommune.</span>
             </div>
             <div class="info-feature-item">
-              <span class="bullet">🗺️</span>
-              <span><strong>Flere kartlag:</strong> Norgeskart, tur-/sykkelstier, terreng og satellitt uten API-nøkler.</span>
+              <span class="bullet">⛵</span>
+              <span><strong>Sjøkart:</strong> Offisielt norsk sjøkart fra Kartverket (med dybder og fyrlykter) og globalt OpenSeaMap.</span>
             </div>
             <div class="info-feature-item">
               <span class="bullet">⚡</span>
@@ -258,31 +263,25 @@ const handleInstallClick = async () => {
 
       <!-- Handlingsknapper -->
       <div class="action-buttons">
-        <!-- Live tracking toggle knapp ("Følg meg") -->
         <button 
-          class="btn-tracking glass-panel"
-          :class="{ active: isTracking }"
-          @click="emit('toggle-tracking')"
-          :title="isTracking ? 'Stopp følging' : 'Følg posisjon kontinuerlig'"
+          class="btn-action btn-locate glass-panel" 
+          :disabled="isLocating"
+          @click="emit('locate')"
+          title="Finn min posisjon"
         >
-          <Compass :size="20" :class="{ spin: isTracking }" />
-          <span class="btn-text">{{ isTracking ? 'Følger deg' : 'Følg meg' }}</span>
+          <Loader2 v-if="isLocating" class="spinner" :size="20" />
+          <LocateFixed v-else :size="20" />
+          <span>Hvor er jeg?</span>
         </button>
 
-        <!-- Hovedknapp: Finn posisjon -->
         <button 
-          class="btn-locate"
-          :class="{ locating: isLocating, has_loc: !!userLocation }"
-          @click="emit('locate')"
-          :disabled="isLocating"
-          title="Sentrer kartet på min posisjon"
+          class="btn-action btn-track glass-panel"
+          :class="{ 'is-tracking': isTracking }"
+          @click="emit('toggle-tracking')"
+          title="Følg min posisjon kontinuerlig"
         >
-          <Loader2 v-if="isLocating" :size="24" class="spin-icon" />
-          <LocateFixed v-else-if="userLocation" :size="24" />
-          <Navigation v-else :size="24" />
-          <span class="btn-text-main">
-            {{ isLocating ? 'Finner...' : (userLocation ? 'Min posisjon' : 'Hvor er jeg?') }}
-          </span>
+          <Compass :size="20" :class="{ 'pulse-slow': isTracking }" />
+          <span>{{ isTracking ? 'Følger deg' : 'Følg meg' }}</span>
         </button>
       </div>
     </div>
@@ -294,24 +293,20 @@ const handleInstallClick = async () => {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   pointer-events: none;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   padding: 16px;
-  z-index: 10;
+  box-sizing: border-box;
 }
 
-/* Glassmorphism Panel Base -> Solid Opaque High Contrast */
 .glass-panel {
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 16px;
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7);
   pointer-events: auto;
-  color: #f8fafc;
+  border-radius: 16px;
 }
 
 /* Topplinje */
@@ -320,10 +315,10 @@ const handleInstallClick = async () => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  max-width: 580px;
+  max-width: 900px;
   width: 100%;
-  background: #0f172a;
-  border: 1px solid #334155;
+  margin: 0 auto;
+  gap: 12px;
 }
 
 .brand {
@@ -333,27 +328,28 @@ const handleInstallClick = async () => {
 }
 
 .brand-icon {
-  width: 34px;
-  height: 34px;
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: white;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #0284c7, #2563eb);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
 }
 
 .brand-text h1 {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 1.1;
   color: #f8fafc;
+  line-height: 1.2;
 }
 
 .brand-subtitle {
-  font-size: 10px;
+  font-size: 11px;
   color: #94a3b8;
+  font-weight: 500;
 }
 
 .top-actions {
@@ -377,25 +373,18 @@ const handleInstallClick = async () => {
   transition: all 0.2s ease;
 }
 
-.btn-turposter:hover {
-  background: #0284c7;
+.btn-turposter:hover, .btn-turposter.active {
+  background: linear-gradient(135deg, #0284c7, #2563eb);
   border-color: #38bdf8;
   color: #ffffff;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
 }
 
-.btn-turposter.active {
-  background: #0284c7;
-  border-color: #38bdf8;
-  color: #ffffff;
-}
-
-.badge-count {
-  background: #10b981;
-  color: #0f172a;
+.kommune-tag {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
   font-size: 11px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 10px;
 }
 
 .icon-btn {
@@ -554,7 +543,7 @@ const handleInstallClick = async () => {
   width: 100%;
   padding: 14px 16px;
   border: 2px solid #ef4444 !important;
-  background: #1e1b2e !important; /* Helt ugjennomsiktig solid bakgrunn */
+  background: #1e1b2e !important;
   border-radius: 14px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(239, 68, 68, 0.3);
   display: flex;
@@ -578,7 +567,7 @@ const handleInstallClick = async () => {
 .error-text {
   font-size: 14px;
   font-weight: 500;
-  color: #f8fafc; /* Hvit og tydelig tekst */
+  color: #f8fafc;
   line-height: 1.4;
 }
 
@@ -634,9 +623,8 @@ const handleInstallClick = async () => {
 /* Statuskapsel */
 .status-pill {
   padding: 6px 14px;
-  border-radius: 20px;
   font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .loc-data {
@@ -652,12 +640,17 @@ const handleInstallClick = async () => {
 }
 
 .status-dot.online {
-  background: #10b981;
-  box-shadow: 0 0 8px #10b981;
+  background-color: var(--success);
+  box-shadow: 0 0 8px var(--success);
 }
 
 .status-dot.idle {
-  background: #64748b;
+  background-color: var(--text-muted);
+}
+
+.loc-text {
+  font-weight: 500;
+  color: #f8fafc;
 }
 
 .loc-text.muted {
@@ -665,79 +658,69 @@ const handleInstallClick = async () => {
 }
 
 .accuracy-badge {
-  background: rgba(2, 132, 199, 0.3);
-  color: #38bdf8;
+  background: rgba(2, 132, 199, 0.2);
+  color: var(--accent);
   padding: 2px 6px;
   border-radius: 6px;
   font-size: 10px;
   font-weight: 600;
 }
 
-/* Handlingsknapper */
+/* Aksjonsknapper */
 .action-buttons {
   display: flex;
-  align-items: center;
-  justify-content: center;
   gap: 12px;
   width: 100%;
 }
 
-.btn-tracking {
+.btn-action {
+  flex: 1;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 14px 18px;
-  border-radius: 28px;
+  padding: 12px 16px;
   font-size: 14px;
   font-weight: 600;
+  color: #f8fafc;
   cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  transition: all 0.25s ease;
-}
-
-.btn-tracking:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.btn-tracking.active {
-  background: rgba(16, 185, 129, 0.25);
-  border-color: #10b981;
-  color: #34d399;
-}
-
-.btn-locate {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: linear-gradient(135deg, #0284c7, #2563eb);
-  color: white;
-  border: none;
-  padding: 14px 24px;
-  border-radius: 28px;
-  font-size: 15px;
-  font-weight: 600;
-  box-shadow: 0 6px 24px rgba(2, 132, 199, 0.45);
-  cursor: pointer;
-  pointer-events: auto;
-  transition: all 0.25s ease;
+  border: 1px solid #334155;
+  background: #0f172a;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 
 .btn-locate:hover {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  border-color: #38bdf8;
+  color: white;
   transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(2, 132, 199, 0.6);
+  box-shadow: 0 8px 20px rgba(2, 132, 199, 0.4);
 }
 
-.btn-locate:active {
-  transform: translateY(1px);
+.btn-track {
+  background: #1e293b;
 }
 
-.btn-locate.locating {
-  opacity: 0.85;
-  cursor: wait;
+.btn-track:hover {
+  background: #334155;
+  border-color: #64748b;
+  transform: translateY(-2px);
 }
 
-.spin-icon, .spin {
-  animation: spin 1.5s linear infinite;
+.btn-track.is-tracking {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: #34d399;
+  color: white;
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+.pulse-slow {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @keyframes spin {
@@ -745,14 +728,17 @@ const handleInstallClick = async () => {
   to { transform: rotate(360deg); }
 }
 
-/* Transisjonsanimasjoner */
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: all 0.25s ease;
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
 }
 
-.fade-slide-enter-from,
-.fade-slide-leave-to {
+/* Transisjoner */
+.fade-slide-enter-active, .fade-slide-leave-active {
+  transition: all 0.25s ease-out;
+}
+
+.fade-slide-enter-from, .fade-slide-leave-to {
   opacity: 0;
   transform: translateY(-10px);
 }
@@ -760,41 +746,13 @@ const handleInstallClick = async () => {
 .bounce-enter-active {
   animation: bounce-in 0.3s;
 }
+
 .bounce-leave-active {
   animation: bounce-in 0.2s reverse;
 }
 
 @keyframes bounce-in {
   0% { transform: scale(0.9); opacity: 0; }
-  50% { transform: scale(1.03); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
-}
-
-/* Responsiv tilpasning for mobil */
-@media (max-width: 640px) {
-  .controls-overlay {
-    padding: 10px;
-  }
-  
-  .top-bar {
-    padding: 8px 10px;
-  }
-
-  .btn-tur-text {
-    max-width: 80px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .btn-locate {
-    padding: 12px 18px;
-    font-size: 14px;
-  }
-
-  .btn-tracking {
-    padding: 12px 14px;
-    font-size: 13px;
-  }
 }
 </style>
