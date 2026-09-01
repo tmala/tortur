@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import MapViewer from './components/MapViewer.vue'
 import LocationControls from './components/LocationControls.vue'
 import TurposterPanel from './components/TurposterPanel.vue'
@@ -132,8 +132,18 @@ const handleCoordinatesChange = (coordsData: { lat: number; lng: number; zoom: n
   centerCoords.value = coordsData
 }
 
-// Last hierarki ved oppstart
-loadHierarchy()
+// Last hierarki og forsøk automatisk å hente brukerens geolokasjon ved oppstart
+onMounted(async () => {
+  loadHierarchy()
+  try {
+    const loc = await getCurrentPosition({ timeout: 5000, enableHighAccuracy: true })
+    if (loc && mapViewerRef.value) {
+      mapViewerRef.value.centerOnUser(true, 15)
+    }
+  } catch {
+    // Hvis brukeren ikke gir tilgang, forblir kartet elegant på Bergen
+  }
+})
 </script>
 
 <template>

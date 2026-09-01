@@ -12,7 +12,7 @@ describe('LocationControls', () => {
         isTracking: false,
         error: null,
         activeLayer: 'standard',
-        centerCoords: { lat: 59.9139, lng: 10.7522, zoom: 13 },
+        centerCoords: { lat: 60.3913, lng: 5.3221, zoom: 13 },
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,

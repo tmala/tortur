@@ -428,9 +428,10 @@ watch(
 onMounted(() => {
   if (!mapContainer.value) return
 
-  const initialLat = props.userLocation ? props.userLocation.lat : 59.9139
-  const initialLng = props.userLocation ? props.userLocation.lng : 10.7522
-  const initialZoom = props.userLocation ? 16 : 13
+  // Standard posisjon: Bergen sentrum (eller brukerposisjon hvis tilgjengelig)
+  const initialLat = props.userLocation ? props.userLocation.lat : 60.3913
+  const initialLng = props.userLocation ? props.userLocation.lng : 5.3221
+  const initialZoom = props.userLocation ? 15 : 13
 
   map = L.map(mapContainer.value, {
     center: [initialLat, initialLng],

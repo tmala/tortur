@@ -1,10 +1,11 @@
 {
   "name": "tortur",
-  "version": "0.0.0",
+  "version": "0.0.1-beta",
   "private": true,
   "type": "module",
   "scripts": {
     "build:data": "node scripts/build-data.js",
+    "build:icons": "node scripts/generate-favicons.js",
     "build": "npm run build:data && run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "test:unit": "vitest",

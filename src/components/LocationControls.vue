@@ -547,61 +547,77 @@ const handleInstallClick = async () => {
   font-size: 12px;
 }
 
-/* Feilbanner */
+/* Feilbanner - 100% ugjennomsiktig for optimal lesbarhet */
 .error-banner {
   align-self: center;
   max-width: 480px;
   width: 100%;
-  padding: 12px 16px;
-  border-color: rgba(239, 68, 68, 0.4);
-  background: rgba(239, 68, 68, 0.15);
+  padding: 14px 16px;
+  border: 2px solid #ef4444 !important;
+  background: #1e1b2e !important; /* Helt ugjennomsiktig solid bakgrunn */
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(239, 68, 68, 0.3);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin-top: 10px;
+  z-index: 100;
 }
 
 .error-content {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .error-icon {
-  color: #ef4444;
+  color: #f87171;
   flex-shrink: 0;
 }
 
 .error-text {
-  font-size: 13px;
-  color: #fca5a5;
+  font-size: 14px;
+  font-weight: 500;
+  color: #f8fafc; /* Hvit og tydelig tekst */
+  line-height: 1.4;
 }
 
 .error-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 10px;
 }
 
 .btn-retry {
-  background: #ef4444;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  background: #dc2626;
+  color: #ffffff;
+  border: 1px solid #ef4444;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-retry:hover {
+  background: #b91c1c;
 }
 
 .btn-dismiss {
-  background: rgba(255, 255, 255, 0.1);
-  color: #cbd5e1;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
+  background: #334155;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-dismiss:hover {
+  background: #475569;
 }
 
 /* Bunnlinje */
