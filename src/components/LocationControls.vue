@@ -12,11 +12,15 @@ import {
   Info, 
   LocateFixed, 
   Mountain, 
-  Map as MapIcon 
+  Map as MapIcon,
+  Anchor,
+  Radio,
+  Settings,
+  Crosshair
 } from 'lucide-vue-next'
 import type { GeoLocationState } from '@/composables/useGeolocation'
 
-defineProps<{
+const props = defineProps<{
   userLocation: GeoLocationState | null
   isLocating: boolean
   isTracking: boolean
@@ -27,6 +31,15 @@ defineProps<{
   activeKommuneName: string | null
   turpostCount: number
   showMunicipalities: boolean
+  isAisToggled?: boolean
+  isZoomSufficient?: boolean
+  aisVesselCount?: number
+  isAisLoading?: boolean
+  currentZoom?: number
+  minZoomForAis?: number
+  hasBwCredentials?: boolean
+  bwClientId?: string
+  bwClientSecret?: string
 }>()
 
 const emit = defineEmits<{
@@ -36,10 +49,21 @@ const emit = defineEmits<{
   (e: 'clear-error'): void
   (e: 'toggle-turposter'): void
   (e: 'toggle-municipalities'): void
+  (e: 'toggle-ais'): void
+  (e: 'save-bw-credentials', clientId: string, clientSecret: string): void
+  (e: 'go-to-coordinate', coords: { lat: number; lng: number }): void
 }>()
 
 const showLayerMenu = ref(false)
 const showInfoModal = ref(false)
+const showAisModal = ref(false)
+const showCoordModal = ref(false)
+const coordLat = ref('')
+const coordLng = ref('')
+const coordInput = ref('')
+const coordError = ref('')
+const inputClientId = ref(props.bwClientId || '')
+const inputClientSecret = ref(props.bwClientSecret || '')
 const installPrompt = ref<any>(null)
 const isInstalled = ref(false)
 
@@ -47,10 +71,13 @@ const availableLayers = [
   { id: 'standard', name: 'Standard OpenStreetMap', desc: 'Klassisk detaljert verdenskart' },
   { id: 'norgeskart', name: 'Kartverket Norgeskart', desc: 'Offisielt detaljert norgeskart (Kartverket)' },
   { id: 'kartverket_sjokart', name: 'Kartverket Sjøkart', desc: 'Offisielt norsk sjøkart med dybder, fyr og merker' },
+  { id: 'google_streets', name: 'Google Veikart', desc: 'Googles klassiske veikart' },
+  { id: 'google_hybrid', name: 'Google Satellitt (Hybrid)', desc: 'Googles satellittfoto med veinavn og steder' },
+  { id: 'google_terrain', name: 'Google Terreng', desc: 'Googles terrengkart med høydeforskjeller' },
   { id: 'tur', name: 'Tur- & Sykkelkart (CyclOSM)', desc: 'Stier, turruter og terreng' },
   { id: 'topo', name: 'Topografisk (OpenTopoMap)', desc: 'Høydekurver og terrengformasjoner' },
   { id: 'seamap', name: 'OpenSeaMap Sjøkart', desc: 'Globalt sjøkart med fyr, bøyer og sjømerker' },
-  { id: 'satellite', name: 'Satellitt & Flyfoto (Esri)', desc: 'Ekte fly- og satellittbilder' }
+  { id: 'satellite', name: 'Satellitt & Flyfoto (Esri)', desc: 'Ekte fly- og satellittbilder (Esri)' }
 ]
 
 const toggleLayerMenu = () => {
@@ -60,6 +87,51 @@ const toggleLayerMenu = () => {
 const selectLayer = (layerId: string) => {
   emit('change-layer', layerId)
   showLayerMenu.value = false
+}
+
+const handleSaveBwCredentials = () => {
+  emit('save-bw-credentials', inputClientId.value.trim(), inputClientSecret.value.trim())
+  showAisModal.value = false
+}
+
+const handleClearBwCredentials = () => {
+  inputClientId.value = ''
+  inputClientSecret.value = ''
+  emit('save-bw-credentials', '', '')
+  showAisModal.value = false
+}
+
+const handleGoToCoordinates = () => {
+  coordError.value = ''
+  let lat: number | null = null
+  let lng: number | null = null
+
+  const raw = coordInput.value.trim()
+  if (raw) {
+    const parts = raw.split(/[\s,;]+/).map(p => parseFloat(p.trim())).filter(p => !isNaN(p))
+    if (parts.length >= 2) {
+      lat = parts[0]!
+      lng = parts[1]!
+    }
+  }
+
+  if (lat === null || lng === null) {
+    const parsedLat = parseFloat(coordLat.value.replace(',', '.'))
+    const parsedLng = parseFloat(coordLng.value.replace(',', '.'))
+    if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+      lat = parsedLat
+      lng = parsedLng
+    }
+  }
+
+  if (lat === null || lng === null || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    coordError.value = 'Vennligst oppgi gyldige koordinater (f.eks. Lat: 65.2833, Lng: 6.3921)'
+    return
+  }
+
+  emit('go-to-coordinate', { lat, lng })
+  showCoordModal.value = false
+  coordError.value = ''
 }
 
 // PWA Install prompt handling
@@ -115,6 +187,26 @@ const handleInstallClick = async () => {
           <span v-else>Turposter</span>
         </button>
 
+        <!-- AIS Båttrafikk-knapp -->
+        <button 
+          class="btn-ais"
+          :class="{ 
+            active: isAisToggled && isZoomSufficient, 
+            'zoom-warning': isAisToggled && !isZoomSufficient 
+          }"
+          @click="emit('toggle-ais')"
+          title="Slå av/på sanntids båttrafikk (AIS)"
+        >
+          <Anchor :size="16" class="anchor-icon" />
+          <span v-if="isAisToggled && isZoomSufficient" class="btn-ais-text">
+            AIS ({{ aisVesselCount || 0 }})
+          </span>
+          <span v-else-if="isAisToggled && !isZoomSufficient" class="btn-ais-text">
+            AIS (Zoom inn)
+          </span>
+          <span v-else class="btn-ais-text">AIS</span>
+        </button>
+
         <!-- Kommunegrenser-knapp -->
         <button 
           class="icon-btn" 
@@ -133,6 +225,16 @@ const handleInstallClick = async () => {
           title="Bytt kartlag"
         >
           <Layers :size="18" />
+        </button>
+
+        <!-- AIS-innstillinger / Kilde-knapp -->
+        <button 
+          class="icon-btn" 
+          :class="{ active: showAisModal }"
+          @click="showAisModal = !showAisModal"
+          title="Båttrafikk (AIS) innstillinger"
+        >
+          <Radio :size="18" />
         </button>
 
         <!-- Info-knapp -->
@@ -157,6 +259,65 @@ const handleInstallClick = async () => {
         </button>
       </div>
     </header>
+
+    <!-- AIS Modal -->
+    <transition name="fade-slide">
+      <div v-if="showAisModal" class="ais-modal glass-panel">
+        <div class="layer-modal-header">
+          <div class="ais-header-title">
+            <Anchor :size="18" class="anchor-title-icon" />
+            <h3>Båttrafikk i sanntid (AIS)</h3>
+          </div>
+          <button class="btn-close" @click="showAisModal = false">✕</button>
+        </div>
+        <div class="ais-modal-content">
+          <p class="ais-desc">
+            Viser posisjoner, fart og kurs for skip i sanntid fra <strong>Kystverket / BarentsWatch</strong>.
+          </p>
+
+          <div class="ais-status-box" :class="{ ok: isZoomSufficient, warn: isAisToggled && !isZoomSufficient }">
+            <div class="status-box-header">
+              <strong>🔍 Zoom-status:</strong>
+              <span>Zoom {{ currentZoom || 13 }} / min. {{ minZoomForAis || 12 }}</span>
+            </div>
+            <p v-if="!isZoomSufficient" class="status-box-msg">
+              Båttrafikk krever at du er zoomet inn på et nærområde (zoom 12 eller mer) for å unngå overbelastning.
+            </p>
+            <p v-else class="status-box-msg ok-msg">
+              ✓ Kartutsnittet er nært nok til å vise båter i sanntid.
+            </p>
+          </div>
+
+          <div class="ais-credentials-section">
+            <div class="section-title">
+              <Radio :size="14" />
+              <span>BarentsWatch API-nøkler (Valgfritt)</span>
+            </div>
+            <p class="section-subtext">
+              Opprett gratis bruker på <a href="https://www.barentswatch.no" target="_blank" class="ais-link">barentswatch.no ↗</a> under <em>Min side &rarr; API-klienter</em>. Hvis du ikke legger inn nøkler, benyttes en simulert kystfeed for demonstrasjon.
+            </p>
+
+            <div class="input-field">
+              <label>Client ID:</label>
+              <input v-model="inputClientId" placeholder="f.eks. brukernavn@epost.no:klientnavn" class="ais-input" />
+            </div>
+            <div class="input-field">
+              <label>Client Secret:</label>
+              <input v-model="inputClientSecret" type="password" placeholder="BarentsWatch Client Secret" class="ais-input" />
+            </div>
+
+            <div class="ais-actions">
+              <button v-if="hasBwCredentials" class="btn-ais-clear" @click="handleClearBwCredentials">
+                Fjern nøkler
+              </button>
+              <button class="btn-ais-save" @click="handleSaveBwCredentials">
+                Lagre innstillinger
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
 
     <!-- Kartlag-velgermeny -->
     <transition name="fade-slide">
@@ -274,6 +435,17 @@ const handleInstallClick = async () => {
           <span>Hvor er jeg?</span>
         </button>
 
+        <!-- Gå til koordinat-knapp -->
+        <button 
+          class="btn-action btn-coord glass-panel"
+          :class="{ active: showCoordModal }"
+          @click="showCoordModal = !showCoordModal"
+          title="Angi koordinater (Lat, Lng) for å sentrere kartet"
+        >
+          <Crosshair :size="20" />
+          <span>Gå til koordinat</span>
+        </button>
+
         <button 
           class="btn-action btn-track glass-panel"
           :class="{ 'is-tracking': isTracking }"
@@ -285,6 +457,68 @@ const handleInstallClick = async () => {
         </button>
       </div>
     </div>
+
+    <!-- Gå til koordinat Modal -->
+    <transition name="fade-slide">
+      <div v-if="showCoordModal" class="coord-modal glass-panel">
+        <div class="layer-modal-header">
+          <div class="coord-header-title">
+            <Crosshair :size="18" class="coord-title-icon" />
+            <h3>Gå til koordinat</h3>
+          </div>
+          <button class="btn-close" @click="showCoordModal = false">✕</button>
+        </div>
+        <div class="coord-modal-content">
+          <p class="coord-desc">
+            Skriv inn eller lim inn koordinater for å flytte og sentrere kartet direkte til punktet.
+          </p>
+
+          <div class="coord-quick-input">
+            <label>Lim inn koordinater (f.eks. "65.2833, 6.3921"):</label>
+            <input 
+              v-model="coordInput" 
+              placeholder="65.283295, 6.392140"
+              class="coord-input"
+              @keyup.enter="handleGoToCoordinates"
+            />
+          </div>
+
+          <div class="coord-split-inputs">
+            <div class="coord-field">
+              <label>Breddegrad (Lat):</label>
+              <input 
+                v-model="coordLat" 
+                placeholder="f.eks. 65.2833" 
+                class="coord-input"
+                @keyup.enter="handleGoToCoordinates"
+              />
+            </div>
+            <div class="coord-field">
+              <label>Lengdegrad (Lng):</label>
+              <input 
+                v-model="coordLng" 
+                placeholder="f.eks. 6.3921" 
+                class="coord-input"
+                @keyup.enter="handleGoToCoordinates"
+              />
+            </div>
+          </div>
+
+          <div v-if="coordError" class="coord-error-msg">
+            ⚠️ {{ coordError }}
+          </div>
+
+          <div class="coord-actions">
+            <button class="btn-coord-cancel" @click="showCoordModal = false">
+              Avbryt
+            </button>
+            <button class="btn-coord-submit" @click="handleGoToCoordinates">
+              🎯 Sentrér kart
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -420,6 +654,327 @@ const handleInstallClick = async () => {
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
+}
+
+.btn-ais {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-ais:hover {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.btn-ais.active {
+  background: linear-gradient(135deg, #0284c7, #0284c7);
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+}
+
+.btn-ais.zoom-warning {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
+  color: #fde68a;
+}
+
+/* AIS Modal */
+.ais-modal {
+  position: absolute;
+  top: 72px;
+  left: 16px;
+  max-width: 440px;
+  width: calc(100% - 32px);
+  padding: 16px;
+  z-index: 30;
+  background: #0f172a;
+  border: 1px solid #38bdf8;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
+  color: #f8fafc;
+}
+
+.ais-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.anchor-title-icon {
+  color: #38bdf8;
+}
+
+.ais-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ais-desc {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.ais-status-box {
+  background: #1e293b;
+  border: 1px solid #334155;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.ais-status-box.ok {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.ais-status-box.warn {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.status-box-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.status-box-msg {
+  font-size: 12px;
+  color: #fde68a;
+  margin: 0;
+}
+
+.status-box-msg.ok-msg {
+  color: #6ee7b7;
+}
+
+.ais-credentials-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #1e293b;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #334155;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+.section-subtext {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.ais-link {
+  color: #38bdf8;
+  text-decoration: underline;
+}
+
+.input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.input-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.ais-input {
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #f8fafc;
+  font-size: 12px;
+  font-family: monospace;
+  outline: none;
+}
+
+.ais-input:focus {
+  border-color: #38bdf8;
+}
+
+.ais-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn-ais-save {
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-ais-clear {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid #ef4444;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Coord Modal */
+.coord-modal {
+  position: absolute;
+  bottom: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 440px;
+  width: calc(100% - 32px);
+  padding: 16px;
+  z-index: 40;
+  background: #0f172a;
+  border: 1px solid #38bdf8;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9);
+  color: #f8fafc;
+}
+
+.coord-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coord-title-icon {
+  color: #38bdf8;
+}
+
+.coord-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.coord-desc {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.coord-quick-input, .coord-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.coord-quick-input label, .coord-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.coord-split-inputs {
+  display: flex;
+  gap: 10px;
+}
+
+.coord-split-inputs .coord-field {
+  flex: 1;
+}
+
+.coord-input {
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #f8fafc;
+  font-size: 13px;
+  font-family: monospace;
+  outline: none;
+}
+
+.coord-input:focus {
+  border-color: #38bdf8;
+}
+
+.coord-error-msg {
+  font-size: 12px;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid #ef4444;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.coord-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn-coord-submit {
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-coord-submit:hover {
+  background: linear-gradient(135deg, #0369a1, #1d4ed8);
+}
+
+.btn-coord-cancel {
+  background: #334155;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-coord {
+  background: #1e293b;
+}
+
+.btn-coord:hover, .btn-coord.active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
 }
 
 /* Lag- og infomodaler */

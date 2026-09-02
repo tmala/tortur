@@ -6,17 +6,18 @@ En moderne, rask og installérbar **Progressive Web App (PWA)** bygget med **Vue
 
 ## 🌟 Hovedfunksjoner
 
-### 1. 🗺️ 100 % Gratis kartlag uten API-nøkler
+### 1. 🗺️ 10 Forskjellige Kartlag
 
-Bytt sømløst mellom sju ulike kartvisninger tilpasset turgåing, båtliv og navigasjon:
-
-- **Standard OpenStreetMap**: Det klassiske, åpne verdenskartet.
-- **Kartverket Norgeskart**: Statens kartverk sitt offisielle topografiske norgeskart (høyt detaljnivå med stedsnavn, terreng og høydekoter i Norge).
-- **Kartverket Sjøkart**: Statens kartverk sitt offisielle sjøkart (hovedkartserien) med nøyaktige dybdetall, dybdekoter, fyrlykter, lyssektorer, staker, bøyer og farleder.
-- **Tur- & Sykkelkart (CyclOSM)**: Friluftskart optimalisert for stier, merkede turruter og sykkelveier.
-- **Topografisk (OpenTopoMap)**: Globalt topografisk kart med markante høydekurver og skyggelegging.
-- **OpenSeaMap Sjøkart**: Globalt nautisk kart med internasjonale sjømerker og navigasjonsmerker.
-- **Satellitt & Flyfoto (Esri)**: Høyoppløselige satellitt- og flyfotobilder (inkluderer offisielle Geovekst-flyfoto i Norge).
+1. **Standard OpenStreetMap**: Raskt, detaljert og universelt verdenskart.
+2. **Kartverket Norgeskart**: Offisielt norgeskart fra Kartverket med norske stedsnavn og terreng.
+3. **Kartverket Sjøkart**: Offisielt sjøkart fra Kartverket med sjødybder, dybdekurver, fyrsektorer og sjømerker.
+4. **Google Veikart**: Googles klassiske veikart med gater og interessepunkter.
+5. **Google Satellitt (Hybrid)**: Ekte Google-satellittfoto med påførte veinavn og steder.
+6. **Google Terreng**: Googles terrengkart med høydeforskjeller og topografi.
+7. **Tur- & Sykkelkart (CyclOSM)**: Tydelige stier, sykkelruter og turveier.
+8. **Topografisk (OpenTopoMap)**: Klassiske høydekonturer og terrengskygger.
+9. **OpenSeaMap Sjøkart**: Sjøkart med fyr, bøyer og navigasjonsmerker.
+10. **Satellitt & Flyfoto (Esri)**: Høyoppløselige flyfoto og satellittbilder fra Esri World Imagery. (inkluderer offisielle Geovekst-flyfoto i Norge).
 
 ### 2. 📍 Geolokasjon & Posisjonsvisning («Hvor er jeg?»)
 
@@ -32,14 +33,27 @@ Bytt sømløst mellom sju ulike kartvisninger tilpasset turgåing, båtliv og na
 - **Hurtignavigasjon**: Klikk på en topp i listen for å fly direkte til den på kartet og åpne informasjonskortet.
 - **Fjellmarkører (`⛰️`)**: Klikk på markører på kartet for å se toppnavn, høyde (`moh.`) og GPS-koordinater.
 
-### 4. 🗺️ Interaktive kommunegrenser & Klikk i kartet
+### 4. ⛵ Sanntids Båttrafikk (AIS / BarentsWatch & Kystverket)
+
+- **Sanntids skipsdata**: Viser posisjoner, fart (`knop`), kurs (`°`), destinasjon og skipstype for fartøy i norske farvann.
+- **Roterende båtsymboler**: Symbolene roterer dynamisk etter båtens kompasskurs.
+- **Fargekoding etter fartøystype**:
+  - 🔵 Passasjerskip / Ferger (f.eks. Kystruten / Hurtigruten, Fjord1)
+  - 🟢 Lasteskip og bulkskip
+  - 🟡 Tankskip
+  - 🟠 Slepebåter og arbeidsbåter
+  - 🔴 Redningsskøyter og Kystvakt
+- **Smart Zoom-grense (Zoom $\ge$ 12)**: For å forhindre overbelastning og sikre lynrask ytelse, vises fartøyene kun når brukeren har zoomet inn på et nærområde (under ca. 20–30 km utsnitt). Zoomet lenger ut vises en hjelpetekst: *«AIS (Zoom inn)»*.
+- **Fleksibel datakilde**: Støtter direkte tilkobling til Kystverkets/BarentsWatch API med egne gratis API-nøkler, eller en integrert demonstrasjonsstrøm.
+
+### 5. 🗺️ Interaktive kommunegrenser & Klikk i kartet
 
 - **GeoJSON-vektorlag**: Viser diskrete kommunegrenser for alle 357 norske kommuner.
 - **Klikk-dialog**: Klikk hvor som helst innenfor en kommune på kartet for å åpne en dialogboks som viser fylke og antall turposter, med valg for:
   - **«⛰️ Vis turposter for [Kommune]»** (laster og viser postene).
   - **«✕ Skjul turposter»** (fjerner postene fra kartet hvis de allerede vises).
 
-### 5. ⚡ Progressive Web App (PWA) & Offline Caching
+### 6. ⚡ Progressive Web App (PWA) & Offline Caching
 
 - **Installérbar**: Kan installeres som frittstående app på mobil (iOS Safari, Android Chrome) og skrivebord (Chrome, Edge, Safari).
 - **Service Worker Cache**: Cacher automatisk kartfliser, kommunegrenser og turpostdata for rask oppstart og bruk uten stabil nettforbindelse.

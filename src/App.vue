@@ -5,6 +5,7 @@ import LocationControls from './components/LocationControls.vue'
 import TurposterPanel from './components/TurposterPanel.vue'
 import { useGeolocation } from './composables/useGeolocation'
 import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from './composables/useTurposter'
+import { useAis } from './composables/useAis'
 
 const {
   isLocating,
@@ -15,6 +16,47 @@ const {
   startTracking,
   stopTracking
 } = useGeolocation()
+
+const {
+  isEnabled: isAisToggled,
+  isZoomSufficient,
+  minZoomForAis,
+  currentZoom,
+  vessels,
+  isLoading: isAisLoading,
+  error: aisError,
+  credentials: bwCredentials,
+  hasCredentials: hasBwCredentials,
+  setCredentials: setBwCredentials,
+  fetchVessels,
+  toggleAis,
+  clearError: clearAisError
+} = useAis()
+
+const lastMapBounds = ref<{ minLat: number; maxLat: number; minLng: number; maxLng: number } | null>(null)
+const lastMapZoom = ref<number>(13)
+
+const handleBoundsChange = (bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }, zoom: number) => {
+  lastMapBounds.value = bounds
+  lastMapZoom.value = zoom
+  if (isAisToggled.value) {
+    fetchVessels(bounds, zoom)
+  }
+}
+
+const handleToggleAis = () => {
+  toggleAis()
+  if (isAisToggled.value && lastMapBounds.value) {
+    fetchVessels(lastMapBounds.value, lastMapZoom.value)
+  }
+}
+
+const handleSaveBwCredentials = (clientId: string, clientSecret: string) => {
+  setBwCredentials(clientId, clientSecret)
+  if (isAisToggled.value && lastMapBounds.value) {
+    fetchVessels(lastMapBounds.value, lastMapZoom.value)
+  }
+}
 
 const {
   hierarchy,
@@ -94,6 +136,13 @@ const handleLocate = async () => {
   }
 }
 
+// Håndter "Gå til koordinat"
+const handleGoToCoordinate = (coordsData: { lat: number; lng: number }) => {
+  if (mapViewerRef.value) {
+    mapViewerRef.value.panToCoordinate(coordsData.lat, coordsData.lng, 14)
+  }
+}
+
 // Håndter live sporing / "Følg meg"
 const handleToggleTracking = () => {
   if (isTracking.value) {
@@ -126,6 +175,7 @@ const handleChangeLayer = (layerId: string) => {
 const handleClearError = () => {
   geoError.value = null
   turError.value = null
+  clearAisError()
 }
 
 const handleCoordinatesChange = (coordsData: { lat: number; lng: number; zoom: number }) => {
@@ -157,8 +207,12 @@ onMounted(async () => {
       :show-municipalities="showMunicipalities"
       :selected-kommune-name="selectedKommune ? selectedKommune.name : null"
       :get-kommune-info="getKommuneInfo"
+      :vessels="vessels"
+      :is-ais-toggled="isAisToggled"
+      :is-zoom-sufficient="isZoomSufficient"
       @map-dragged="handleMapDragged"
       @coordinates-change="handleCoordinatesChange"
+      @bounds-change="handleBoundsChange"
       @select-kommune-by-name="handleSelectKommuneByName"
       @clear-turposter="handleClearAllTurposter"
     />
@@ -167,19 +221,31 @@ onMounted(async () => {
       :user-location="coords"
       :is-locating="isLocating"
       :is-tracking="isTracking"
-      :error="geoError || turError"
+      :error="geoError || turError || aisError"
       :active-layer="activeLayer"
       :center-coords="centerCoords"
       :is-turposter-open="isTurposterOpen"
       :active-kommune-name="selectedKommune ? selectedKommune.name : null"
       :turpost-count="turposter.length"
       :show-municipalities="showMunicipalities"
+      :is-ais-toggled="isAisToggled"
+      :is-zoom-sufficient="isZoomSufficient"
+      :ais-vessel-count="vessels.length"
+      :is-ais-loading="isAisLoading"
+      :current-zoom="currentZoom"
+      :min-zoom-for-ais="minZoomForAis"
+      :has-bw-credentials="hasBwCredentials"
+      :bw-client-id="bwCredentials.clientId"
+      :bw-client-secret="bwCredentials.clientSecret"
       @locate="handleLocate"
       @toggle-tracking="handleToggleTracking"
       @change-layer="handleChangeLayer"
       @clear-error="handleClearError"
       @toggle-turposter="handleToggleTurposter"
       @toggle-municipalities="showMunicipalities = !showMunicipalities"
+      @toggle-ais="handleToggleAis"
+      @save-bw-credentials="handleSaveBwCredentials"
+      @go-to-coordinate="handleGoToCoordinate"
     />
 
     <TurposterPanel

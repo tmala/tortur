@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "vite",
     "build:data": "node scripts/build-data.js",
     "build:icons": "node scripts/generate-favicons.js",
     "build": "npm run build:data && run-p type-check \"build-only {@}\" --",
