@@ -1,5 +1,5 @@
 // =============================================================================
-// TorTur – Google Apps Script Backend
+// TorTur – Google Apps Script Backend v6
 // =============================================================================
 // Instruksjoner:
 //  1. Gå til Google Regneark → Extensions → Apps Script
@@ -98,7 +98,10 @@ function doPost(e) {
         if (u) userId = u.sub
       }
       if (!userId) {
-        return jsonResponse({ success: false, error: 'Krever innlogging for a hente systemkonfigurasjon.' })
+        return jsonResponse({
+          success: false,
+          error: 'Krever innlogging for a hente systemkonfigurasjon.',
+        })
       }
       return jsonResponse({ success: true, systemConfig: getSystemConfig(ss) })
     }
@@ -348,7 +351,10 @@ function handleCheckin(body) {
   try {
     var sysConfig = getSystemConfig(ss)
     var firebaseUrl = (sysConfig.FIREBASE_DB_URL || '').toString().trim().replace(/\/$/, '')
-    var secretPrefix = (sysConfig.FIREBASE_SECRET_PREFIX || '').toString().trim().replace(/^\/|\/$/g, '')
+    var secretPrefix = (sysConfig.FIREBASE_SECRET_PREFIX || '')
+      .toString()
+      .trim()
+      .replace(/^\/|\/$/g, '')
 
     if (firebaseUrl && secretPrefix) {
       var checkinId = 'c_' + new Date().getTime()
@@ -373,11 +379,27 @@ function handleCheckin(body) {
       }
 
       // 6a. Turpost-indeks: /{secretPrefix}/turposter/{turpostId}/{checkinId}.json
-      var turpostUrl = firebaseUrl + '/' + secretPrefix + '/turposter/' + encodeURIComponent(turpostId) + '/' + checkinId + '.json'
+      var turpostUrl =
+        firebaseUrl +
+        '/' +
+        secretPrefix +
+        '/turposter/' +
+        encodeURIComponent(turpostId) +
+        '/' +
+        checkinId +
+        '.json'
       UrlFetchApp.fetch(turpostUrl, fetchOptions)
 
       // 6b. Bruker-indeks: /{secretPrefix}/brukere/{userId}/{checkinId}.json
-      var brukerUrl = firebaseUrl + '/' + secretPrefix + '/brukere/' + encodeURIComponent(userId) + '/' + checkinId + '.json'
+      var brukerUrl =
+        firebaseUrl +
+        '/' +
+        secretPrefix +
+        '/brukere/' +
+        encodeURIComponent(userId) +
+        '/' +
+        checkinId +
+        '.json'
       UrlFetchApp.fetch(brukerUrl, fetchOptions)
     }
   } catch (fbErr) {
