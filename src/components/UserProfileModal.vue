@@ -11,7 +11,8 @@ import {
   Compass,
   Maximize2,
   ShieldCheck,
-  RotateCw
+  RotateCw,
+  ChevronDown
 } from 'lucide-vue-next'
 import type { GoogleUser, FirebaseCheckinItem } from '@/composables/useAuth'
 
@@ -61,6 +62,22 @@ const handleForceRefresh = async () => {
     // 3. Tving en full reload fra serveren
     window.location.reload()
   }
+}
+
+// Sporer hvilke innsjekkinger som er ekspandert i listen
+const expandedCheckinIds = ref<Set<string>>(new Set())
+
+const toggleExpand = (id: string | number) => {
+  const key = String(id)
+  if (expandedCheckinIds.value.has(key)) {
+    expandedCheckinIds.value.delete(key)
+  } else {
+    expandedCheckinIds.value.add(key)
+  }
+}
+
+const isExpanded = (id: string | number): boolean => {
+  return expandedCheckinIds.value.has(String(id))
 }
 
 // Lightbox for bildevisning
@@ -123,27 +140,41 @@ onUnmounted(() => {
         <div class="profile-modal-card glass-panel" role="dialog" aria-modal="true">
           <!-- Header med brukerinfo og Lukk-knapp -->
           <div class="profile-modal-header">
-            <div class="user-info-row">
-              <div class="user-avatar-wrap">
-                <img
-                  v-if="user?.avatarUrl"
-                  :src="user.avatarUrl"
-                  :alt="user.userName"
-                  class="user-avatar-img"
-                  referrerpolicy="no-referrer"
-                />
-                <div v-else class="user-avatar-fallback">
-                  <Mountain :size="24" />
+            <!-- Øverste rad: Profilbilde, navn, e-post og Lukk-knapp -->
+            <div class="profile-header-top">
+              <div class="user-info-row">
+                <div class="user-avatar-wrap">
+                  <img
+                    v-if="user?.avatarUrl"
+                    :src="user.avatarUrl"
+                    :alt="user.userName"
+                    class="user-avatar-img"
+                    referrerpolicy="no-referrer"
+                  />
+                  <div v-else class="user-avatar-fallback">
+                    <Mountain :size="24" />
+                  </div>
+                  <div class="user-online-badge" title="Tilkoblet" />
                 </div>
-                <div class="user-online-badge" title="Tilkoblet" />
+                <div class="user-details">
+                  <h3 class="user-name">{{ user?.userName || 'Turgåer' }}</h3>
+                  <span class="user-email">{{ user?.email }}</span>
+                </div>
               </div>
-              <div class="user-details">
-                <h3 class="user-name">{{ user?.userName || 'Turgåer' }}</h3>
-                <span class="user-email">{{ user?.email }}</span>
-              </div>
+
+              <!-- Lukk-knapp oppe til høyre -->
+              <button
+                class="btn-profile-close"
+                @click="emit('close')"
+                title="Lukk (Esc)"
+                aria-label="Lukk"
+              >
+                <X :size="18" />
+              </button>
             </div>
 
-            <div class="header-actions">
+            <!-- Handlingsknapper under profilinfoen -->
+            <div class="profile-header-actions">
               <!-- Oppdater appen / Tving refresh -->
               <button
                 class="btn-profile-refresh"
@@ -166,21 +197,15 @@ onUnmounted(() => {
                 <ShieldCheck :size="15" />
                 <span>{{ props.isAdminModeActive ? 'Admin: PÅ' : 'Admin: AV' }}</span>
               </button>
+
+              <!-- Logg ut -->
               <button
                 class="btn-profile-logout"
                 @click="emit('logout')"
                 title="Logg ut av TorTur"
               >
-                <LogOut :size="15" />
+                <LogOut :size="14" />
                 <span>Logg ut</span>
-              </button>
-              <button
-                class="btn-profile-close"
-                @click="emit('close')"
-                title="Lukk (Esc)"
-                aria-label="Lukk"
-              >
-                <X :size="18" />
               </button>
             </div>
           </div>
@@ -244,48 +269,74 @@ onUnmounted(() => {
               <p>Trykk på en turpost i kartet og velg «Sjekk inn her» for å registrere din første tur!</p>
             </div>
 
-            <!-- Innsjekkingsliste -->
+            <!-- Innsjekkingsliste (ekspanderbar) -->
             <div v-else class="checkin-cards-list">
               <div
                 v-for="(item, idx) in sortedCheckins"
                 :key="item.id || idx"
                 class="user-checkin-card"
+                :class="{ 'card-expanded': isExpanded(item.id || idx) }"
               >
                 <div class="checkin-card-main">
-                  <div class="checkin-card-header">
+                  <!-- Klikkbart hode: Viser turpostnavn, dato og pil -->
+                  <div
+                    class="checkin-card-header"
+                    @click="toggleExpand(item.id || idx)"
+                    title="Klikk for å vise/skjule detaljer og bilde"
+                  >
                     <div class="turpost-name-row">
                       <CheckCircle2 :size="16" class="check-icon" />
                       <span class="turpost-heading">
                         {{ item.turpostName || ('Turpost ' + item.turpostId) }}
                       </span>
                     </div>
-                    <div class="checkin-date-badge">
-                      <Calendar :size="13" />
-                      <span>{{ formatDate(item.timestamp) }}</span>
+                    <div class="checkin-header-right">
+                      <div class="checkin-date-badge">
+                        <Calendar :size="13" />
+                        <span>{{ formatDate(item.timestamp) }}</span>
+                      </div>
+                      <ChevronDown
+                        :size="16"
+                        class="chevron-expand"
+                        :class="{ 'is-open': isExpanded(item.id || idx) }"
+                      />
                     </div>
                   </div>
 
-                  <p v-if="item.description" class="checkin-desc">
-                    {{ item.description }}
-                  </p>
+                  <!-- Ekspanderbare detaljer (notat og bilde) -->
+                  <div
+                    v-if="isExpanded(item.id || idx)"
+                    class="checkin-card-details"
+                  >
+                    <p v-if="item.description" class="checkin-desc">
+                      {{ item.description }}
+                    </p>
 
-                  <div v-if="item.imageUrl" class="checkin-photo-wrap">
-                    <button
-                      type="button"
-                      class="photo-thumb-btn"
-                      @click="lightboxImage = item.imageUrl"
-                      title="Klikk for å se bildet i fullskjerm"
+                    <div v-if="item.imageUrl" class="checkin-photo-wrap">
+                      <button
+                        type="button"
+                        class="photo-thumb-btn"
+                        @click.stop="lightboxImage = item.imageUrl"
+                        title="Klikk for å se bildet i fullskjerm"
+                      >
+                        <img
+                          :src="item.imageUrl"
+                          alt="Turbilde"
+                          class="checkin-photo-thumb"
+                          loading="lazy"
+                        />
+                        <div class="photo-overlay">
+                          <Maximize2 :size="16" />
+                        </div>
+                      </button>
+                    </div>
+
+                    <p
+                      v-if="!item.description && !item.imageUrl"
+                      class="checkin-empty-detail"
                     >
-                      <img
-                        :src="item.imageUrl"
-                        alt="Turbilde"
-                        class="checkin-photo-thumb"
-                        loading="lazy"
-                      />
-                      <div class="photo-overlay">
-                        <Maximize2 :size="16" />
-                      </div>
-                    </button>
+                      Ingen notat eller bilde registrert på denne turen.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -343,12 +394,27 @@ onUnmounted(() => {
 /* Header */
 .profile-modal-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px;
+  flex-direction: column;
+  padding: 16px 18px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(15, 23, 42, 0.5);
   gap: 12px;
+}
+
+.profile-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.profile-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
 }
 
 .user-info-row {
@@ -356,6 +422,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 14px;
   min-width: 0;
+  flex: 1;
 }
 
 .user-avatar-wrap {
@@ -713,7 +780,55 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  flex-wrap: wrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkin-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.chevron-expand {
+  color: #94a3b8;
+  transition: transform 0.2s ease, color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.chevron-expand.is-open {
+  transform: rotate(180deg);
+  color: #38bdf8;
+}
+
+.checkin-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 2px;
+  animation: expand-fade 0.2s ease;
+}
+
+@keyframes expand-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.checkin-empty-detail {
+  font-size: 12px;
+  color: #64748b;
+  font-style: italic;
+  margin: 0;
+  padding: 4px 0;
 }
 
 .turpost-name-row {

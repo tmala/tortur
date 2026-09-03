@@ -520,11 +520,23 @@ describe('UserProfileModal', () => {
     expect(bodyText).toContain('tormala@example.com')
     expect(bodyText).toContain('Gavelen')
     expect(bodyText).toContain('Vardetangen')
-    expect(bodyText).toContain('Nyeste tur!')
+
+    // Sjekk at detaljer er skjult når listen er kollapset
+    expect(document.body.textContent).not.toContain('Nyeste tur!')
+
+    // Klikk for å ekspandere det første kortet
+    const firstCardHeader = document.body.querySelector('.checkin-card-header') as HTMLElement
+    expect(firstCardHeader).not.toBeNull()
+    firstCardHeader.click()
+    await wrapper.vm.$nextTick()
+
+    // Nå skal notatet vises
+    expect(document.body.textContent).toContain('Nyeste tur!')
 
     // Vardetangen (nyeste) skal komme før Gavelen i DOM
-    const vardetangenPos = bodyText.indexOf('Vardetangen')
-    const gavelenPos = bodyText.indexOf('Gavelen')
+    const currentBody = document.body.textContent || ''
+    const vardetangenPos = currentBody.indexOf('Vardetangen')
+    const gavelenPos = currentBody.indexOf('Gavelen')
     expect(vardetangenPos).toBeLessThan(gavelenPos)
 
     const logoutBtn = document.body.querySelector('.btn-profile-logout') as HTMLButtonElement
