@@ -702,6 +702,16 @@ const handleInstallClick = async () => {
   .brand-version {
     display: none;
   }
+
+  .layer-modal,
+  .info-modal,
+  .ais-modal {
+    top: calc(154px + env(safe-area-inset-top, 0px));
+    left: 10px;
+    width: calc(100% - 20px);
+    max-height: calc(100dvh - 165px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    padding: 10px;
+  }
 }
 
 .btn-turposter {
@@ -807,16 +817,17 @@ const handleInstallClick = async () => {
 /* AIS Modal */
 .ais-modal {
   position: absolute;
-  top: 124px;
+  top: calc(110px + env(safe-area-inset-top, 0px));
   left: 16px;
   max-width: 440px;
   width: calc(100% - 32px);
-  max-height: calc(100vh - 140px);
+  max-height: calc(100dvh - 130px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
-  padding: 16px;
+  padding: 14px;
   z-index: 30;
   background: #0f172a;
   border: 1px solid #38bdf8;
+  border-radius: 14px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
   color: #f8fafc;
 }
@@ -983,16 +994,17 @@ const handleInstallClick = async () => {
 .layer-modal,
 .info-modal {
   position: absolute;
-  top: 124px;
+  top: calc(110px + env(safe-area-inset-top, 0px));
   left: 16px;
   max-width: 380px;
   width: calc(100% - 32px);
-  max-height: calc(100vh - 140px);
+  max-height: calc(100dvh - 130px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
-  padding: 16px;
+  padding: 10px 12px;
   z-index: 20;
   background: #0f172a;
   border: 1px solid #334155;
+  border-radius: 14px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
 }
 
@@ -1000,13 +1012,13 @@ const handleInstallClick = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px solid #334155;
 }
 
 .layer-modal-header h3 {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: #f8fafc;
 }
@@ -1029,17 +1041,17 @@ const handleInstallClick = async () => {
 .layer-options {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .layer-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 11px 14px;
+  padding: 6px 10px;
   background: #1e293b;
   border: 1px solid #334155;
-  border-radius: 10px;
+  border-radius: 8px;
   color: #f8fafc;
   cursor: pointer;
   text-align: left;
@@ -1060,20 +1072,25 @@ const handleInstallClick = async () => {
 .layer-info {
   display: flex;
   flex-direction: column;
+  gap: 1px;
 }
 
 .layer-name {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
+  line-height: 1.25;
 }
 
 .layer-desc {
-  font-size: 11px;
+  font-size: 10.5px;
   color: #94a3b8;
+  line-height: 1.2;
 }
 
 .check-icon {
   color: #38bdf8;
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 
 .info-content {
