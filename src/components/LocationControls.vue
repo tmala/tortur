@@ -15,7 +15,7 @@ import {
   Anchor,
   Radio,
   Settings,
-  Crosshair,
+  MapPin,
   ChevronDown,
   X,
 } from 'lucide-vue-next'
@@ -40,6 +40,7 @@ const props = defineProps<{
   currentZoom?: number
   minZoomForAis?: number
   isLoggedIn?: boolean
+  isLoadingLocalTurposter?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -50,18 +51,13 @@ const emit = defineEmits<{
   (e: 'toggle-turposter'): void
   (e: 'toggle-municipalities'): void
   (e: 'toggle-ais'): void
-  (e: 'go-to-coordinate', coords: { lat: number; lng: number }): void
+  (e: 'show-local-turposter'): void
   (e: 'open-profile'): void
 }>()
 
 const showLayerMenu = ref(false)
 const showInfoModal = ref(false)
 const showAisModal = ref(false)
-const showCoordModal = ref(false)
-const coordLat = ref('')
-const coordLng = ref('')
-const coordInput = ref('')
-const coordError = ref('')
 const installPrompt = ref<any>(null)
 const isInstalled = ref(false)
 
@@ -99,10 +95,6 @@ const handleKeyDown = (e: KeyboardEvent) => {
     }
     if (showInfoModal.value) {
       showInfoModal.value = false
-      return
-    }
-    if (showCoordModal.value) {
-      showCoordModal.value = false
       return
     }
     if (isMenuOpen.value) {
@@ -163,47 +155,8 @@ const toggleLayerMenu = () => {
 }
 
 const selectLayer = (layerId: string) => {
-  if (layerId.startsWith('google_') && !props.isLoggedIn) {
-    return
-  }
   emit('change-layer', layerId)
   showLayerMenu.value = false
-}
-
-const handleGoToCoordinates = () => {
-  coordError.value = ''
-  let lat: number | null = null
-  let lng: number | null = null
-
-  const raw = coordInput.value.trim()
-  if (raw) {
-    const parts = raw
-      .split(/[\s,;]+/)
-      .map((p) => parseFloat(p.trim()))
-      .filter((p) => !isNaN(p))
-    if (parts.length >= 2) {
-      lat = parts[0]!
-      lng = parts[1]!
-    }
-  }
-
-  if (lat === null || lng === null) {
-    const parsedLat = parseFloat(coordLat.value.replace(',', '.'))
-    const parsedLng = parseFloat(coordLng.value.replace(',', '.'))
-    if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
-      lat = parsedLat
-      lng = parsedLng
-    }
-  }
-
-  if (lat === null || lng === null || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-    coordError.value = 'Vennligst oppgi gyldige koordinater (f.eks. Lat: 65.2833, Lng: 6.3921)'
-    return
-  }
-
-  emit('go-to-coordinate', { lat, lng })
-  showCoordModal.value = false
-  coordError.value = ''
 }
 
 // Event listeners for install, click outside og escape
@@ -294,15 +247,16 @@ const handleInstallClick = async () => {
               <LocateFixed v-else :size="18" />
             </button>
 
-            <!-- Gå til koordinat -->
+            <!-- Vis turposter i min kommune -->
             <button
-              class="icon-btn btn-coord"
-              :class="{ active: showCoordModal }"
-              @click="showCoordModal = !showCoordModal"
-              title="Gå til koordinat"
-              aria-label="Gå til koordinat"
+              class="icon-btn btn-local-turposter"
+              :disabled="isLoadingLocalTurposter"
+              @click="emit('show-local-turposter')"
+              title="Vis turposter i min kommune"
+              aria-label="Vis turposter i min kommune"
             >
-              <Crosshair :size="18" />
+              <Loader2 v-if="isLoadingLocalTurposter" class="spinner" :size="18" />
+              <MapPin v-else :size="18" />
             </button>
 
             <!-- Følg meg -->
@@ -573,61 +527,7 @@ const handleInstallClick = async () => {
       </div>
     </div>
 
-    <!-- Gå til koordinat Modal -->
-    <transition name="fade-slide">
-      <div v-if="showCoordModal" class="coord-modal glass-panel">
-        <div class="layer-modal-header">
-          <div class="coord-header-title">
-            <Crosshair :size="18" class="coord-title-icon" />
-            <h3>Gå til koordinat</h3>
-          </div>
-          <button class="btn-close" @click="showCoordModal = false">✕</button>
-        </div>
-        <div class="coord-modal-content">
-          <p class="coord-desc">
-            Skriv inn eller lim inn koordinater for å flytte og sentrere kartet direkte til punktet.
-          </p>
 
-          <div class="coord-quick-input">
-            <label>Lim inn koordinater (f.eks. "65.2833, 6.3921"):</label>
-            <input
-              v-model="coordInput"
-              placeholder="65.283295, 6.392140"
-              class="coord-input"
-              @keyup.enter="handleGoToCoordinates"
-            />
-          </div>
-
-          <div class="coord-split-inputs">
-            <div class="coord-field">
-              <label>Breddegrad (Lat):</label>
-              <input
-                v-model="coordLat"
-                placeholder="f.eks. 65.2833"
-                class="coord-input"
-                @keyup.enter="handleGoToCoordinates"
-              />
-            </div>
-            <div class="coord-field">
-              <label>Lengdegrad (Lng):</label>
-              <input
-                v-model="coordLng"
-                placeholder="f.eks. 6.3921"
-                class="coord-input"
-                @keyup.enter="handleGoToCoordinates"
-              />
-            </div>
-          </div>
-
-          <div v-if="coordError" class="coord-error-msg">⚠️ {{ coordError }}</div>
-
-          <div class="coord-actions">
-            <button class="btn-coord-cancel" @click="showCoordModal = false">Avbryt</button>
-            <button class="btn-coord-submit" @click="handleGoToCoordinates">🎯 Sentrér kart</button>
-          </div>
-        </div>
-      </div>
-    </transition>
   </div>
 </template>
 
@@ -1064,137 +964,19 @@ const handleInstallClick = async () => {
   cursor: pointer;
 }
 
-/* Coord Modal */
-.coord-modal {
-  position: absolute;
-  top: 124px;
-  left: 16px;
-  max-width: 440px;
-  width: calc(100% - 32px);
-  max-height: calc(100vh - 140px);
-  overflow-y: auto;
-  padding: 16px;
-  z-index: 40;
-  background: #0f172a;
-  border: 1px solid #38bdf8;
-  border-radius: 16px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9);
-  color: #f8fafc;
-}
-
-.coord-header-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.coord-title-icon {
+.btn-local-turposter {
   color: #38bdf8;
 }
 
-.coord-modal-content {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.coord-desc {
-  font-size: 13px;
-  color: #cbd5e1;
-  line-height: 1.4;
-  margin: 0;
-}
-
-.coord-quick-input,
-.coord-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.coord-quick-input label,
-.coord-field label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #94a3b8;
-}
-
-.coord-split-inputs {
-  display: flex;
-  gap: 10px;
-}
-
-.coord-split-inputs .coord-field {
-  flex: 1;
-}
-
-.coord-input {
-  background: #1e293b;
-  border: 1px solid #475569;
-  border-radius: 8px;
-  padding: 8px 10px;
-  color: #f8fafc;
-  font-size: 13px;
-  font-family: monospace;
-  outline: none;
-}
-
-.coord-input:focus {
-  border-color: #38bdf8;
-}
-
-.coord-error-msg {
-  font-size: 12px;
-  color: #f87171;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid #ef4444;
-  padding: 6px 10px;
-  border-radius: 6px;
-}
-
-.coord-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.btn-coord-submit {
-  background: linear-gradient(135deg, #0284c7, #2563eb);
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-coord-submit:hover {
-  background: linear-gradient(135deg, #0369a1, #1d4ed8);
-}
-
-.btn-coord-cancel {
-  background: #334155;
-  color: #f8fafc;
-  border: 1px solid #475569;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.btn-coord {
-  background: #1e293b;
-}
-
-.btn-coord:hover,
-.btn-coord.active {
-  background: #0284c7;
+.btn-local-turposter:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.2);
   border-color: #38bdf8;
   color: #ffffff;
-  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+}
+
+.btn-local-turposter:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 /* Lag- og infomodaler */

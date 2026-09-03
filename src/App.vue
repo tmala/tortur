@@ -11,6 +11,7 @@ import { useGeolocation } from './composables/useGeolocation'
 import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from './composables/useTurposter'
 import { useAis } from './composables/useAis'
 import { useAuth, type FirebaseCheckinItem } from './composables/useAuth'
+import { useGeoDetect } from './composables/useGeoDetect'
 
 const {
   isLocating,
@@ -261,10 +262,42 @@ const handleLocate = async () => {
   }
 }
 
-// Håndter "Gå til koordinat"
-const handleGoToCoordinate = (coordsData: { lat: number; lng: number }) => {
-  if (mapViewerRef.value) {
-    mapViewerRef.value.panToCoordinate(coordsData.lat, coordsData.lng, 14)
+// Håndter "Vis turposter i min kommune"
+const { detectKommune } = useGeoDetect()
+const isLoadingLocalTurposter = ref(false)
+
+const handleShowLocalTurposter = async () => {
+  if (isLoadingLocalTurposter.value) return
+  isLoadingLocalTurposter.value = true
+  try {
+    let loc = coords.value
+    if (!loc) {
+      loc = await getCurrentPosition()
+    }
+    if (!loc) {
+      geoError.value = 'Kunne ikke hente din posisjon for å finne kommunen din.'
+      return
+    }
+
+    const geoResult = await detectKommune(loc.lat, loc.lng)
+    if (!geoResult || !geoResult.kommune) {
+      turError.value = 'Finner ingen norsk kommune på din nåværende posisjon.'
+      return
+    }
+
+    const result = await selectKommuneByName(geoResult.kommune)
+    if (result) {
+      isTurposterOpen.value = true
+      if (mapViewerRef.value) {
+        mapViewerRef.value.centerOnUser(true, 13)
+      }
+    } else {
+      turError.value = `Fant ingen registrerte turposter for ${geoResult.kommune}.`
+    }
+  } catch (err: any) {
+    console.warn('Kunne ikke finne lokal kommune:', err)
+  } finally {
+    isLoadingLocalTurposter.value = false
   }
 }
 
@@ -376,6 +409,7 @@ onUnmounted(() => {
       :current-zoom="currentZoom"
       :min-zoom-for-ais="minZoomForAis"
       :is-logged-in="isLoggedIn"
+      :is-loading-local-turposter="isLoadingLocalTurposter"
       @locate="handleLocate"
       @toggle-tracking="handleToggleTracking"
       @change-layer="handleChangeLayer"
@@ -383,7 +417,7 @@ onUnmounted(() => {
       @toggle-turposter="handleToggleTurposter"
       @toggle-municipalities="showMunicipalities = !showMunicipalities"
       @toggle-ais="handleToggleAis"
-      @go-to-coordinate="handleGoToCoordinate"
+      @show-local-turposter="handleShowLocalTurposter"
       @open-profile="handleOpenProfile"
     />
 
