@@ -142,6 +142,7 @@ const handleSubmit = async () => {
 
     const result = await submitCheckin({
       turpostId: props.turpost.id,
+      turpostName: props.turpost.name,
       description: description.value.trim(),
       imageFile: fileToUpload
     })

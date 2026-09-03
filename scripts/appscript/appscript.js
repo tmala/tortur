@@ -352,12 +352,14 @@ function handleCheckin(body) {
 
     if (firebaseUrl && secretPrefix) {
       var checkinId = 'c_' + new Date().getTime()
+      var turpostName = (body.turpostName || '').toString().trim()
       var firebasePayload = {
         id: checkinId,
         userId: userId,
         userName: userName,
         userAvatar: userAvatar,
         turpostId: String(turpostId),
+        turpostName: turpostName,
         timestamp: timestamp,
         description: description,
         imageUrl: imageUrl,

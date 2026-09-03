@@ -5,6 +5,7 @@ import LocationControls from './components/LocationControls.vue'
 import TurposterPanel from './components/TurposterPanel.vue'
 import CheckinModal from './components/CheckinModal.vue'
 import TurpostCheckinsModal from './components/TurpostCheckinsModal.vue'
+import UserProfileModal from './components/UserProfileModal.vue'
 import { useGeolocation } from './composables/useGeolocation'
 import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from './composables/useTurposter'
 import { useAis } from './composables/useAis'
@@ -34,10 +35,11 @@ const {
   clearError: clearAisError
 } = useAis()
 
-const { user, isLoggedIn, aisClientId, aisClientSecret, fetchMyCheckins } = useAuth()
+const { user, isLoggedIn, aisClientId, aisClientSecret, fetchMyCheckins, logout } = useAuth()
 const activeLayer = ref<string>('standard')
 const activeCheckinPost = ref<TurpostItem | null>(null)
 const activeViewCheckinsPost = ref<TurpostItem | null>(null)
+const isProfileOpen = ref(false)
 
 // Brukerens egne innsjekkinger fra Firebase
 const myCheckins = ref<FirebaseCheckinItem[]>([])
@@ -73,6 +75,16 @@ const handleOpenCheckin = (post: TurpostItem) => {
 
 const handleViewCheckins = (post: TurpostItem) => {
   activeViewCheckinsPost.value = post
+}
+
+const handleOpenProfile = async () => {
+  isProfileOpen.value = true
+  await loadMyCheckins()
+}
+
+const handleLogoutFromProfile = () => {
+  isProfileOpen.value = false
+  logout()
 }
 
 const handleCheckinSubmitted = (result: any) => {
@@ -352,6 +364,7 @@ onUnmounted(() => {
       @toggle-municipalities="showMunicipalities = !showMunicipalities"
       @toggle-ais="handleToggleAis"
       @go-to-coordinate="handleGoToCoordinate"
+      @open-profile="handleOpenProfile"
     />
 
     <TurposterPanel
@@ -393,6 +406,15 @@ onUnmounted(() => {
       :current-user-id="user?.userId"
       @close="activeViewCheckinsPost = null"
       @open-checkin="(post) => { activeViewCheckinsPost = null; activeCheckinPost = post }"
+    />
+
+    <!-- Profilvisning med brukerens innsjekkede turposter og utlogging -->
+    <UserProfileModal
+      :is-open="isProfileOpen"
+      :user="user"
+      :checkins="myCheckins"
+      @close="isProfileOpen = false"
+      @logout="handleLogoutFromProfile"
     />
   </main>
 </template>

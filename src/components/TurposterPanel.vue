@@ -198,13 +198,14 @@ const filteredKommunerList = () => {
                 <div class="post-info">
                   <span class="post-title">{{ post.name }}</span>
                   <div class="post-meta">
-                    <span v-if="visitedTurpostIds?.has(String(post.id))" class="visited-tag" title="Du har besøkt denne posten">✓ Besøkt</span>
+                    <span v-if="isLoggedIn && visitedTurpostIds?.has(String(post.id))" class="visited-tag" title="Du har besøkt denne posten">✓ Besøkt</span>
                     <span v-if="post.alt" class="alt-tag">⛰️ {{ post.alt }} moh.</span>
                     <span class="coord-tag">{{ post.lat.toFixed(4) }}°, {{ post.lng.toFixed(4) }}°</span>
                   </div>
                 </div>
                 <div class="post-actions-wrap">
                   <button
+                    v-if="isLoggedIn"
                     class="btn-view-list"
                     @click.stop="emit('view-checkins', post)"
                     title="Vis innsjekkinger for denne turposten"

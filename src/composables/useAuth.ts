@@ -16,6 +16,7 @@ export interface SystemConfig {
 
 export interface CheckinParams {
   turpostId: string | number
+  turpostName?: string
   description: string
   imageFile?: File | null
 }
@@ -23,6 +24,7 @@ export interface CheckinParams {
 export interface CheckinResult {
   userId: string
   turpostId: string
+  turpostName?: string
   timestamp: string
   description: string
   imageUrl: string
@@ -36,6 +38,7 @@ export interface FirebaseCheckinItem {
   userName: string
   userAvatar: string
   turpostId: string
+  turpostName?: string
   timestamp: string
   description: string
   imageUrl: string
@@ -251,6 +254,7 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
     userId: user.value.userId,
     email: user.value.email,
     turpostId: String(params.turpostId),
+    turpostName: params.turpostName || '',
     description: params.description || '',
     image: imagePayload
   }

@@ -4,6 +4,7 @@ import LocationControls from '../components/LocationControls.vue'
 import TurposterPanel from '../components/TurposterPanel.vue'
 import CheckinModal from '../components/CheckinModal.vue'
 import TurpostCheckinsModal from '../components/TurpostCheckinsModal.vue'
+import UserProfileModal from '../components/UserProfileModal.vue'
 
 describe('LocationControls', () => {
   it('renders application title and toggles menu properly', async () => {
@@ -276,6 +277,33 @@ describe('TurposterPanel', () => {
     expect(wrapper.emitted('view-checkins')).toBeTruthy()
     expect(wrapper.emitted('view-checkins')![0]![0]).toEqual(samplePost)
   })
+
+  it('hides view-checkins button in turposter list when not logged in', () => {
+    const samplePost = {
+      id: 'luster-1',
+      name: 'Molden',
+      lat: 61.3412,
+      lng: 7.3145,
+      alt: 1116
+    }
+
+    const wrapper = mount(TurposterPanel, {
+      props: {
+        isOpen: true,
+        hierarchy: sampleHierarchy,
+        selectedFylke: sampleHierarchy[0]!,
+        selectedKommune: sampleHierarchy[0]!.kommuner[0]!,
+        turposter: [samplePost],
+        filteredTurposter: [samplePost],
+        isLoadingHierarchy: false,
+        isLoadingPosts: false,
+        searchQuery: '',
+        isLoggedIn: false
+      }
+    })
+
+    expect(wrapper.find('.btn-view-list').exists()).toBe(false)
+  })
 })
 
 describe('CheckinModal', () => {
@@ -342,5 +370,67 @@ describe('TurpostCheckinsModal', () => {
     quickCheckinBtn.click()
     expect(wrapper.emitted('open-checkin')).toBeTruthy()
     expect(wrapper.emitted('open-checkin')![0]![0]).toEqual(samplePost)
+  })
+})
+
+describe('UserProfileModal', () => {
+  it('renders user details, stats, chronological checkins, and emits logout', async () => {
+    const sampleUser = {
+      userId: '112985692350976832637',
+      userName: 'Tor Mala',
+      email: 'tormala@example.com',
+      avatarUrl: 'https://example.com/avatar.jpg',
+      lastLogin: '2026-09-03T10:00:00Z'
+    }
+
+    const checkins = [
+      {
+        id: 'c_1',
+        userId: '112985692350976832637',
+        userName: 'Tor Mala',
+        userAvatar: '',
+        turpostId: '5ee93bee5d376792d0c660b6',
+        turpostName: 'Gavelen',
+        timestamp: '2026-09-01T10:00:00Z',
+        description: 'Tidligere tur',
+        imageUrl: ''
+      },
+      {
+        id: 'c_2',
+        userId: '112985692350976832637',
+        userName: 'Tor Mala',
+        userAvatar: '',
+        turpostId: '5f5132e559c7186497f302c4',
+        turpostName: 'Vardetangen',
+        timestamp: '2026-09-03T10:39:45Z',
+        description: 'Nyeste tur!',
+        imageUrl: ''
+      }
+    ]
+
+    const wrapper = mount(UserProfileModal, {
+      props: {
+        isOpen: true,
+        user: sampleUser,
+        checkins
+      }
+    })
+
+    const bodyText = document.body.textContent || ''
+    expect(bodyText).toContain('Tor Mala')
+    expect(bodyText).toContain('tormala@example.com')
+    expect(bodyText).toContain('Gavelen')
+    expect(bodyText).toContain('Vardetangen')
+    expect(bodyText).toContain('Nyeste tur!')
+
+    // Vardetangen (nyeste) skal komme før Gavelen i DOM
+    const vardetangenPos = bodyText.indexOf('Vardetangen')
+    const gavelenPos = bodyText.indexOf('Gavelen')
+    expect(vardetangenPos).toBeLessThan(gavelenPos)
+
+    const logoutBtn = document.body.querySelector('.btn-profile-logout') as HTMLButtonElement
+    expect(logoutBtn).not.toBeNull()
+    logoutBtn.click()
+    expect(wrapper.emitted('logout')).toBeTruthy()
   })
 })

@@ -51,6 +51,7 @@ const emit = defineEmits<{
   (e: 'toggle-municipalities'): void
   (e: 'toggle-ais'): void
   (e: 'go-to-coordinate', coords: { lat: number; lng: number }): void
+  (e: 'open-profile'): void
 }>()
 
 const showLayerMenu = ref(false)
@@ -260,7 +261,7 @@ const handleInstallClick = async () => {
 
         <div class="brand-divider" />
 
-        <AuthPanel />
+        <AuthPanel @open-profile="emit('open-profile')" />
       </header>
 
       <!-- Menyen med Turposter osv. plassert RETT UNDER hovedmenypunktet -->

@@ -256,32 +256,32 @@ const updateTurpostMarkers = (posts: TurpostItem[]) => {
         <div class="popup-info">
           Posisjon: ${post.lat.toFixed(5)}°, ${post.lng.toFixed(5)}°
         </div>
-        <div class="turpost-popup-actions">
-          <button type="button" class="btn-popup-view" id="view-checkins-btn-${post.id}">
-            👁️ Vis innsjekkinger
-          </button>
-          ${props.isLoggedIn ? `
+        ${props.isLoggedIn ? `
+          <div class="turpost-popup-actions">
+            <button type="button" class="btn-popup-view" id="view-checkins-btn-${post.id}">
+              👁️ Vis innsjekkinger
+            </button>
             <button type="button" class="btn-popup-checkin" id="checkin-btn-${post.id}">
               📍 Sjekk inn her
             </button>
-          ` : `
-            <div class="popup-checkin-hint">Logg inn for å sjekke inn</div>
-          `}
-        </div>
+          </div>
+        ` : `
+          <div class="popup-checkin-hint">Logg inn for å se innsjekkinger og sjekke inn</div>
+        `}
       </div>
     `
 
     marker.bindPopup(popupHtml)
     marker.on('popupopen', () => {
-      const viewBtn = document.getElementById(`view-checkins-btn-${post.id}`)
-      if (viewBtn) {
-        viewBtn.onclick = (e) => {
-          e.stopPropagation()
-          emit('view-checkins', post)
-        }
-      }
-
       if (props.isLoggedIn) {
+        const viewBtn = document.getElementById(`view-checkins-btn-${post.id}`)
+        if (viewBtn) {
+          viewBtn.onclick = (e) => {
+            e.stopPropagation()
+            emit('view-checkins', post)
+          }
+        }
+
         const checkinBtn = document.getElementById(`checkin-btn-${post.id}`)
         if (checkinBtn) {
           checkinBtn.onclick = (e) => {

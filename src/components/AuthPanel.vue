@@ -5,8 +5,11 @@ import { LogOut, LogIn, Shield, User, Loader2, AlertCircle, X } from 'lucide-vue
 
 const { user, isLoggedIn, isLoading, error, login, logout } = useAuth()
 
-const showPanel   = ref(false)
-const showDropdown = ref(false)
+const emit = defineEmits<{
+  (e: 'open-profile'): void
+}>()
+
+const showPanel = ref(false)
 
 const handleLogin = async () => {
   showPanel.value = false
@@ -16,44 +19,29 @@ const handleLogin = async () => {
   }
 }
 
-const handleLogout = () => {
-  logout()
-  showDropdown.value = false
-}
-
-const handleClickOutside = (e: MouseEvent) => {
-  const target = e.target as HTMLElement
-  if (!target.closest('.auth-dropdown-wrapper')) {
-    showDropdown.value = false
-  }
-}
-
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Escape') {
     if (showPanel.value) showPanel.value = false
-    if (showDropdown.value) showDropdown.value = false
   }
 }
 
 onMounted(() => {
-  window.addEventListener('click', handleClickOutside)
   window.addEventListener('keydown', handleKeyDown)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('click', handleClickOutside)
   window.removeEventListener('keydown', handleKeyDown)
 })
 </script>
 
 <template>
   <div class="auth-root">
-    <!-- Innlogget: Avatar + dropdown -->
-    <div v-if="isLoggedIn && user" class="auth-dropdown-wrapper" @click.stop>
+    <!-- Innlogget: Avatar åpner profilvisning -->
+    <div v-if="isLoggedIn && user" class="auth-dropdown-wrapper">
       <button
         class="auth-avatar-btn"
-        :title="`Innlogget som ${user.userName}`"
-        @click="showDropdown = !showDropdown"
+        :title="`Min profil (${user.userName}) - klikk for å se besøkte turposter og logge ut`"
+        @click="emit('open-profile')"
       >
         <img
           v-if="user.avatarUrl"
@@ -67,29 +55,6 @@ onUnmounted(() => {
         </span>
         <span class="auth-online-dot" />
       </button>
-
-      <transition name="dropdown-fade">
-        <div v-if="showDropdown" class="auth-dropdown glass-panel">
-          <div class="auth-dropdown-header">
-            <img
-              v-if="user.avatarUrl"
-              :src="user.avatarUrl"
-              :alt="user.userName"
-              class="auth-dropdown-avatar"
-              referrerpolicy="no-referrer"
-            />
-            <div class="auth-dropdown-info">
-              <span class="auth-dropdown-name">{{ user.userName }}</span>
-              <span class="auth-dropdown-email">{{ user.email }}</span>
-            </div>
-          </div>
-          <div class="auth-dropdown-divider" />
-          <button class="auth-dropdown-logout" @click="handleLogout">
-            <LogOut :size="15" />
-            <span>Logg ut</span>
-          </button>
-        </div>
-      </transition>
     </div>
 
     <!-- Ikke innlogget: Login-knapp -->
