@@ -356,9 +356,8 @@ const handleInstallClick = async () => {
           </div>
         </div>
       </transition>
-    </div>
 
-    <!-- AIS Modal -->
+      <!-- AIS Modal -->
     <transition name="fade-slide">
       <div v-if="showAisModal" class="ais-modal glass-panel">
         <div class="layer-modal-header">
@@ -487,6 +486,7 @@ const handleInstallClick = async () => {
         </div>
       </div>
     </transition>
+    </div>
 
     <!-- Feilmelding / Varsel -->
     <transition name="bounce">
@@ -706,10 +706,8 @@ const handleInstallClick = async () => {
   .layer-modal,
   .info-modal,
   .ais-modal {
-    top: calc(154px + env(safe-area-inset-top, 0px));
-    left: 10px;
-    width: calc(100% - 20px);
-    max-height: calc(100dvh - 165px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-width: calc(100vw - 20px);
+    max-height: calc(100dvh - 240px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     padding: 10px;
   }
 }
@@ -816,16 +814,16 @@ const handleInstallClick = async () => {
 
 /* AIS Modal */
 .ais-modal {
-  position: absolute;
-  top: calc(110px + env(safe-area-inset-top, 0px));
-  left: 16px;
+  position: relative;
+  width: 100%;
   max-width: 440px;
-  width: calc(100% - 32px);
-  max-height: calc(100dvh - 130px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 220px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   padding: 14px;
-  z-index: 30;
-  background: #0f172a;
+  z-index: 20;
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid #38bdf8;
   border-radius: 14px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
@@ -993,19 +991,19 @@ const handleInstallClick = async () => {
 /* Lag- og infomodaler */
 .layer-modal,
 .info-modal {
-  position: absolute;
-  top: calc(110px + env(safe-area-inset-top, 0px));
-  left: 16px;
+  position: relative;
+  width: 100%;
   max-width: 380px;
-  width: calc(100% - 32px);
-  max-height: calc(100dvh - 130px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 220px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   padding: 10px 12px;
   z-index: 20;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
 }
 
 .layer-modal-header {
