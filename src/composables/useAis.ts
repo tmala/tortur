@@ -73,10 +73,12 @@ export function useAis() {
       const clientId = credentials.value.clientId.trim()
       const clientSecret = credentials.value.clientSecret.trim()
 
-      const tokenEndpoints = [
-        '/tortur/api/bw-token',
-        'https://id.barentswatch.no/connect/token'
-      ]
+      const tokenEndpoints = import.meta.env.DEV
+        ? ['/tortur/api/bw-token']
+        : [
+            `${import.meta.env.BASE_URL}api/bw-token.php`,
+            'https://id.barentswatch.no/connect/token'
+          ]
 
       const tryFetchToken = async (scope: string) => {
         let lastError = ''
@@ -198,10 +200,12 @@ export function useAis() {
             ]]
           }
 
-          const aisEndpoints = [
-            '/tortur/api/bw-ais/v1/latest/combined',
-            'https://live.ais.barentswatch.no/v1/latest/combined'
-          ]
+          const aisEndpoints = import.meta.env.DEV
+            ? ['/tortur/api/bw-ais/v1/latest/combined']
+            : [
+                `${import.meta.env.BASE_URL}api/bw-ais.php?token=${encodeURIComponent(token)}`,
+                'https://live.ais.barentswatch.no/v1/latest/combined'
+              ]
 
           for (const endpoint of aisEndpoints) {
             try {
