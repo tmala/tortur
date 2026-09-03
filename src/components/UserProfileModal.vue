@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   Trophy,
   Compass,
-  Maximize2
+  Maximize2,
+  ShieldCheck
 } from 'lucide-vue-next'
 import type { GoogleUser, FirebaseCheckinItem } from '@/composables/useAuth'
 
@@ -18,12 +19,15 @@ const props = defineProps<{
   user: GoogleUser | null
   checkins: FirebaseCheckinItem[]
   isLoading?: boolean
+  isAdmin?: boolean
+  isAdminModeActive?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'logout'): void
   (e: 'refresh'): void
+  (e: 'toggle-admin-mode'): void
 }>()
 
 // Lightbox for bildevisning
@@ -107,6 +111,17 @@ onUnmounted(() => {
             </div>
 
             <div class="header-actions">
+              <!-- Admin-modus toggle (kun synlig for admin-brukere) -->
+              <button
+                v-if="props.isAdmin"
+                class="btn-admin-toggle"
+                :class="{ active: props.isAdminModeActive }"
+                @click="emit('toggle-admin-mode')"
+                :title="props.isAdminModeActive ? 'Deaktiver admin-modus' : 'Aktiver admin-modus'"
+              >
+                <ShieldCheck :size="15" />
+                <span>{{ props.isAdminModeActive ? 'Admin: PÅ' : 'Admin: AV' }}</span>
+              </button>
               <button
                 class="btn-profile-logout"
                 @click="emit('logout')"
@@ -365,6 +380,38 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.btn-admin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(100, 116, 139, 0.15);
+  border: 1px solid rgba(100, 116, 139, 0.35);
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-admin-toggle:hover {
+  background: rgba(247, 201, 72, 0.15);
+  border-color: rgba(247, 201, 72, 0.4);
+  color: #f7c948;
+}
+
+.btn-admin-toggle.active {
+  background: rgba(247, 201, 72, 0.18);
+  border: 1px solid rgba(247, 201, 72, 0.55);
+  color: #f7c948;
+}
+
+.btn-admin-toggle.active:hover {
+  background: rgba(247, 201, 72, 0.28);
+  border-color: rgba(247, 201, 72, 0.75);
 }
 
 .btn-profile-logout {

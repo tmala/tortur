@@ -18,6 +18,7 @@ const props = defineProps<{
   isZoomSufficient?: boolean
   isLoggedIn?: boolean
   visitedTurpostIds?: Set<string>
+  isAdmin?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -30,6 +31,7 @@ const emit = defineEmits<{
   (e: 'view-checkins', post: TurpostItem): void
   (e: 'select-kommune-by-name', name: string): void
   (e: 'clear-turposter'): void
+  (e: 'admin-map-click', coords: { lat: number; lng: number }): void
 }>()
 
 const mapContainer = ref<HTMLElement | null>(null)
@@ -680,6 +682,13 @@ onMounted(() => {
   map.on('moveend', updateMapState)
   map.on('zoomend', updateMapState)
 
+  // Admin-modus: klikk i kartet oppretter ny turpost
+  map.on('click', (e: L.LeafletMouseEvent) => {
+    if (props.isAdmin) {
+      emit('admin-map-click', { lat: e.latlng.lat, lng: e.latlng.lng })
+    }
+  })
+
   updateMapState()
   emit('map-ready')
 })
@@ -695,6 +704,10 @@ onUnmounted(() => {
 <template>
   <div class="map-wrapper">
     <div ref="mapContainer" class="map-view"></div>
+    <!-- Admin-modus banner -->
+    <div v-if="props.isAdmin" class="admin-map-banner">
+      🛠️ Admin-modus &ndash; klikk i kartet for å legge til en turpost
+    </div>
   </div>
 </template>
 
@@ -712,5 +725,22 @@ onUnmounted(() => {
 .map-view {
   width: 100%;
   height: 100%;
+}
+
+.admin-map-banner {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(247, 201, 72, 0.92);
+  color: #1a1a1a;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: 24px;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  white-space: nowrap;
 }
 </style>

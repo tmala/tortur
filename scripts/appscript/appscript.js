@@ -1,5 +1,5 @@
 // =============================================================================
-// TorTur – Google Apps Script Backend v6
+// TorTur – Google Apps Script Backend v7
 // =============================================================================
 // Instruksjoner:
 //  1. Gå til Google Regneark → Extensions → Apps Script
@@ -13,7 +13,7 @@
 // =============================================================================
 //
 // Forventet struktur i Google Regneark:
-//   Fane "Brukere":            UserID | UserName | Email | AvatarUrl | LastLogin
+//   Fane "Brukere":            UserID | UserName | Email | AvatarUrl | LastLogin | IsAdmin
 //   Fane "SystemKonfigurasjon": Key    | Value
 //   Fane "TurpostInnsjekk":    UserID | TurpostID | TimeStamp | Beskrivelse | BildeURL
 //
@@ -36,6 +36,7 @@ var COL_USER_NAME = 2 // B – UserName
 var COL_EMAIL = 3 // C – Email
 var COL_AVATAR_URL = 4 // D – AvatarUrl
 var COL_LAST_LOGIN = 5 // E – LastLogin (UTC ISO-streng)
+var COL_IS_ADMIN = 6 // F – IsAdmin ("Y" = admin)
 
 // Kolonner i "SystemKonfigurasjon"-fanen
 var COL_KEY = 1 // A – Key
@@ -148,12 +149,14 @@ function handleLogin(body) {
 
   var data = sheet.getDataRange().getValues()
   var userRowIndex = -1 // 1-indeksert radnummer
+  var isAdmin = false
 
   // Rad 0 er overskriftsrad – start soek fra rad 1
   for (var i = 1; i < data.length; i++) {
     var rowEmail = (data[i][COL_EMAIL - 1] || '').toString().toLowerCase().trim()
     if (rowEmail === email) {
       userRowIndex = i + 1 // getRange er 1-indeksert
+      isAdmin = (data[i][COL_IS_ADMIN - 1] || '').toString().trim().toUpperCase() === 'Y'
       break
     }
   }
@@ -186,6 +189,7 @@ function handleLogin(body) {
       email: googleUser.email || '',
       avatarUrl: googleUser.picture || '',
       lastLogin: now,
+      isAdmin: isAdmin,
     },
     systemConfig: systemConfig,
   })

@@ -6,6 +6,7 @@ import TurposterPanel from './components/TurposterPanel.vue'
 import CheckinModal from './components/CheckinModal.vue'
 import TurpostCheckinsModal from './components/TurpostCheckinsModal.vue'
 import UserProfileModal from './components/UserProfileModal.vue'
+import AdminAddTurpostModal from './components/AdminAddTurpostModal.vue'
 import { useGeolocation } from './composables/useGeolocation'
 import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from './composables/useTurposter'
 import { useAis } from './composables/useAis'
@@ -35,11 +36,28 @@ const {
   clearError: clearAisError
 } = useAis()
 
-const { user, isLoggedIn, aisClientId, aisClientSecret, fetchMyCheckins, logout } = useAuth()
+const { user, isLoggedIn, isAdmin, aisClientId, aisClientSecret, fetchMyCheckins, logout } = useAuth()
 const activeLayer = ref<string>('standard')
 const activeCheckinPost = ref<TurpostItem | null>(null)
 const activeViewCheckinsPost = ref<TurpostItem | null>(null)
 const isProfileOpen = ref(false)
+
+// Admin-modus: brukeren MÅ aktivere det manuelt fra profilen
+// isAdmin = rettigheten (fra regnearket), adminModeActive = om modus er PÅ
+const adminModeActive = ref(false)
+
+function handleToggleAdminMode() {
+  if (isAdmin.value) {
+    adminModeActive.value = !adminModeActive.value
+  }
+}
+
+// Admin: ny turpost
+const adminClickCoords = ref<{ lat: number; lng: number } | null>(null)
+
+function handleAdminMapClick(coords: { lat: number; lng: number }) {
+  adminClickCoords.value = coords
+}
 
 // Brukerens egne innsjekkinger fra Firebase
 const myCheckins = ref<FirebaseCheckinItem[]>([])
@@ -328,6 +346,7 @@ onUnmounted(() => {
       :is-zoom-sufficient="isZoomSufficient"
       :is-logged-in="isLoggedIn"
       :visited-turpost-ids="visitedTurpostIds"
+      :is-admin="adminModeActive"
       @map-dragged="handleMapDragged"
       @coordinates-change="handleCoordinatesChange"
       @bounds-change="handleBoundsChange"
@@ -336,6 +355,7 @@ onUnmounted(() => {
       @view-checkins="handleViewCheckins"
       @select-kommune-by-name="handleSelectKommuneByName"
       @clear-turposter="handleClearAllTurposter"
+      @admin-map-click="handleAdminMapClick"
     />
 
     <LocationControls
@@ -413,8 +433,20 @@ onUnmounted(() => {
       :is-open="isProfileOpen"
       :user="user"
       :checkins="myCheckins"
+      :is-admin="isAdmin"
+      :is-admin-mode-active="adminModeActive"
       @close="isProfileOpen = false"
       @logout="handleLogoutFromProfile"
+      @toggle-admin-mode="handleToggleAdminMode"
+    />
+
+    <!-- Admin: Legg til ny turpost -->
+    <AdminAddTurpostModal
+      v-if="adminModeActive"
+      :is-open="!!adminClickCoords"
+      :lat="adminClickCoords?.lat ?? 0"
+      :lng="adminClickCoords?.lng ?? 0"
+      @close="adminClickCoords = null"
     />
   </main>
 </template>

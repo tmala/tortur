@@ -6,6 +6,7 @@ export interface GoogleUser {
   email: string
   avatarUrl: string
   lastLogin: string
+  isAdmin?: boolean
 }
 
 export interface SystemConfig {
@@ -383,6 +384,7 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
 // =============================================================================
 export function useAuth() {
   const isLoggedIn = computed(() => !!user.value)
+  const isAdmin    = computed(() => user.value?.isAdmin === true)
 
   const aisClientId     = computed(() => systemConfig.value.AIS_CLIENT_ID     || '')
   const aisClientSecret = computed(() => systemConfig.value.AIS_CLIENT_SECRET || '')
@@ -391,6 +393,7 @@ export function useAuth() {
   return {
     user,
     isLoggedIn,
+    isAdmin,
     isLoading,
     error,
     systemConfig,
