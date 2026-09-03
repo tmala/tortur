@@ -271,7 +271,7 @@ const updateTurpostMarkers = (posts: TurpostItem[]) => {
 const loadMunicipalitiesGeoJson = async () => {
   if (geoJsonData) return
   try {
-    const res = await fetch('/data/kommuner.geojson')
+    const res = await fetch(`${import.meta.env.BASE_URL}data/kommuner.geojson`)
     if (!res.ok) return
     geoJsonData = await res.json()
     renderMunicipalitiesLayer()
@@ -462,6 +462,7 @@ const createVesselIcon = (vessel: AisVessel) => {
   else if (vessel.shipCategory === 'tug') color = '#f97316' // Orange tug
   else if (vessel.shipCategory === 'rescue') color = '#ef4444' // Red rescue/coast guard
   else if (vessel.shipCategory === 'fishing') color = '#a855f7' // Purple fishing vessel
+  else if (vessel.shipCategory === 'military') color = '#4d7c0f' // Olive green military
   else if (vessel.shipCategory === 'other') color = '#94a3b8'
 
   const rot = vessel.heading ?? vessel.cog ?? 0
@@ -492,9 +493,10 @@ const updateVesselMarkers = (ships: AisVessel[] | undefined) => {
     passenger: 'Passasjerskip / Ferge',
     cargo: 'Lasteskip',
     tanker: 'Tankskip',
-    tug: 'Slepebåt / Arbeidsbåt',
+    tug: 'Slepebåt / Arbeidsfartøy',
     rescue: 'Redning / Kystvakt',
     fishing: 'Fiskefartøy',
+    military: 'Militært fartøy (Marine)',
     other: 'Fartøy'
   }
 
@@ -504,11 +506,15 @@ const updateVesselMarkers = (ships: AisVessel[] | undefined) => {
       zIndexOffset: 800
     })
 
+    const isMilitary = ship.shipCategory === 'military'
+    const shipEmoji = isMilitary ? '🛡️' : '🚢'
+    const nameColor = isMilitary ? '#86efac' : '#38bdf8'
+
     marker.bindPopup(`
       <div style="font-family: inherit; font-size: 13px; color: #f8fafc; line-height: 1.4; min-width: 200px;">
         <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-          <span style="font-size: 16px;">🚢</span>
-          <strong style="color: #38bdf8; font-size: 14px;">${ship.name}</strong>
+          <span style="font-size: 16px;">${shipEmoji}</span>
+          <strong style="color: ${nameColor}; font-size: 14px;">${ship.name}</strong>
         </div>
         <div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px;">
           ${ship.shipType || categoryLabels[ship.shipCategory] || 'Fartøy'} &bull; MMSI: ${ship.mmsi}

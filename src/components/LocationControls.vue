@@ -1,22 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { 
-  Navigation, 
-  Layers, 
-  Compass, 
-  MapPin, 
-  AlertTriangle, 
-  Loader2, 
-  Download, 
-  Check, 
-  Info, 
-  LocateFixed, 
-  Mountain, 
+import { ref, computed, onMounted } from 'vue'
+import {
+  Navigation,
+  Layers,
+  Compass,
+  AlertTriangle,
+  Loader2,
+  Download,
+  Check,
+  Info,
+  LocateFixed,
+  Mountain,
   Map as MapIcon,
   Anchor,
   Radio,
   Settings,
-  Crosshair
+  Crosshair,
 } from 'lucide-vue-next'
 import type { GeoLocationState } from '@/composables/useGeolocation'
 
@@ -37,9 +36,7 @@ const props = defineProps<{
   isAisLoading?: boolean
   currentZoom?: number
   minZoomForAis?: number
-  hasBwCredentials?: boolean
-  bwClientId?: string
-  bwClientSecret?: string
+  isLoggedIn?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -50,7 +47,6 @@ const emit = defineEmits<{
   (e: 'toggle-turposter'): void
   (e: 'toggle-municipalities'): void
   (e: 'toggle-ais'): void
-  (e: 'save-bw-credentials', clientId: string, clientSecret: string): void
   (e: 'go-to-coordinate', coords: { lat: number; lng: number }): void
 }>()
 
@@ -62,43 +58,66 @@ const coordLat = ref('')
 const coordLng = ref('')
 const coordInput = ref('')
 const coordError = ref('')
-const inputClientId = ref(props.bwClientId || '')
-const inputClientSecret = ref(props.bwClientSecret || '')
 const installPrompt = ref<any>(null)
 const isInstalled = ref(false)
 
-const availableLayers = [
-  { id: 'standard', name: 'Standard OpenStreetMap', desc: 'Klassisk detaljert verdenskart' },
-  { id: 'norgeskart', name: 'Kartverket Norgeskart', desc: 'Offisielt detaljert norgeskart (Kartverket)' },
-  { id: 'kartverket_sjokart', name: 'Kartverket Sjøkart', desc: 'Offisielt norsk sjøkart med dybder, fyr og merker' },
-  { id: 'google_streets', name: 'Google Veikart', desc: 'Googles klassiske veikart' },
-  { id: 'google_hybrid', name: 'Google Satellitt (Hybrid)', desc: 'Googles satellittfoto med veinavn og steder' },
-  { id: 'google_terrain', name: 'Google Terreng', desc: 'Googles terrengkart med høydeforskjeller' },
-  { id: 'tur', name: 'Tur- & Sykkelkart (CyclOSM)', desc: 'Stier, turruter og terreng' },
-  { id: 'topo', name: 'Topografisk (OpenTopoMap)', desc: 'Høydekurver og terrengformasjoner' },
-  { id: 'seamap', name: 'OpenSeaMap Sjøkart', desc: 'Globalt sjøkart med fyr, bøyer og sjømerker' },
-  { id: 'satellite', name: 'Satellitt & Flyfoto (Esri)', desc: 'Ekte fly- og satellittbilder (Esri)' }
-]
+const availableLayers = computed(() => {
+  const baseLayers = [
+    { id: 'standard', name: 'Standard OpenStreetMap', desc: 'Klassisk detaljert verdenskart' },
+    {
+      id: 'norgeskart',
+      name: 'Kartverket Norgeskart',
+      desc: 'Offisielt detaljert norgeskart (Kartverket)',
+    },
+    {
+      id: 'kartverket_sjokart',
+      name: 'Kartverket Sjøkart',
+      desc: 'Offisielt norsk sjøkart med dybder, fyr og merker',
+    },
+  ]
+
+  const googleLayers = [
+    { id: 'google_streets', name: 'Google Veikart', desc: 'Googles klassiske veikart' },
+    {
+      id: 'google_hybrid',
+      name: 'Google Satellitt (Hybrid)',
+      desc: 'Googles satellittfoto med veinavn og steder',
+    },
+    {
+      id: 'google_terrain',
+      name: 'Google Terreng',
+      desc: 'Googles terrengkart med høydeforskjeller',
+    },
+  ]
+
+  const otherLayers = [
+    { id: 'tur', name: 'Tur- & Sykkelkart (CyclOSM)', desc: 'Stier, turruter og terreng' },
+    { id: 'topo', name: 'Topografisk (OpenTopoMap)', desc: 'Høydekurver og terrengformasjoner' },
+    {
+      id: 'seamap',
+      name: 'OpenSeaMap Sjøkart',
+      desc: 'Globalt sjøkart med fyr, bøyer og sjømerker',
+    },
+    {
+      id: 'satellite',
+      name: 'Satellitt & Flyfoto (Esri)',
+      desc: 'Ekte fly- og satellittbilder (Esri)',
+    },
+  ]
+
+  return [...baseLayers, ...(props.isLoggedIn ? googleLayers : []), ...otherLayers]
+})
 
 const toggleLayerMenu = () => {
   showLayerMenu.value = !showLayerMenu.value
 }
 
 const selectLayer = (layerId: string) => {
+  if (layerId.startsWith('google_') && !props.isLoggedIn) {
+    return
+  }
   emit('change-layer', layerId)
   showLayerMenu.value = false
-}
-
-const handleSaveBwCredentials = () => {
-  emit('save-bw-credentials', inputClientId.value.trim(), inputClientSecret.value.trim())
-  showAisModal.value = false
-}
-
-const handleClearBwCredentials = () => {
-  inputClientId.value = ''
-  inputClientSecret.value = ''
-  emit('save-bw-credentials', '', '')
-  showAisModal.value = false
 }
 
 const handleGoToCoordinates = () => {
@@ -108,7 +127,10 @@ const handleGoToCoordinates = () => {
 
   const raw = coordInput.value.trim()
   if (raw) {
-    const parts = raw.split(/[\s,;]+/).map(p => parseFloat(p.trim())).filter(p => !isNaN(p))
+    const parts = raw
+      .split(/[\s,;]+/)
+      .map((p) => parseFloat(p.trim()))
+      .filter((p) => !isNaN(p))
     if (parts.length >= 2) {
       lat = parts[0]!
       lng = parts[1]!
@@ -160,22 +182,12 @@ const handleInstallClick = async () => {
 
 <template>
   <div class="controls-overlay">
-    <!-- Topplinje med logo, tittel, turposter og innstillinger -->
-    <header class="top-bar glass-panel">
-      <div class="brand">
-        <div class="brand-icon">
-          <MapPin :size="20" class="brand-pin" />
-        </div>
-        <div class="brand-text">
-          <h1>Kart</h1>
-          <span class="brand-subtitle">OpenStreetMap PWA</span>
-        </div>
-      </div>
-
-      <div class="top-actions">
+    <!-- Topplinje med verktøyknapper -->
+    <header class="top-bar">
+      <div class="top-actions glass-panel">
         <!-- Turposter-knapp -->
-        <button 
-          class="btn-turposter" 
+        <button
+          class="btn-turposter"
           :class="{ active: isTurposterOpen || activeKommuneName }"
           @click="emit('toggle-turposter')"
           title="Vis turposter etter fylke og kommune"
@@ -187,12 +199,13 @@ const handleInstallClick = async () => {
           <span v-else>Turposter</span>
         </button>
 
-        <!-- AIS Båttrafikk-knapp -->
-        <button 
+        <!-- AIS Båttrafikk-knapp – kun synlig når innlogget -->
+        <button
+          v-if="isLoggedIn"
           class="btn-ais"
-          :class="{ 
-            active: isAisToggled && isZoomSufficient, 
-            'zoom-warning': isAisToggled && !isZoomSufficient 
+          :class="{
+            active: isAisToggled && isZoomSufficient,
+            'zoom-warning': isAisToggled && !isZoomSufficient,
           }"
           @click="emit('toggle-ais')"
           title="Slå av/på sanntids båttrafikk (AIS)"
@@ -206,10 +219,9 @@ const handleInstallClick = async () => {
           </span>
           <span v-else class="btn-ais-text">AIS</span>
         </button>
-
         <!-- Kommunegrenser-knapp -->
-        <button 
-          class="icon-btn" 
+        <button
+          class="icon-btn"
           :class="{ active: showMunicipalities }"
           @click="emit('toggle-municipalities')"
           title="Slå av/på visning av kommunegrenser"
@@ -218,8 +230,8 @@ const handleInstallClick = async () => {
         </button>
 
         <!-- Kartlag-knapp -->
-        <button 
-          class="icon-btn" 
+        <button
+          class="icon-btn"
           :class="{ active: showLayerMenu }"
           @click="toggleLayerMenu"
           title="Bytt kartlag"
@@ -228,8 +240,8 @@ const handleInstallClick = async () => {
         </button>
 
         <!-- AIS-innstillinger / Kilde-knapp -->
-        <button 
-          class="icon-btn" 
+        <button
+          class="icon-btn"
           :class="{ active: showAisModal }"
           @click="showAisModal = !showAisModal"
           title="Båttrafikk (AIS) innstillinger"
@@ -238,8 +250,8 @@ const handleInstallClick = async () => {
         </button>
 
         <!-- Info-knapp -->
-        <button 
-          class="icon-btn" 
+        <button
+          class="icon-btn"
           :class="{ active: showInfoModal }"
           @click="showInfoModal = !showInfoModal"
           title="Om appen"
@@ -248,9 +260,9 @@ const handleInstallClick = async () => {
         </button>
 
         <!-- PWA Install-knapp (vises hvis tilgjengelig) -->
-        <button 
-          v-if="installPrompt && !isInstalled" 
-          class="btn-install" 
+        <button
+          v-if="installPrompt && !isInstalled"
+          class="btn-install"
           @click="handleInstallClick"
           title="Installer som app på enheten"
         >
@@ -272,16 +284,21 @@ const handleInstallClick = async () => {
         </div>
         <div class="ais-modal-content">
           <p class="ais-desc">
-            Viser posisjoner, fart og kurs for skip i sanntid fra <strong>Kystverket / BarentsWatch</strong>.
+            Viser posisjoner, fart og kurs for skip i sanntid fra
+            <strong>Kystverket / BarentsWatch</strong>.
           </p>
 
-          <div class="ais-status-box" :class="{ ok: isZoomSufficient, warn: isAisToggled && !isZoomSufficient }">
+          <div
+            class="ais-status-box"
+            :class="{ ok: isZoomSufficient, warn: isAisToggled && !isZoomSufficient }"
+          >
             <div class="status-box-header">
               <strong>🔍 Zoom-status:</strong>
               <span>Zoom {{ currentZoom || 13 }} / min. {{ minZoomForAis || 12 }}</span>
             </div>
             <p v-if="!isZoomSufficient" class="status-box-msg">
-              Båttrafikk krever at du er zoomet inn på et nærområde (zoom 12 eller mer) for å unngå overbelastning.
+              Båttrafikk krever at du er zoomet inn på et nærområde (zoom 12 eller mer) for å unngå
+              overbelastning.
             </p>
             <p v-else class="status-box-msg ok-msg">
               ✓ Kartutsnittet er nært nok til å vise båter i sanntid.
@@ -291,28 +308,15 @@ const handleInstallClick = async () => {
           <div class="ais-credentials-section">
             <div class="section-title">
               <Radio :size="14" />
-              <span>BarentsWatch API-nøkler (Valgfritt)</span>
+              <span>BarentsWatch API</span>
             </div>
             <p class="section-subtext">
-              Opprett gratis bruker på <a href="https://www.barentswatch.no" target="_blank" class="ais-link">barentswatch.no ↗</a> under <em>Min side &rarr; API-klienter</em>. Hvis du ikke legger inn nøkler, benyttes en simulert kystfeed for demonstrasjon.
+              AIS krever at du er innlogget med google-konto (og at din google-bruker er på TorTur
+              sin WhiteList). Data leveres av <strong>Kystverket / BarentsWatch</strong>.
             </p>
-
-            <div class="input-field">
-              <label>Client ID:</label>
-              <input v-model="inputClientId" placeholder="f.eks. brukernavn@epost.no:klientnavn" class="ais-input" />
-            </div>
-            <div class="input-field">
-              <label>Client Secret:</label>
-              <input v-model="inputClientSecret" type="password" placeholder="BarentsWatch Client Secret" class="ais-input" />
-            </div>
-
-            <div class="ais-actions">
-              <button v-if="hasBwCredentials" class="btn-ais-clear" @click="handleClearBwCredentials">
-                Fjern nøkler
-              </button>
-              <button class="btn-ais-save" @click="handleSaveBwCredentials">
-                Lagre innstillinger
-              </button>
+            <div class="ais-config-info" :class="{ 'config-ok': isLoggedIn }">
+              <span v-if="isLoggedIn">✓ AIS-nøkler er aktive</span>
+              <span v-else>Logg inn for å aktivere AIS-tilgang</span>
             </div>
           </div>
         </div>
@@ -328,7 +332,7 @@ const handleInstallClick = async () => {
         </div>
         <div class="layer-options">
           <button
-            v-for="layer in availableLayers" 
+            v-for="layer in availableLayers"
             :key="layer.id"
             class="layer-item"
             :class="{ selected: activeLayer === layer.id }"
@@ -353,7 +357,8 @@ const handleInstallClick = async () => {
         </div>
         <div class="info-content">
           <p>
-            Dette er en <strong>Progressive Web App (PWA)</strong> med åpne kartdata fra <strong>OpenStreetMap</strong> og <strong>Kartverket</strong>.
+            Dette er en <strong>Progressive Web App (PWA)</strong> med åpne kartdata fra
+            <strong>OpenStreetMap</strong> og <strong>Kartverket</strong>.
           </p>
           <div class="info-feature-list">
             <div class="info-feature-item">
@@ -366,19 +371,31 @@ const handleInstallClick = async () => {
             </div>
             <div class="info-feature-item">
               <span class="bullet">🗺️</span>
-              <span><strong>Klikk i kartet:</strong> Slå på kommunegrenser og klikk direkte på en kommune i kartet for å hente turpostene der.</span>
+              <span
+                ><strong>Klikk i kartet:</strong> Slå på kommunegrenser og klikk direkte på en
+                kommune i kartet for å hente turpostene der.</span
+              >
             </div>
             <div class="info-feature-item">
               <span class="bullet">⛰️</span>
-              <span><strong>Turposter i Norge:</strong> Utforsk over 15 000 turposter sortert etter fylke og kommune.</span>
+              <span
+                ><strong>Turposter i Norge:</strong> Utforsk over 15 000 turposter sortert etter
+                fylke og kommune.</span
+              >
             </div>
             <div class="info-feature-item">
               <span class="bullet">⛵</span>
-              <span><strong>Sjøkart:</strong> Offisielt norsk sjøkart fra Kartverket (med dybder og fyrlykter) og globalt OpenSeaMap.</span>
+              <span
+                ><strong>Sjøkart:</strong> Offisielt norsk sjøkart fra Kartverket (med dybder og
+                fyrlykter) og globalt OpenSeaMap.</span
+              >
             </div>
             <div class="info-feature-item">
               <span class="bullet">⚡</span>
-              <span><strong>PWA Offline Cache:</strong> Kan installeres på mobilen eller skrivebordet.</span>
+              <span
+                ><strong>PWA Offline Cache:</strong> Kan installeres på mobilen eller
+                skrivebordet.</span
+              >
             </div>
           </div>
         </div>
@@ -417,15 +434,16 @@ const handleInstallClick = async () => {
         <div v-else-if="centerCoords" class="loc-data">
           <span class="status-dot idle"></span>
           <span class="loc-text muted">
-            Senter: {{ centerCoords.lat.toFixed(4) }}°, {{ centerCoords.lng.toFixed(4) }}° (Zoom {{ centerCoords.zoom }})
+            Senter: {{ centerCoords.lat.toFixed(4) }}°, {{ centerCoords.lng.toFixed(4) }}° (Zoom
+            {{ centerCoords.zoom }})
           </span>
         </div>
       </div>
 
       <!-- Handlingsknapper -->
       <div class="action-buttons">
-        <button 
-          class="btn-action btn-locate glass-panel" 
+        <button
+          class="btn-action btn-locate glass-panel"
           :disabled="isLocating"
           @click="emit('locate')"
           title="Finn min posisjon"
@@ -436,7 +454,7 @@ const handleInstallClick = async () => {
         </button>
 
         <!-- Gå til koordinat-knapp -->
-        <button 
+        <button
           class="btn-action btn-coord glass-panel"
           :class="{ active: showCoordModal }"
           @click="showCoordModal = !showCoordModal"
@@ -446,7 +464,7 @@ const handleInstallClick = async () => {
           <span>Gå til koordinat</span>
         </button>
 
-        <button 
+        <button
           class="btn-action btn-track glass-panel"
           :class="{ 'is-tracking': isTracking }"
           @click="emit('toggle-tracking')"
@@ -475,8 +493,8 @@ const handleInstallClick = async () => {
 
           <div class="coord-quick-input">
             <label>Lim inn koordinater (f.eks. "65.2833, 6.3921"):</label>
-            <input 
-              v-model="coordInput" 
+            <input
+              v-model="coordInput"
               placeholder="65.283295, 6.392140"
               class="coord-input"
               @keyup.enter="handleGoToCoordinates"
@@ -486,35 +504,29 @@ const handleInstallClick = async () => {
           <div class="coord-split-inputs">
             <div class="coord-field">
               <label>Breddegrad (Lat):</label>
-              <input 
-                v-model="coordLat" 
-                placeholder="f.eks. 65.2833" 
+              <input
+                v-model="coordLat"
+                placeholder="f.eks. 65.2833"
                 class="coord-input"
                 @keyup.enter="handleGoToCoordinates"
               />
             </div>
             <div class="coord-field">
               <label>Lengdegrad (Lng):</label>
-              <input 
-                v-model="coordLng" 
-                placeholder="f.eks. 6.3921" 
+              <input
+                v-model="coordLng"
+                placeholder="f.eks. 6.3921"
                 class="coord-input"
                 @keyup.enter="handleGoToCoordinates"
               />
             </div>
           </div>
 
-          <div v-if="coordError" class="coord-error-msg">
-            ⚠️ {{ coordError }}
-          </div>
+          <div v-if="coordError" class="coord-error-msg">⚠️ {{ coordError }}</div>
 
           <div class="coord-actions">
-            <button class="btn-coord-cancel" @click="showCoordModal = false">
-              Avbryt
-            </button>
-            <button class="btn-coord-submit" @click="handleGoToCoordinates">
-              🎯 Sentrér kart
-            </button>
+            <button class="btn-coord-cancel" @click="showCoordModal = false">Avbryt</button>
+            <button class="btn-coord-submit" @click="handleGoToCoordinates">🎯 Sentrér kart</button>
           </div>
         </div>
       </div>
@@ -543,53 +555,34 @@ const handleInstallClick = async () => {
   border-radius: 16px;
 }
 
-/* Topplinje */
+/* Topplinje med verktøyknapper */
 .top-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  max-width: 900px;
-  width: 100%;
-  margin: 0 auto;
-  gap: 12px;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.brand-icon {
-  background: linear-gradient(135deg, #0284c7, #0369a1);
-  color: white;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
-}
-
-.brand-text h1 {
-  font-size: 16px;
-  font-weight: 700;
-  color: #f8fafc;
-  line-height: 1.2;
-}
-
-.brand-subtitle {
-  font-size: 11px;
-  color: #94a3b8;
-  font-weight: 500;
+  width: auto;
+  margin: 0 auto;
+  pointer-events: none;
 }
 
 .top-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+
+@media (max-width: 860px) {
+  .top-bar {
+    margin-top: 56px;
+  }
 }
 
 .btn-turposter {
@@ -607,7 +600,8 @@ const handleInstallClick = async () => {
   transition: all 0.2s ease;
 }
 
-.btn-turposter:hover, .btn-turposter.active {
+.btn-turposter:hover,
+.btn-turposter.active {
   background: linear-gradient(135deg, #0284c7, #2563eb);
   border-color: #38bdf8;
   color: #ffffff;
@@ -635,7 +629,8 @@ const handleInstallClick = async () => {
   transition: all 0.2s ease;
 }
 
-.icon-btn:hover, .icon-btn.active {
+.icon-btn:hover,
+.icon-btn.active {
   background: #0284c7;
   border-color: #38bdf8;
   color: #ffffff;
@@ -888,13 +883,15 @@ const handleInstallClick = async () => {
   margin: 0;
 }
 
-.coord-quick-input, .coord-field {
+.coord-quick-input,
+.coord-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.coord-quick-input label, .coord-field label {
+.coord-quick-input label,
+.coord-field label {
   font-size: 11px;
   font-weight: 600;
   color: #94a3b8;
@@ -970,7 +967,8 @@ const handleInstallClick = async () => {
   background: #1e293b;
 }
 
-.btn-coord:hover, .btn-coord.active {
+.btn-coord:hover,
+.btn-coord.active {
   background: #0284c7;
   border-color: #38bdf8;
   color: #ffffff;
@@ -978,7 +976,8 @@ const handleInstallClick = async () => {
 }
 
 /* Lag- og infomodaler */
-.layer-modal, .info-modal {
+.layer-modal,
+.info-modal {
   position: absolute;
   top: 72px;
   left: 16px;
@@ -1100,7 +1099,9 @@ const handleInstallClick = async () => {
   border: 2px solid #ef4444 !important;
   background: #1e1b2e !important;
   border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(239, 68, 68, 0.3);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(239, 68, 68, 0.3);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1279,21 +1280,32 @@ const handleInstallClick = async () => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: .5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* Transisjoner */
-.fade-slide-enter-active, .fade-slide-leave-active {
+.fade-slide-enter-active,
+.fade-slide-leave-active {
   transition: all 0.25s ease-out;
 }
 
-.fade-slide-enter-from, .fade-slide-leave-to {
+.fade-slide-enter-from,
+.fade-slide-leave-to {
   opacity: 0;
   transform: translateY(-10px);
 }
@@ -1307,7 +1319,30 @@ const handleInstallClick = async () => {
 }
 
 @keyframes bounce-in {
-  0% { transform: scale(0.9); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.ais-config-info {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  color: #fca5a5;
+  text-align: center;
+}
+.ais-config-info.config-ok {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #86efac;
 }
 </style>

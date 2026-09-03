@@ -5,8 +5,17 @@ import vueJsx from '@vitejs/plugin-vue-jsx'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { VitePWA } from 'vite-plugin-pwa'
 
+import { readFileSync } from 'node:fs'
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
+
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/tortur/',
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_NAME__: JSON.stringify(pkg.name)
+  },
   plugins: [
     vue(),
     vueJsx(),
@@ -72,15 +81,15 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api/bw-token': {
+      '/tortur/api/bw-token': {
         target: 'https://id.barentswatch.no',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/bw-token/, '/connect/token')
+        rewrite: (path) => path.replace(/^\/tortur\/api\/bw-token/, '/connect/token')
       },
-      '/api/bw-ais': {
+      '/tortur/api/bw-ais': {
         target: 'https://live.ais.barentswatch.no',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/bw-ais/, '')
+        rewrite: (path) => path.replace(/^\/tortur\/api\/bw-ais/, '')
       }
     }
   }

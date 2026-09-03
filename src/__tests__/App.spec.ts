@@ -20,10 +20,58 @@ describe('LocationControls', () => {
       }
     })
 
-    expect(wrapper.text()).toContain('Kart')
     expect(wrapper.text()).toContain('Hvor er jeg?')
     expect(wrapper.text()).toContain('Følg meg')
     expect(wrapper.text()).toContain('Turposter')
+  })
+
+  it('does not show Google map layers when user is not logged in', async () => {
+    const wrapper = mount(LocationControls, {
+      props: {
+        userLocation: null,
+        isLocating: false,
+        isTracking: false,
+        error: null,
+        activeLayer: 'standard',
+        centerCoords: null,
+        isTurposterOpen: false,
+        activeKommuneName: null,
+        turpostCount: 0,
+        showMunicipalities: true,
+        isLoggedIn: false
+      }
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+
+    expect(wrapper.text()).not.toContain('Google Veikart')
+    expect(wrapper.text()).not.toContain('Google Satellitt')
+    expect(wrapper.text()).not.toContain('Google Terreng')
+    expect(wrapper.text()).toContain('Standard OpenStreetMap')
+  })
+
+  it('shows Google map layers when user is logged in', async () => {
+    const wrapper = mount(LocationControls, {
+      props: {
+        userLocation: null,
+        isLocating: false,
+        isTracking: false,
+        error: null,
+        activeLayer: 'standard',
+        centerCoords: null,
+        isTurposterOpen: false,
+        activeKommuneName: null,
+        turpostCount: 0,
+        showMunicipalities: true,
+        isLoggedIn: true
+      }
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+
+    expect(wrapper.text()).toContain('Google Veikart')
+    expect(wrapper.text()).toContain('Google Satellitt (Hybrid)')
+    expect(wrapper.text()).toContain('Google Terreng')
   })
 
   it('emits locate event when clicking locate button', async () => {

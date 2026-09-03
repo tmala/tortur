@@ -4,7 +4,7 @@ export interface AisVessel {
   mmsi: number
   name: string
   shipType: string
-  shipCategory: 'passenger' | 'cargo' | 'tanker' | 'tug' | 'rescue' | 'fishing' | 'other'
+  shipCategory: 'passenger' | 'cargo' | 'tanker' | 'tug' | 'rescue' | 'fishing' | 'military' | 'other'
   lat: number
   lng: number
   sog: number // Speed over ground (knop)
@@ -74,7 +74,7 @@ export function useAis() {
       const clientSecret = credentials.value.clientSecret.trim()
 
       const tokenEndpoints = [
-        '/api/bw-token',
+        '/tortur/api/bw-token',
         'https://id.barentswatch.no/connect/token'
       ]
 
@@ -199,7 +199,7 @@ export function useAis() {
           }
 
           const aisEndpoints = [
-            '/api/bw-ais/v1/latest/combined',
+            '/tortur/api/bw-ais/v1/latest/combined',
             'https://live.ais.barentswatch.no/v1/latest/combined'
           ]
 
@@ -231,11 +231,22 @@ export function useAis() {
                   15: 'Udefinert'
                 }
 
-                const getShipTypeInfo = (code: number, explicitName?: string) => {
+                const getShipTypeInfo = (code: number, explicitName?: string, vesselName?: string) => {
                   let cat: AisVessel['shipCategory'] = 'other'
                   let typeName = explicitName || `Fartøy (Type ${code})`
 
-                  if (code === 30 || (code >= 31 && code <= 39)) {
+                  // Navnbasert overstyring: militære skip identifisert via prefiks
+                  const militaryPrefixes = ['KNM ', 'HMS ', 'USS ', 'HDMS ', 'FGS ', 'FS ', 'HNLMS ', 'HNoMS ']
+                  const upperName = (vesselName || '').toUpperCase()
+                  if (militaryPrefixes.some(p => upperName.startsWith(p.toUpperCase()))) {
+                    typeName = explicitName || 'Militært fartøy (Marine)'
+                    return { typeName, cat: 'military' as AisVessel['shipCategory'] }
+                  }
+
+                  if (code === 35) {
+                    typeName = explicitName || 'Militært fartøy'
+                    cat = 'military'
+                  } else if (code === 30 || (code >= 31 && code <= 39)) {
                     typeName = explicitName || (code === 36 ? 'Seilbåt' : (code === 37 ? 'Fritidsbåt / Lystbåt' : 'Fiskefartøy'))
                     cat = (code === 36 || code === 37) ? 'other' : 'fishing'
                   } else if (code >= 40 && code <= 49) {
@@ -275,7 +286,8 @@ export function useAis() {
 
                 vessels.value = (Array.isArray(data) ? data : []).map((item: any) => {
                   const typeCode = item.shipType || 0
-                  const { typeName, cat } = getShipTypeInfo(typeCode, item.shipTypeName)
+                  const rawName = item.name ? item.name.trim() : ''
+                  const { typeName, cat } = getShipTypeInfo(typeCode, item.shipTypeName, rawName)
 
                   const sog = item.speedOverGround ?? item.sog ?? 0
                   const cog = item.courseOverGround ?? item.cog ?? 0
