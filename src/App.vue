@@ -167,6 +167,7 @@ const handleBoundsChange = (bounds: { minLat: number; maxLat: number; minLng: nu
 }
 
 const handleToggleAis = () => {
+  if (!isAdmin.value) return
   toggleAis()
   if (isAisToggled.value && lastMapBounds.value) {
     fetchVessels(lastMapBounds.value, lastMapZoom.value)
@@ -176,11 +177,18 @@ const handleToggleAis = () => {
   }
 }
 
-// Start/stopp poll automatisk dersom AIS blir slått av utenfra
+// Start/stopp poll automatisk dersom AIS blir slått av utenfra eller admin logger ut
 watch(isAisToggled, (enabled) => {
-  if (enabled) {
+  if (enabled && isAdmin.value) {
     startAisPoll()
   } else {
+    stopAisPoll()
+  }
+})
+
+watch(isAdmin, (admin) => {
+  if (!admin && isAisToggled.value) {
+    toggleAis()
     stopAisPoll()
   }
 })
@@ -409,6 +417,7 @@ onUnmounted(() => {
       :current-zoom="currentZoom"
       :min-zoom-for-ais="minZoomForAis"
       :is-logged-in="isLoggedIn"
+      :is-admin="isAdmin"
       :is-loading-local-turposter="isLoadingLocalTurposter"
       @locate="handleLocate"
       @toggle-tracking="handleToggleTracking"

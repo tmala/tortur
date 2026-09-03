@@ -44,6 +44,35 @@ describe('LocationControls', () => {
     expect(wrapper.find('.brand-menu-dropdown').exists()).toBe(false)
   })
 
+  it('hides AIS controls for non-admin users and shows them for admin', async () => {
+    const wrapper = mount(LocationControls, {
+      props: {
+        userLocation: null,
+        isLocating: false,
+        isTracking: false,
+        error: null,
+        activeLayer: 'standard',
+        centerCoords: null,
+        isTurposterOpen: false,
+        activeKommuneName: null,
+        turpostCount: 0,
+        showMunicipalities: true,
+        isLoggedIn: true,
+        isAdmin: false
+      }
+    })
+
+    // Open menu
+    await wrapper.find('.brand-badge-btn').trigger('click')
+    expect(wrapper.find('.btn-ais').exists()).toBe(false)
+    expect(wrapper.find('button[title="Båttrafikk (AIS) innstillinger"]').exists()).toBe(false)
+
+    // Set isAdmin: true
+    await wrapper.setProps({ isAdmin: true })
+    expect(wrapper.find('.btn-ais').exists()).toBe(true)
+    expect(wrapper.find('button[title="Båttrafikk (AIS) innstillinger"]').exists()).toBe(true)
+  })
+
   it('does not show Google map layers when user is not logged in', async () => {
     const wrapper = mount(LocationControls, {
       props: {

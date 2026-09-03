@@ -40,6 +40,7 @@ const props = defineProps<{
   currentZoom?: number
   minZoomForAis?: number
   isLoggedIn?: boolean
+  isAdmin?: boolean
   isLoadingLocalTurposter?: boolean
 }>()
 
@@ -270,9 +271,9 @@ const handleInstallClick = async () => {
               <Compass :size="18" :class="{ 'pulse-slow': isTracking }" />
             </button>
 
-            <!-- AIS Båttrafikk-knapp – kun synlig når innlogget -->
+            <!-- AIS Båttrafikk-knapp – kun synlig for admin -->
             <button
-              v-if="isLoggedIn"
+              v-if="isAdmin"
               class="btn-ais"
               :class="{
                 active: isAisToggled && isZoomSufficient,
@@ -311,8 +312,9 @@ const handleInstallClick = async () => {
               <Layers :size="18" />
             </button>
 
-            <!-- AIS-innstillinger / Kilde-knapp -->
+            <!-- AIS-innstillinger / Kilde-knapp – kun synlig for admin -->
             <button
+              v-if="isAdmin"
               class="icon-btn"
               :class="{ active: showAisModal }"
               @click="showAisModal = !showAisModal"
@@ -357,9 +359,9 @@ const handleInstallClick = async () => {
         </div>
       </transition>
 
-      <!-- AIS Modal -->
+      <!-- AIS Modal – kun synlig for admin -->
     <transition name="fade-slide">
-      <div v-if="showAisModal" class="ais-modal glass-panel">
+      <div v-if="isAdmin && showAisModal" class="ais-modal glass-panel">
         <div class="layer-modal-header">
           <div class="ais-header-title">
             <Anchor :size="18" class="anchor-title-icon" />
