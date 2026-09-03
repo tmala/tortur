@@ -20,6 +20,8 @@ const props = defineProps<{
   isLoadingHierarchy: boolean
   isLoadingPosts: boolean
   searchQuery: string
+  isLoggedIn?: boolean
+  visitedTurpostIds?: Set<string>
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +30,7 @@ const emit = defineEmits<{
   (e: 'select-kommune', kommune: KommuneInfo | null): void
   (e: 'update:searchQuery', val: string): void
   (e: 'focus-post', post: TurpostItem): void
+  (e: 'view-checkins', post: TurpostItem): void
   (e: 'clear-all'): void
 }>()
 
@@ -195,13 +198,23 @@ const filteredKommunerList = () => {
                 <div class="post-info">
                   <span class="post-title">{{ post.name }}</span>
                   <div class="post-meta">
+                    <span v-if="visitedTurpostIds?.has(String(post.id))" class="visited-tag" title="Du har besøkt denne posten">✓ Besøkt</span>
                     <span v-if="post.alt" class="alt-tag">⛰️ {{ post.alt }} moh.</span>
                     <span class="coord-tag">{{ post.lat.toFixed(4) }}°, {{ post.lng.toFixed(4) }}°</span>
                   </div>
                 </div>
-                <button class="btn-focus" title="Sentrer kartet på denne posten">
-                  <Navigation2 :size="16" />
-                </button>
+                <div class="post-actions-wrap">
+                  <button
+                    class="btn-view-list"
+                    @click.stop="emit('view-checkins', post)"
+                    title="Vis innsjekkinger for denne turposten"
+                  >
+                    👁️
+                  </button>
+                  <button class="btn-focus" title="Sentrer kartet på denne posten">
+                    <Navigation2 :size="16" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -543,8 +556,39 @@ const filteredKommunerList = () => {
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
-.coord-tag {
-  color: #94a3b8;
+.visited-tag {
+  color: #34d399;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.btn-view-list {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f8fafc;
+  font-size: 12px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-view-list:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.post-actions-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .btn-focus {

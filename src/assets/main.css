@@ -117,12 +117,20 @@ body,
   height: 32px;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  background: linear-gradient(135deg, #10b981, #059669);
+  /* Standard for ubesøkte turposter: Varm gul / amber */
+  background: linear-gradient(135deg, #f59e0b, #d97706);
   border: 2px solid #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 4px 10px rgba(245, 158, 11, 0.45);
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+
+/* Grønn pin for turposter den innloggede brukeren har besøkt */
+.turpost-pin-marker.is-visited .turpost-pin-icon {
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.45);
 }
 
 .turpost-pin-icon span {
@@ -195,6 +203,91 @@ body,
 
 .turpost-popup .btn-zoom-post:hover {
   background: #0369a1;
+}
+
+.turpost-popup .popup-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.turpost-popup .popup-status-badge.visited {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.turpost-popup .popup-status-badge.not-visited {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.turpost-popup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.turpost-popup .btn-popup-checkin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+  color: white;
+  border: 1px solid #38bdf8;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+  transition: all 0.2s ease;
+}
+
+.turpost-popup .btn-popup-checkin:hover {
+  background: linear-gradient(135deg, #0369a1, #1d4ed8);
+  transform: translateY(-1px);
+}
+
+.turpost-popup .btn-popup-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.turpost-popup .btn-popup-view:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.turpost-popup .popup-checkin-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 6px;
+  text-align: center;
+  font-style: italic;
 }
 
 /* Custom Leaflet Control Styling */

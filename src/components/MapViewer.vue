@@ -16,6 +16,8 @@ const props = defineProps<{
   vessels?: AisVessel[]
   isAisToggled?: boolean
   isZoomSufficient?: boolean
+  isLoggedIn?: boolean
+  visitedTurpostIds?: Set<string>
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +26,8 @@ const emit = defineEmits<{
   (e: 'coordinates-change', coords: { lat: number; lng: number; zoom: number }): void
   (e: 'bounds-change', bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }, zoom: number): void
   (e: 'select-turpost', post: TurpostItem): void
+  (e: 'checkin-turpost', post: TurpostItem): void
+  (e: 'view-checkins', post: TurpostItem): void
   (e: 'select-kommune-by-name', name: string): void
   (e: 'clear-turposter'): void
 }>()
@@ -121,13 +125,13 @@ const createUserIcon = (heading: number | null) => {
   })
 }
 
-const createTurpostIcon = () => {
+const createTurpostIcon = (isVisited: boolean = false) => {
   return L.divIcon({
     className: 'custom-turpost-pin',
     html: `
-      <div class="turpost-pin-marker">
+      <div class="turpost-pin-marker ${isVisited ? 'is-visited' : 'is-unvisited'}">
         <div class="turpost-pin-icon">
-          <span>⛰️</span>
+          <span>${isVisited ? '✓' : '⛰️'}</span>
         </div>
       </div>
     `,
@@ -232,23 +236,61 @@ const updateTurpostMarkers = (posts: TurpostItem[]) => {
     const latLng: L.LatLngTuple = [post.lat, post.lng]
     bounds.extend(latLng)
 
+    const isVisited = props.visitedTurpostIds?.has(String(post.id)) ?? false
+
     const marker = L.marker(latLng, {
-      icon: createTurpostIcon(),
+      icon: createTurpostIcon(isVisited),
       title: post.name,
-      zIndexOffset: 500
+      zIndexOffset: isVisited ? 550 : 500
     })
 
     const popupHtml = `
       <div class="turpost-popup">
         <h4>${post.name}</h4>
         ${post.alt ? `<div class="popup-badge">⛰️ ${post.alt} moh.</div>` : ''}
+        ${props.isLoggedIn ? `
+          <div class="popup-status-badge ${isVisited ? 'visited' : 'not-visited'}">
+            ${isVisited ? '✓ Besøkt' : 'Ikke besøkt'}
+          </div>
+        ` : ''}
         <div class="popup-info">
           Posisjon: ${post.lat.toFixed(5)}°, ${post.lng.toFixed(5)}°
+        </div>
+        <div class="turpost-popup-actions">
+          <button type="button" class="btn-popup-view" id="view-checkins-btn-${post.id}">
+            👁️ Vis innsjekkinger
+          </button>
+          ${props.isLoggedIn ? `
+            <button type="button" class="btn-popup-checkin" id="checkin-btn-${post.id}">
+              📍 Sjekk inn her
+            </button>
+          ` : `
+            <div class="popup-checkin-hint">Logg inn for å sjekke inn</div>
+          `}
         </div>
       </div>
     `
 
     marker.bindPopup(popupHtml)
+    marker.on('popupopen', () => {
+      const viewBtn = document.getElementById(`view-checkins-btn-${post.id}`)
+      if (viewBtn) {
+        viewBtn.onclick = (e) => {
+          e.stopPropagation()
+          emit('view-checkins', post)
+        }
+      }
+
+      if (props.isLoggedIn) {
+        const checkinBtn = document.getElementById(`checkin-btn-${post.id}`)
+        if (checkinBtn) {
+          checkinBtn.onclick = (e) => {
+            e.stopPropagation()
+            emit('checkin-turpost', post)
+          }
+        }
+      }
+    })
     marker.on('click', () => {
       emit('select-turpost', post)
     })
@@ -545,9 +587,9 @@ watch(
 )
 
 watch(
-  () => props.turposter,
-  (newPosts) => {
-    updateTurpostMarkers(newPosts)
+  () => [props.turposter, props.isLoggedIn, props.visitedTurpostIds],
+  () => {
+    updateTurpostMarkers(props.turposter)
   },
   { deep: true }
 )

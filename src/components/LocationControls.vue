@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   Navigation,
   Layers,
@@ -16,7 +16,10 @@ import {
   Radio,
   Settings,
   Crosshair,
+  ChevronDown,
+  X,
 } from 'lucide-vue-next'
+import AuthPanel from './AuthPanel.vue'
 import type { GeoLocationState } from '@/composables/useGeolocation'
 
 const props = defineProps<{
@@ -60,6 +63,52 @@ const coordInput = ref('')
 const coordError = ref('')
 const installPrompt = ref<any>(null)
 const isInstalled = ref(false)
+
+const logoUrl = `${import.meta.env.BASE_URL}icon.svg`
+const appVersion = __APP_VERSION__
+const appTitle = 'TorTur'
+
+const isMenuOpen = ref(false)
+
+const toggleMenu = () => {
+  isMenuOpen.value = !isMenuOpen.value
+  if (!isMenuOpen.value) {
+    showLayerMenu.value = false
+    showAisModal.value = false
+    showInfoModal.value = false
+  }
+}
+
+const handleClickOutside = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (isMenuOpen.value && !target.closest('.top-left-wrapper')) {
+    isMenuOpen.value = false
+  }
+}
+
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') {
+    if (showLayerMenu.value) {
+      showLayerMenu.value = false
+      return
+    }
+    if (showAisModal.value) {
+      showAisModal.value = false
+      return
+    }
+    if (showInfoModal.value) {
+      showInfoModal.value = false
+      return
+    }
+    if (showCoordModal.value) {
+      showCoordModal.value = false
+      return
+    }
+    if (isMenuOpen.value) {
+      isMenuOpen.value = false
+    }
+  }
+}
 
 const availableLayers = computed(() => {
   const baseLayers = [
@@ -156,8 +205,11 @@ const handleGoToCoordinates = () => {
   coordError.value = ''
 }
 
-// PWA Install prompt handling
+// Event listeners for install, click outside og escape
 onMounted(() => {
+  window.addEventListener('click', handleClickOutside)
+  window.addEventListener('keydown', handleKeyDown)
+
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault()
     installPrompt.value = e
@@ -167,6 +219,11 @@ onMounted(() => {
     isInstalled.value = true
     installPrompt.value = null
   })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('keydown', handleKeyDown)
 })
 
 const handleInstallClick = async () => {
@@ -182,95 +239,169 @@ const handleInstallClick = async () => {
 
 <template>
   <div class="controls-overlay">
-    <!-- Topplinje med verktøyknapper -->
-    <header class="top-bar">
-      <div class="top-actions glass-panel">
-        <!-- Turposter-knapp -->
+    <!-- Topp-venstre hjørne: Hovedmerkevare (TorTur), Login og Nedtrekksmeny med Turposter osv. -->
+    <div class="top-left-wrapper">
+      <header class="app-top-left-panel glass-panel">
         <button
-          class="btn-turposter"
-          :class="{ active: isTurposterOpen || activeKommuneName }"
-          @click="emit('toggle-turposter')"
-          title="Vis turposter etter fylke og kommune"
+          class="brand-badge-btn"
+          @click="toggleMenu"
+          :class="{ active: isMenuOpen }"
+          title="Klikk for å vise/skjule meny med turposter og kartverktøy"
+          aria-label="Åpne eller lukk verktøymeny"
+          :aria-expanded="isMenuOpen"
         >
-          <Mountain :size="16" class="mountain-icon" />
-          <span v-if="activeKommuneName" class="kommune-tag">
-            {{ activeKommuneName }} ({{ turpostCount }})
-          </span>
-          <span v-else>Turposter</span>
+          <img :src="logoUrl" alt="TorTur logo" class="brand-logo-img" />
+          <div class="brand-title-wrap">
+            <span class="brand-title">{{ appTitle }}</span>
+            <span class="brand-version">v{{ appVersion }}</span>
+          </div>
+          <ChevronDown :size="15" class="brand-chevron" :class="{ 'chevron-open': isMenuOpen }" />
         </button>
 
-        <!-- AIS Båttrafikk-knapp – kun synlig når innlogget -->
-        <button
-          v-if="isLoggedIn"
-          class="btn-ais"
-          :class="{
-            active: isAisToggled && isZoomSufficient,
-            'zoom-warning': isAisToggled && !isZoomSufficient,
-          }"
-          @click="emit('toggle-ais')"
-          title="Slå av/på sanntids båttrafikk (AIS)"
-        >
-          <Anchor :size="16" class="anchor-icon" />
-          <span v-if="isAisToggled && isZoomSufficient" class="btn-ais-text">
-            AIS ({{ aisVesselCount || 0 }})
-          </span>
-          <span v-else-if="isAisToggled && !isZoomSufficient" class="btn-ais-text">
-            AIS (Zoom inn)
-          </span>
-          <span v-else class="btn-ais-text">AIS</span>
-        </button>
-        <!-- Kommunegrenser-knapp -->
-        <button
-          class="icon-btn"
-          :class="{ active: showMunicipalities }"
-          @click="emit('toggle-municipalities')"
-          title="Slå av/på visning av kommunegrenser"
-        >
-          <MapIcon :size="18" />
-        </button>
+        <div class="brand-divider" />
 
-        <!-- Kartlag-knapp -->
-        <button
-          class="icon-btn"
-          :class="{ active: showLayerMenu }"
-          @click="toggleLayerMenu"
-          title="Bytt kartlag"
-        >
-          <Layers :size="18" />
-        </button>
+        <AuthPanel />
+      </header>
 
-        <!-- AIS-innstillinger / Kilde-knapp -->
-        <button
-          class="icon-btn"
-          :class="{ active: showAisModal }"
-          @click="showAisModal = !showAisModal"
-          title="Båttrafikk (AIS) innstillinger"
-        >
-          <Radio :size="18" />
-        </button>
+      <!-- Menyen med Turposter osv. plassert RETT UNDER hovedmenypunktet -->
+      <transition name="fade-slide">
+        <div v-if="isMenuOpen" class="brand-menu-dropdown glass-panel" @click.stop>
+          <div class="top-actions">
+            <!-- Turposter-knapp -->
+            <button
+              class="btn-turposter"
+              :class="{ active: isTurposterOpen || activeKommuneName }"
+              @click="emit('toggle-turposter')"
+              title="Vis turposter etter fylke og kommune"
+            >
+              <Mountain :size="16" class="mountain-icon" />
+              <span v-if="activeKommuneName" class="kommune-tag">
+                {{ activeKommuneName }} ({{ turpostCount }})
+              </span>
+              <span v-else>Turposter</span>
+            </button>
 
-        <!-- Info-knapp -->
-        <button
-          class="icon-btn"
-          :class="{ active: showInfoModal }"
-          @click="showInfoModal = !showInfoModal"
-          title="Om appen"
-        >
-          <Info :size="18" />
-        </button>
+            <!-- Hvor er jeg? -->
+            <button
+              class="icon-btn btn-locate"
+              :disabled="isLocating"
+              @click="emit('locate')"
+              :title="isLocating ? 'Finner posisjon...' : 'Hvor er jeg?'"
+              aria-label="Hvor er jeg?"
+            >
+              <Loader2 v-if="isLocating" class="spinner" :size="18" />
+              <LocateFixed v-else :size="18" />
+            </button>
 
-        <!-- PWA Install-knapp (vises hvis tilgjengelig) -->
-        <button
-          v-if="installPrompt && !isInstalled"
-          class="btn-install"
-          @click="handleInstallClick"
-          title="Installer som app på enheten"
-        >
-          <Download :size="15" />
-          <span>Installer</span>
-        </button>
-      </div>
-    </header>
+            <!-- Gå til koordinat -->
+            <button
+              class="icon-btn btn-coord"
+              :class="{ active: showCoordModal }"
+              @click="showCoordModal = !showCoordModal"
+              title="Gå til koordinat"
+              aria-label="Gå til koordinat"
+            >
+              <Crosshair :size="18" />
+            </button>
+
+            <!-- Følg meg -->
+            <button
+              class="icon-btn btn-track"
+              :class="{ active: isTracking, 'is-tracking': isTracking }"
+              @click="emit('toggle-tracking')"
+              :title="isTracking ? 'Følger deg' : 'Følg meg'"
+              aria-label="Følg meg"
+            >
+              <Compass :size="18" :class="{ 'pulse-slow': isTracking }" />
+            </button>
+
+            <!-- AIS Båttrafikk-knapp – kun synlig når innlogget -->
+            <button
+              v-if="isLoggedIn"
+              class="btn-ais"
+              :class="{
+                active: isAisToggled && isZoomSufficient,
+                'zoom-warning': isAisToggled && !isZoomSufficient,
+              }"
+              @click="emit('toggle-ais')"
+              title="Slå av/på sanntids båttrafikk (AIS)"
+            >
+              <Anchor :size="16" class="anchor-icon" />
+              <span v-if="isAisToggled && isZoomSufficient" class="btn-ais-text">
+                AIS ({{ aisVesselCount || 0 }})
+              </span>
+              <span v-else-if="isAisToggled && !isZoomSufficient" class="btn-ais-text">
+                AIS (Zoom inn)
+              </span>
+              <span v-else class="btn-ais-text">AIS</span>
+            </button>
+
+            <!-- Kommunegrenser-knapp -->
+            <button
+              class="icon-btn"
+              :class="{ active: showMunicipalities }"
+              @click="emit('toggle-municipalities')"
+              title="Slå av/på visning av kommunegrenser"
+            >
+              <MapIcon :size="18" />
+            </button>
+
+            <!-- Kartlag-knapp -->
+            <button
+              class="icon-btn"
+              :class="{ active: showLayerMenu }"
+              @click="toggleLayerMenu"
+              title="Bytt kartlag"
+            >
+              <Layers :size="18" />
+            </button>
+
+            <!-- AIS-innstillinger / Kilde-knapp -->
+            <button
+              class="icon-btn"
+              :class="{ active: showAisModal }"
+              @click="showAisModal = !showAisModal"
+              title="Båttrafikk (AIS) innstillinger"
+            >
+              <Radio :size="18" />
+            </button>
+
+            <!-- Info-knapp -->
+            <button
+              class="icon-btn"
+              :class="{ active: showInfoModal }"
+              @click="showInfoModal = !showInfoModal"
+              title="Om appen"
+            >
+              <Info :size="18" />
+            </button>
+
+            <!-- PWA Install-knapp (vises hvis tilgjengelig) -->
+            <button
+              v-if="installPrompt && !isInstalled"
+              class="btn-install"
+              @click="handleInstallClick"
+              title="Installer som app på enheten"
+            >
+              <Download :size="15" />
+              <span>Installer</span>
+            </button>
+
+            <div class="menu-divider" />
+
+            <!-- Lukk meny-knapp -->
+            <button
+              class="icon-btn btn-close-menu"
+              @click="isMenuOpen = false"
+              title="Lukk meny (Esc)"
+              aria-label="Lukk meny"
+            >
+              <X :size="16" />
+            </button>
+          </div>
+        </div>
+      </transition>
+    </div>
 
     <!-- AIS Modal -->
     <transition name="fade-slide">
@@ -418,7 +549,7 @@ const handleInstallClick = async () => {
       </div>
     </transition>
 
-    <!-- Bunnkontrollpanel (Posisjonsknapp & Status) -->
+    <!-- Bunnkontrollpanel (Statuskapsel) -->
     <div class="bottom-bar">
       <!-- Statuskapsel (Koordinater & Nøyaktighet) -->
       <div class="status-pill glass-panel">
@@ -438,41 +569,6 @@ const handleInstallClick = async () => {
             {{ centerCoords.zoom }})
           </span>
         </div>
-      </div>
-
-      <!-- Handlingsknapper -->
-      <div class="action-buttons">
-        <button
-          class="btn-action btn-locate glass-panel"
-          :disabled="isLocating"
-          @click="emit('locate')"
-          title="Finn min posisjon"
-        >
-          <Loader2 v-if="isLocating" class="spinner" :size="20" />
-          <LocateFixed v-else :size="20" />
-          <span>Hvor er jeg?</span>
-        </button>
-
-        <!-- Gå til koordinat-knapp -->
-        <button
-          class="btn-action btn-coord glass-panel"
-          :class="{ active: showCoordModal }"
-          @click="showCoordModal = !showCoordModal"
-          title="Angi koordinater (Lat, Lng) for å sentrere kartet"
-        >
-          <Crosshair :size="20" />
-          <span>Gå til koordinat</span>
-        </button>
-
-        <button
-          class="btn-action btn-track glass-panel"
-          :class="{ 'is-tracking': isTracking }"
-          @click="emit('toggle-tracking')"
-          title="Følg min posisjon kontinuerlig"
-        >
-          <Compass :size="20" :class="{ 'pulse-slow': isTracking }" />
-          <span>{{ isTracking ? 'Følger deg' : 'Følg meg' }}</span>
-        </button>
       </div>
     </div>
 
@@ -555,33 +651,156 @@ const handleInstallClick = async () => {
   border-radius: 16px;
 }
 
-/* Topplinje med verktøyknapper */
-.top-bar {
+/* Topp-venstre modul */
+.top-left-wrapper {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.app-top-left-panel {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: auto;
-  margin: 0 auto;
-  pointer-events: none;
+  gap: 10px;
+  padding: 6px 12px 6px 8px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.brand-badge-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 3px 6px 3px 3px;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.brand-badge-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.brand-badge-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+}
+
+.brand-logo-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+}
+
+.brand-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.brand-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.01em;
+}
+
+.brand-version {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.brand-chevron {
+  color: #94a3b8;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-left: 2px;
+}
+
+.brand-chevron.chevron-open {
+  transform: rotate(180deg);
+  color: #38bdf8;
+}
+
+.brand-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 2px;
+}
+
+/* Menyen med Turposter osv. plassert RETT UNDER */
+.brand-menu-dropdown {
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  max-width: calc(100vw - 32px);
 }
 
 .top-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 6px 8px;
-  background: rgba(15, 23, 42, 0.9);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-  pointer-events: auto;
 }
 
-@media (max-width: 860px) {
-  .top-bar {
-    margin-top: 56px;
+.menu-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 2px;
+}
+
+.btn-close-menu {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+}
+
+.btn-close-menu:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+
+@media (max-width: 640px) {
+  .top-left-wrapper {
+    top: 10px;
+    left: 10px;
+  }
+  .app-top-left-panel {
+    padding: 5px 10px 5px 6px;
+    gap: 8px;
+  }
+  .brand-logo-img {
+    width: 28px;
+    height: 28px;
+  }
+  .brand-version {
+    display: none;
   }
 }
 
@@ -688,10 +907,12 @@ const handleInstallClick = async () => {
 /* AIS Modal */
 .ais-modal {
   position: absolute;
-  top: 72px;
+  top: 124px;
   left: 16px;
   max-width: 440px;
   width: calc(100% - 32px);
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
   padding: 16px;
   z-index: 30;
   background: #0f172a;
@@ -846,11 +1067,12 @@ const handleInstallClick = async () => {
 /* Coord Modal */
 .coord-modal {
   position: absolute;
-  bottom: 84px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 124px;
+  left: 16px;
   max-width: 440px;
   width: calc(100% - 32px);
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
   padding: 16px;
   z-index: 40;
   background: #0f172a;
@@ -979,10 +1201,12 @@ const handleInstallClick = async () => {
 .layer-modal,
 .info-modal {
   position: absolute;
-  top: 72px;
+  top: 124px;
   left: 16px;
   max-width: 380px;
   width: calc(100% - 32px);
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
   padding: 16px;
   z-index: 20;
   background: #0f172a;
@@ -1223,52 +1447,11 @@ const handleInstallClick = async () => {
 }
 
 /* Aksjonsknapper */
-.action-buttons {
-  display: flex;
-  gap: 12px;
-  width: 100%;
-}
-
-.btn-action {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #f8fafc;
-  cursor: pointer;
-  border: 1px solid #334155;
-  background: #0f172a;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-}
-
-.btn-locate:hover {
-  background: linear-gradient(135deg, #0284c7, #0369a1);
-  border-color: #38bdf8;
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(2, 132, 199, 0.4);
-}
-
-.btn-track {
-  background: #1e293b;
-}
-
-.btn-track:hover {
-  background: #334155;
-  border-color: #64748b;
-  transform: translateY(-2px);
-}
-
-.btn-track.is-tracking {
+.icon-btn.btn-track.is-tracking {
   background: linear-gradient(135deg, #10b981, #059669);
   border-color: #34d399;
   color: white;
-  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4);
 }
 
 .spinner {

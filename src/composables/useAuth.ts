@@ -14,26 +14,58 @@ export interface SystemConfig {
   [key: string]: string | undefined
 }
 
+export interface CheckinParams {
+  turpostId: string | number
+  description: string
+  imageFile?: File | null
+}
+
+export interface CheckinResult {
+  userId: string
+  turpostId: string
+  timestamp: string
+  description: string
+  imageUrl: string
+  userName?: string
+  userAvatar?: string
+}
+
+export interface FirebaseCheckinItem {
+  id: string
+  userId: string
+  userName: string
+  userAvatar: string
+  turpostId: string
+  timestamp: string
+  description: string
+  imageUrl: string
+}
+
 const STORAGE_KEY_USER   = 'tortur_user'
 const STORAGE_KEY_CONFIG = 'tortur_system_config'
+const STORAGE_KEY_TOKEN  = 'tortur_id_token'
 
 const APPSCRIPT_URL = import.meta.env.VITE_APPSCRIPT_URL as string | undefined
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
 
 // Singleton state – delt på tvers av alle useAuth()-kall
-const user         = ref<GoogleUser | null>(null)
-const systemConfig = ref<SystemConfig>({})
-const isLoading    = ref(false)
-const error        = ref<string | null>(null)
-let   gisLoaded    = false
+const user           = ref<GoogleUser | null>(null)
+const systemConfig   = ref<SystemConfig>({})
+const currentIdToken = ref<string | null>(null)
+const isLoading      = ref(false)
+const error          = ref<string | null>(null)
+let   gisLoaded      = false
 
-// Gjenopprett fra localStorage ved første import
+// Gjenopprett fra localStorage/sessionStorage ved første import
 try {
   const savedUser = localStorage.getItem(STORAGE_KEY_USER)
   if (savedUser) user.value = JSON.parse(savedUser)
 
   const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG)
   if (savedConfig) systemConfig.value = JSON.parse(savedConfig)
+
+  const savedToken = sessionStorage.getItem(STORAGE_KEY_TOKEN)
+  if (savedToken) currentIdToken.value = savedToken
 } catch {
   // Ugyldig data – ignorer
 }
@@ -102,9 +134,11 @@ async function loginWithToken(idToken: string): Promise<void> {
 
     user.value         = data.user as GoogleUser
     systemConfig.value = (data.systemConfig || {}) as SystemConfig
+    currentIdToken.value = idToken
 
     localStorage.setItem(STORAGE_KEY_USER,   JSON.stringify(user.value))
     localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(systemConfig.value))
+    sessionStorage.setItem(STORAGE_KEY_TOKEN, idToken)
   } catch (err) {
     error.value = 'Kunne ikke nå innloggingsserveren. Sjekk nettverkstilkoblingen.'
     console.error('[useAuth] Login-feil:', err)
@@ -122,40 +156,34 @@ async function login(): Promise<void> {
     return
   }
 
-  error.value = null
-
   try {
     await loadGIS()
-
     const google = (window as any).google
+    if (!google?.accounts?.id) {
+      error.value = 'Google Identity Services er ikke tilgjengelig'
+      return
+    }
 
-    await new Promise<void>((resolve, reject) => {
-      google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: async (response: { credential: string }) => {
-          try {
-            await loginWithToken(response.credential)
-            resolve()
-          } catch (e) {
-            reject(e)
-          }
-        },
-        auto_select: false,
-        cancel_on_tap_outside: true
-      })
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: (response: any) => {
+        if (response.credential) {
+          loginWithToken(response.credential)
+        } else {
+          error.value = 'Ingen legitimasjon mottatt fra Google'
+        }
+      },
+      auto_select: false,
+      cancel_on_tap_outside: true
+    })
 
-      google.accounts.id.prompt((notification: any) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          // One Tap ikke vist – prøv popup-flyt
-          google.accounts.id.renderButton(
-            document.getElementById('google-signin-btn'),
-            { theme: 'outline', size: 'large', width: 280 }
-          )
-        }
-        if (notification.isDismissedMoment()) {
-          resolve() // bruker lukket – ikke en feil
-        }
-      })
+    google.accounts.id.prompt((notification: any) => {
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        google.accounts.id.renderButton(
+          document.getElementById('g_id_signin_hidden') || document.body,
+          { theme: 'outline', size: 'large' }
+        )
+      }
     })
   } catch (e: any) {
     error.value = e?.message || 'Innlogging feilet'
@@ -166,11 +194,13 @@ async function login(): Promise<void> {
 // Logg ut
 // =============================================================================
 function logout(): void {
-  user.value         = null
-  systemConfig.value = {}
-  error.value        = null
+  user.value           = null
+  systemConfig.value   = {}
+  currentIdToken.value = null
+  error.value          = null
   localStorage.removeItem(STORAGE_KEY_USER)
   localStorage.removeItem(STORAGE_KEY_CONFIG)
+  sessionStorage.removeItem(STORAGE_KEY_TOKEN)
 
   try {
     const google = (window as any).google
@@ -183,6 +213,168 @@ function logout(): void {
 }
 
 // =============================================================================
+// Konverter bildefil til base64 data-URL
+// =============================================================================
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = err => reject(err)
+    reader.readAsDataURL(file)
+  })
+}
+
+// =============================================================================
+// Send innsjekk til Google Apps Script
+// =============================================================================
+async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
+  if (!APPSCRIPT_URL) {
+    throw new Error('VITE_APPSCRIPT_URL er ikke konfigurert i miljøvariabler.')
+  }
+  if (!user.value) {
+    throw new Error('Du må være innlogget for å sjekke inn.')
+  }
+
+  let imagePayload: { base64: string; mimeType: string; fileName: string } | undefined
+  if (params.imageFile) {
+    const base64 = await fileToBase64(params.imageFile)
+    imagePayload = {
+      base64,
+      mimeType: params.imageFile.type || 'image/jpeg',
+      fileName: params.imageFile.name || `innsjekk_${Date.now()}.jpg`
+    }
+  }
+
+  const payload = {
+    action: 'checkin',
+    idToken: currentIdToken.value || undefined,
+    userId: user.value.userId,
+    email: user.value.email,
+    turpostId: String(params.turpostId),
+    description: params.description || '',
+    image: imagePayload
+  }
+
+  const response = await fetch(APPSCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(payload)
+  })
+
+  if (!response.ok) {
+    throw new Error(`Tjeneren svarte med feilstatus ${response.status}`)
+  }
+
+  const text = await response.text()
+  let data: any
+  try {
+    data = JSON.parse(text)
+  } catch {
+    throw new Error('Ugyldig svar fra tjeneren (ikke JSON).')
+  }
+
+  if (!data.success) {
+    throw new Error(data.error || 'Innsjekking feilet.')
+  }
+
+  if (data.systemConfig) {
+    systemConfig.value = data.systemConfig
+    localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(data.systemConfig))
+  }
+
+  return data.checkin as CheckinResult
+}
+
+// =============================================================================
+// Hent fersk SystemKonfigurasjon fra Apps Script hvis den mangler eller er utdatert
+// =============================================================================
+async function refreshSystemConfig(): Promise<SystemConfig> {
+  if (!APPSCRIPT_URL || !user.value) return systemConfig.value
+
+  try {
+    const response = await fetch(APPSCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'getConfig',
+        userId: user.value.userId,
+        idToken: currentIdToken.value || undefined
+      })
+    })
+
+    if (!response.ok) return systemConfig.value
+    const data = await response.json()
+    if (data.success && data.systemConfig) {
+      systemConfig.value = data.systemConfig
+      localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(data.systemConfig))
+    }
+  } catch (err) {
+    console.warn('[useAuth] Kunne ikke oppdatere SystemKonfigurasjon:', err)
+  }
+
+  return systemConfig.value
+}
+
+// =============================================================================
+// Hent innsjekkinger for en gitt turpost fra Firebase
+// =============================================================================
+async function fetchTurpostCheckins(turpostId: string | number): Promise<FirebaseCheckinItem[]> {
+  let dbUrl = (systemConfig.value.FIREBASE_DB_URL || '').replace(/\/$/, '')
+  let prefix = (systemConfig.value.FIREBASE_SECRET_PREFIX || '').replace(/^\/|\/$/g, '')
+
+  // Hvis config mangler i minnet/localStorage, oppfrisk fra server
+  if (!dbUrl || !prefix) {
+    await refreshSystemConfig()
+    dbUrl = (systemConfig.value.FIREBASE_DB_URL || '').replace(/\/$/, '')
+    prefix = (systemConfig.value.FIREBASE_SECRET_PREFIX || '').replace(/^\/|\/$/g, '')
+  }
+
+  if (!dbUrl || !prefix) return []
+
+  try {
+    const url = `${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(turpostId))}.json`
+    const res = await fetch(url)
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!data || typeof data !== 'object') return []
+    return Object.values(data) as FirebaseCheckinItem[]
+  } catch (err) {
+    console.warn('[useAuth] Kunne ikke hente turpost-innsjekkinger fra Firebase:', err)
+    return []
+  }
+}
+
+// =============================================================================
+// Hent innlogget brukers egne innsjekkinger fra Firebase ("Mine innsjekkinger")
+// =============================================================================
+async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
+  if (!user.value) return []
+  let dbUrl = (systemConfig.value.FIREBASE_DB_URL || '').replace(/\/$/, '')
+  let prefix = (systemConfig.value.FIREBASE_SECRET_PREFIX || '').replace(/^\/|\/$/g, '')
+
+  // Hvis config mangler i minnet/localStorage, oppfrisk fra server
+  if (!dbUrl || !prefix) {
+    await refreshSystemConfig()
+    dbUrl = (systemConfig.value.FIREBASE_DB_URL || '').replace(/\/$/, '')
+    prefix = (systemConfig.value.FIREBASE_SECRET_PREFIX || '').replace(/^\/|\/$/g, '')
+  }
+
+  if (!dbUrl || !prefix) return []
+
+  try {
+    const url = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(user.value.userId)}.json`
+    const res = await fetch(url)
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!data || typeof data !== 'object') return []
+    return Object.values(data) as FirebaseCheckinItem[]
+  } catch (err) {
+    console.warn('[useAuth] Kunne ikke hente bruker-innsjekkinger fra Firebase:', err)
+    return []
+  }
+}
+
+// =============================================================================
 // useAuth – composable eksport
 // =============================================================================
 export function useAuth() {
@@ -190,6 +382,7 @@ export function useAuth() {
 
   const aisClientId     = computed(() => systemConfig.value.AIS_CLIENT_ID     || '')
   const aisClientSecret = computed(() => systemConfig.value.AIS_CLIENT_SECRET || '')
+  const firebaseDbUrl   = computed(() => systemConfig.value.FIREBASE_DB_URL   || '')
 
   return {
     user,
@@ -199,7 +392,11 @@ export function useAuth() {
     systemConfig,
     aisClientId,
     aisClientSecret,
+    firebaseDbUrl,
     login,
-    logout
+    logout,
+    submitCheckin,
+    fetchTurpostCheckins,
+    fetchMyCheckins
   }
 }

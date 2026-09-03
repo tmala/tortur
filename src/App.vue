@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import MapViewer from './components/MapViewer.vue'
 import LocationControls from './components/LocationControls.vue'
 import TurposterPanel from './components/TurposterPanel.vue'
-import AuthPanel from './components/AuthPanel.vue'
+import CheckinModal from './components/CheckinModal.vue'
+import TurpostCheckinsModal from './components/TurpostCheckinsModal.vue'
 import { useGeolocation } from './composables/useGeolocation'
 import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from './composables/useTurposter'
 import { useAis } from './composables/useAis'
-import { useAuth } from './composables/useAuth'
+import { useAuth, type FirebaseCheckinItem } from './composables/useAuth'
 
 const {
   isLocating,
@@ -33,8 +34,56 @@ const {
   clearError: clearAisError
 } = useAis()
 
-const { isLoggedIn, aisClientId, aisClientSecret } = useAuth()
+const { user, isLoggedIn, aisClientId, aisClientSecret, fetchMyCheckins } = useAuth()
 const activeLayer = ref<string>('standard')
+const activeCheckinPost = ref<TurpostItem | null>(null)
+const activeViewCheckinsPost = ref<TurpostItem | null>(null)
+
+// Brukerens egne innsjekkinger fra Firebase
+const myCheckins = ref<FirebaseCheckinItem[]>([])
+const visitedTurpostIds = computed(() => new Set(myCheckins.value.map(c => String(c.turpostId))))
+
+const loadMyCheckins = async () => {
+  if (!isLoggedIn.value) {
+    myCheckins.value = []
+    return
+  }
+  try {
+    myCheckins.value = await fetchMyCheckins()
+  } catch (err) {
+    console.warn('[App] Kunne ikke laste brukerens innsjekkinger:', err)
+  }
+}
+
+watch(
+  isLoggedIn,
+  (loggedIn) => {
+    if (loggedIn) {
+      loadMyCheckins()
+    } else {
+      myCheckins.value = []
+    }
+  },
+  { immediate: true }
+)
+
+const handleOpenCheckin = (post: TurpostItem) => {
+  activeCheckinPost.value = post
+}
+
+const handleViewCheckins = (post: TurpostItem) => {
+  activeViewCheckinsPost.value = post
+}
+
+const handleCheckinSubmitted = (result: any) => {
+  if (result && result.turpostId) {
+    myCheckins.value.push(result)
+  }
+}
+
+const handleSelectTurpost = (_post: TurpostItem) => {
+  // Kan benyttes for tilstandsoppdateringer ved klikk på turpost
+}
 
 // Når bruker logger inn (eller ut) synkroniseres AIS-nøklene automatisk
 watch(
@@ -125,7 +174,7 @@ const {
 const mapViewerRef = ref<InstanceType<typeof MapViewer> | null>(null)
 const centerCoords = ref<{ lat: number; lng: number; zoom: number } | null>(null)
 const isTurposterOpen = ref(false)
-const showMunicipalities = ref(true)
+const showMunicipalities = ref(false)
 
 // Håndter åpning og lukking av turpost-panel
 const handleToggleTurposter = () => {
@@ -248,28 +297,10 @@ onMounted(async () => {
 onUnmounted(() => {
   stopAisPoll()
 })
-
-const logoUrl = `${import.meta.env.BASE_URL}icon.svg`
-const appVersion = __APP_VERSION__
-const appTitle = 'TorTur'
 </script>
 
 <template>
   <main class="app-root">
-    <!-- Topp venstre hjørne: App Logo, Navn, Versjonsnummer og Login-knapp -->
-    <header class="app-top-left-panel">
-      <div class="brand-badge">
-        <img :src="logoUrl" alt="TorTur logo" class="brand-logo-img" />
-        <div class="brand-title-wrap">
-          <span class="brand-title">{{ appTitle }}</span>
-          <span class="brand-version">v{{ appVersion }}</span>
-        </div>
-      </div>
-
-      <div class="brand-divider" />
-
-      <AuthPanel />
-    </header>
 
     <MapViewer
       ref="mapViewerRef"
@@ -283,9 +314,14 @@ const appTitle = 'TorTur'
       :vessels="vessels"
       :is-ais-toggled="isAisToggled"
       :is-zoom-sufficient="isZoomSufficient"
+      :is-logged-in="isLoggedIn"
+      :visited-turpost-ids="visitedTurpostIds"
       @map-dragged="handleMapDragged"
       @coordinates-change="handleCoordinatesChange"
       @bounds-change="handleBoundsChange"
+      @select-turpost="handleSelectTurpost"
+      @checkin-turpost="handleOpenCheckin"
+      @view-checkins="handleViewCheckins"
       @select-kommune-by-name="handleSelectKommuneByName"
       @clear-turposter="handleClearAllTurposter"
     />
@@ -328,12 +364,35 @@ const appTitle = 'TorTur'
       :is-loading-hierarchy="isLoadingHierarchy"
       :is-loading-posts="isLoadingPosts"
       :search-query="searchQuery"
+      :is-logged-in="isLoggedIn"
+      :visited-turpost-ids="visitedTurpostIds"
       @close="isTurposterOpen = false"
       @select-fylke="handleSelectFylke"
       @select-kommune="handleSelectKommune"
       @update:search-query="searchQuery = $event"
       @focus-post="handleFocusPost"
+      @view-checkins="handleViewCheckins"
       @clear-all="handleClearAllTurposter"
+    />
+
+    <!-- Innsjekkingsmodal for turpost -->
+    <CheckinModal
+      :is-open="!!activeCheckinPost"
+      :turpost="activeCheckinPost"
+      :user="user"
+      @close="activeCheckinPost = null"
+      @submitted="handleCheckinSubmitted"
+    />
+
+    <!-- Modal for visning av alle innsjekkinger på en turpost -->
+    <TurpostCheckinsModal
+      :is-open="!!activeViewCheckinsPost"
+      :turpost="activeViewCheckinsPost"
+      :is-logged-in="isLoggedIn"
+      :has-visited="activeViewCheckinsPost ? visitedTurpostIds.has(String(activeViewCheckinsPost.id)) : false"
+      :current-user-id="user?.userId"
+      @close="activeViewCheckinsPost = null"
+      @open-checkin="(post) => { activeViewCheckinsPost = null; activeCheckinPost = post }"
     />
   </main>
 </template>
@@ -345,84 +404,5 @@ const appTitle = 'TorTur'
   height: 100vh;
   overflow: hidden;
   background-color: #0f172a;
-}
-
-/* Topp venstre panel: Logo, tittel, versjon og login */
-.app-top-left-panel {
-  position: fixed;
-  top: 16px;
-  left: 16px;
-  z-index: 1100;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 12px 6px 8px;
-  background: rgba(15, 23, 42, 0.94);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-.brand-badge {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.brand-logo-img {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  object-fit: cover;
-  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
-}
-
-.brand-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.brand-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #f8fafc;
-  letter-spacing: -0.01em;
-}
-
-.brand-version {
-  font-size: 10px;
-  font-weight: 600;
-  color: #94a3b8;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 2px 6px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.brand-divider {
-  width: 1px;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.15);
-  margin: 0 2px;
-}
-
-@media (max-width: 640px) {
-  .app-top-left-panel {
-    top: 10px;
-    left: 10px;
-    padding: 5px 10px 5px 6px;
-    gap: 8px;
-  }
-  .brand-logo-img {
-    width: 28px;
-    height: 28px;
-  }
-  .brand-version {
-    display: none;
-  }
 }
 </style>
