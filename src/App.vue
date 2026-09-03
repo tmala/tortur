@@ -37,7 +37,7 @@ const {
 } = useAis()
 
 const { user, isLoggedIn, isAdmin, aisClientId, aisClientSecret, fetchMyCheckins, logout } = useAuth()
-const activeLayer = ref<string>('standard')
+const activeLayer = ref<string>('norgeskart')
 const activeCheckinPost = ref<TurpostItem | null>(null)
 const activeViewCheckinsPost = ref<TurpostItem | null>(null)
 const isProfileOpen = ref(false)
@@ -125,9 +125,9 @@ watch(
       setBwCredentials('', '')
       // Slå av AIS dersom bruker logger ut
       if (isAisToggled.value) toggleAis()
-      // Hvis aktivt kartlag er et Google-kartlag ved utlogging, bytt tilbake til standard
+      // Hvis aktivt kartlag er et Google-kartlag ved utlogging, bytt tilbake til norgeskart
       if (activeLayer.value.startsWith('google_')) {
-        activeLayer.value = 'standard'
+        activeLayer.value = 'norgeskart'
       }
     }
   },
@@ -294,7 +294,7 @@ const handleMapDragged = () => {
 // Kartlagbytte
 const handleChangeLayer = (layerId: string) => {
   if (layerId.startsWith('google_') && !isLoggedIn.value) {
-    activeLayer.value = 'standard'
+    activeLayer.value = 'norgeskart'
     return
   }
   activeLayer.value = layerId
@@ -413,6 +413,7 @@ onUnmounted(() => {
       :is-open="!!activeCheckinPost"
       :turpost="activeCheckinPost"
       :user="user"
+      :user-location="coords"
       @close="activeCheckinPost = null"
       @submitted="handleCheckinSubmitted"
     />
@@ -424,6 +425,7 @@ onUnmounted(() => {
       :is-logged-in="isLoggedIn"
       :has-visited="activeViewCheckinsPost ? visitedTurpostIds.has(String(activeViewCheckinsPost.id)) : false"
       :current-user-id="user?.userId"
+      :user-location="coords"
       @close="activeViewCheckinsPost = null"
       @open-checkin="(post) => { activeViewCheckinsPost = null; activeCheckinPost = post }"
     />
@@ -453,9 +455,13 @@ onUnmounted(() => {
 
 <style scoped>
 .app-root {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   background-color: #0f172a;
 }

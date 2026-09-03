@@ -238,11 +238,11 @@ const filteredKommunerList = () => {
 <style scoped>
 .turposter-panel {
   position: absolute;
-  top: 72px;
-  right: 16px;
+  top: calc(72px + env(safe-area-inset-top, 0px));
+  right: calc(16px + env(safe-area-inset-right, 0px));
   width: 380px;
   max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 150px);
+  max-height: calc(100dvh - 150px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   z-index: 25;

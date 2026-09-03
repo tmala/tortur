@@ -10,7 +10,8 @@ import {
   Trophy,
   Compass,
   Maximize2,
-  ShieldCheck
+  ShieldCheck,
+  RotateCw
 } from 'lucide-vue-next'
 import type { GoogleUser, FirebaseCheckinItem } from '@/composables/useAuth'
 
@@ -29,6 +30,38 @@ const emit = defineEmits<{
   (e: 'refresh'): void
   (e: 'toggle-admin-mode'): void
 }>()
+
+const isRefreshing = ref(false)
+
+const handleForceRefresh = async () => {
+  if (isRefreshing.value) return
+  isRefreshing.value = true
+
+  try {
+    // 1. Be service worker sjekke etter oppdatering og hente nyeste versjon
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      for (const reg of registrations) {
+        await reg.update()
+      }
+    }
+
+    // 2. Tøm eventuell statisk app-cache (men spar på kart-tiles)
+    if ('caches' in window) {
+      const cacheNames = await caches.keys()
+      await Promise.all(
+        cacheNames
+          .filter((name) => !name.includes('map-tiles'))
+          .map((name) => caches.delete(name))
+      )
+    }
+  } catch (err) {
+    console.warn('Kunne ikke oppdatere cache fullstendig:', err)
+  } finally {
+    // 3. Tving en full reload fra serveren
+    window.location.reload()
+  }
+}
 
 // Lightbox for bildevisning
 const lightboxImage = ref<string | null>(null)
@@ -111,6 +144,17 @@ onUnmounted(() => {
             </div>
 
             <div class="header-actions">
+              <!-- Oppdater appen / Tving refresh -->
+              <button
+                class="btn-profile-refresh"
+                :disabled="isRefreshing"
+                @click="handleForceRefresh"
+                title="Søk etter ny versjon og last inn på nytt"
+              >
+                <RotateCw :size="14" :class="{ 'spin-refresh': isRefreshing }" />
+                <span>{{ isRefreshing ? 'Laster...' : 'Oppdater' }}</span>
+              </button>
+
               <!-- Admin-modus toggle (kun synlig for admin-brukere) -->
               <button
                 v-if="props.isAdmin"
@@ -412,6 +456,41 @@ onUnmounted(() => {
 .btn-admin-toggle.active:hover {
   background: rgba(247, 201, 72, 0.28);
   border-color: rgba(247, 201, 72, 0.75);
+}
+
+.btn-profile-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-profile-refresh:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: rgba(56, 189, 248, 0.6);
+  color: #ffffff;
+}
+
+.btn-profile-refresh:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.spin-refresh {
+  animation: spin-cw 1s linear infinite;
+}
+
+@keyframes spin-cw {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .btn-profile-logout {

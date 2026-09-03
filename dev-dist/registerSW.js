@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/tortur/dev-sw.js?dev-sw', { scope: '/tortur/', type: 'classic' })

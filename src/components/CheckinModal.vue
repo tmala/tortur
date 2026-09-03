@@ -3,11 +3,18 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type GoogleUser, type CheckinResult } from '@/composables/useAuth'
+import {
+  type GeoLocationState,
+  calculateDistanceMeters,
+  formatDistance,
+  MAX_CHECKIN_DISTANCE_METERS
+} from '@/composables/useGeolocation'
 
 const props = defineProps<{
   isOpen: boolean
   turpost: TurpostItem | null
   user: GoogleUser | null
+  userLocation?: GeoLocationState | null
 }>()
 
 const emit = defineEmits<{
@@ -25,6 +32,21 @@ const errorMessage = ref<string | null>(null)
 const isSuccess = ref(false)
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
+
+// Avstandsberegning til turposten
+const distance = computed(() => {
+  if (!props.userLocation || !props.turpost) return null
+  return calculateDistanceMeters(
+    props.userLocation.lat,
+    props.userLocation.lng,
+    props.turpost.lat,
+    props.turpost.lng
+  )
+})
+
+const isWithinRange = computed(() => {
+  return distance.value !== null && distance.value <= MAX_CHECKIN_DISTANCE_METERS
+})
 
 // Tilbakestill tilstand når modalen åpnes/lukkes
 watch(
@@ -131,6 +153,11 @@ async function compressImageIfNeeded(file: File): Promise<File> {
 const handleSubmit = async () => {
   if (!props.turpost || !props.user || isSubmitting.value) return
 
+  if (!isWithinRange.value) {
+    errorMessage.value = `Du må være innen 100 meter fra turposten for å sjekke inn (${distance.value !== null ? 'nåværende avstand: ' + formatDistance(distance.value) : 'posisjon ikke tilgjengelig'}).`
+    return
+  }
+
   isSubmitting.value = true
   errorMessage.value = null
 
@@ -199,6 +226,19 @@ onUnmounted(() => {
                   <span v-if="turpost?.lat && turpost?.lng" class="meta-coords">
                     {{ turpost.lat.toFixed(4) }}°, {{ turpost.lng.toFixed(4) }}°
                   </span>
+                </div>
+                <!-- Avstand til turposten -->
+                <div
+                  class="checkin-range-banner"
+                  :class="{
+                    'in-range': isWithinRange,
+                    'out-of-range': distance !== null && !isWithinRange,
+                    'no-location': distance === null
+                  }"
+                >
+                  <span v-if="isWithinRange">📍 Innen rekkevidde ({{ Math.round(distance!) }} m fra turposten)</span>
+                  <span v-else-if="distance !== null">⚠️ For langt unna ({{ formatDistance(distance) }}). Må være under 100m.</span>
+                  <span v-else>⚠️ Posisjon ikke tilgjengelig (maks 100m kreves).</span>
                 </div>
               </div>
             </div>
@@ -309,11 +349,12 @@ onUnmounted(() => {
               <button
                 type="submit"
                 class="btn-submit"
-                :disabled="isSubmitting"
+                :disabled="isSubmitting || !isWithinRange"
+                :title="!isWithinRange ? 'Du må være innen 100 meter fra turposten for å sjekke inn' : 'Fullfør innsjekking'"
               >
                 <Loader2 v-if="isSubmitting" class="spinner" :size="18" />
                 <Check v-else :size="18" />
-                <span>{{ isSubmitting ? 'Lagrer innsjekk...' : 'Sjekk inn her' }}</span>
+                <span>{{ isSubmitting ? 'Lagrer innsjekk...' : (isWithinRange ? 'Sjekk inn her' : 'For langt unna (maks 100m)') }}</span>
               </button>
             </div>
           </form>
@@ -409,6 +450,37 @@ onUnmounted(() => {
 .meta-alt {
   color: #38bdf8;
   font-weight: 600;
+}
+
+.checkin-range-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  width: fit-content;
+}
+
+.checkin-range-banner.in-range {
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.checkin-range-banner.out-of-range {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.checkin-range-banner.no-location {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
 .btn-close {

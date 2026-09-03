@@ -1,10 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import LocationControls from '../components/LocationControls.vue'
 import TurposterPanel from '../components/TurposterPanel.vue'
 import CheckinModal from '../components/CheckinModal.vue'
 import TurpostCheckinsModal from '../components/TurpostCheckinsModal.vue'
 import UserProfileModal from '../components/UserProfileModal.vue'
+
+afterEach(() => {
+  document.body.innerHTML = ''
+})
 
 describe('LocationControls', () => {
   it('renders application title and toggles menu properly', async () => {
@@ -307,7 +311,7 @@ describe('TurposterPanel', () => {
 })
 
 describe('CheckinModal', () => {
-  it('renders turpost information and user details when open', () => {
+  it('renders turpost information and user details when within 100m range', () => {
     const samplePost = {
       id: 'luster-1',
       name: 'Molden',
@@ -328,7 +332,16 @@ describe('CheckinModal', () => {
       props: {
         isOpen: true,
         turpost: samplePost,
-        user: sampleUser
+        user: sampleUser,
+        userLocation: {
+          lat: 61.3412,
+          lng: 7.3145,
+          accuracy: 5,
+          heading: null,
+          speed: null,
+          altitude: 1116,
+          timestamp: Date.now()
+        }
       }
     })
 
@@ -336,7 +349,49 @@ describe('CheckinModal', () => {
     expect(text).toContain('Molden')
     expect(text).toContain('1116 moh.')
     expect(text).toContain('Test Turgåer')
+    expect(text).toContain('Innen rekkevidde')
     expect(text).toContain('Sjekk inn her')
+  })
+
+  it('disables check-in when user is further than 100 meters away', () => {
+    const samplePost = {
+      id: 'luster-1',
+      name: 'Molden',
+      lat: 61.3412,
+      lng: 7.3145,
+      alt: 1116
+    }
+
+    const sampleUser = {
+      userId: '123456789',
+      userName: 'Test Turgåer',
+      email: 'test@example.com',
+      avatarUrl: 'https://example.com/avatar.jpg',
+      lastLogin: '2026-09-03T10:00:00Z'
+    }
+
+    // User is far away (e.g. Bergen instead of Luster)
+    const wrapper = mount(CheckinModal, {
+      props: {
+        isOpen: true,
+        turpost: samplePost,
+        user: sampleUser,
+        userLocation: {
+          lat: 60.3913,
+          lng: 5.3221,
+          accuracy: 5,
+          heading: null,
+          speed: null,
+          altitude: 10,
+          timestamp: Date.now()
+        }
+      }
+    })
+
+    const text = document.body.textContent || ''
+    expect(text).toContain('For langt unna')
+    const submitBtn = document.body.querySelector('.btn-submit') as HTMLButtonElement
+    expect(submitBtn.disabled).toBe(true)
   })
 })
 
@@ -356,7 +411,16 @@ describe('TurpostCheckinsModal', () => {
         turpost: samplePost,
         isLoggedIn: true,
         hasVisited: true,
-        currentUserId: '123'
+        currentUserId: '123',
+        userLocation: {
+          lat: 61.3412,
+          lng: 7.3145,
+          accuracy: 5,
+          heading: null,
+          speed: null,
+          altitude: 1116,
+          timestamp: Date.now()
+        }
       }
     })
 
@@ -367,9 +431,44 @@ describe('TurpostCheckinsModal', () => {
 
     const quickCheckinBtn = document.body.querySelector('.btn-checkin-quick') as HTMLButtonElement
     expect(quickCheckinBtn).not.toBeNull()
+    expect(quickCheckinBtn.disabled).toBe(false)
     quickCheckinBtn.click()
     expect(wrapper.emitted('open-checkin')).toBeTruthy()
     expect(wrapper.emitted('open-checkin')![0]![0]).toEqual(samplePost)
+  })
+
+  it('disables quick checkin when user is too far away', () => {
+    const samplePost = {
+      id: 'luster-1',
+      name: 'Molden',
+      lat: 61.3412,
+      lng: 7.3145,
+      alt: 1116
+    }
+
+    const wrapper = mount(TurpostCheckinsModal, {
+      props: {
+        isOpen: true,
+        turpost: samplePost,
+        isLoggedIn: true,
+        hasVisited: false,
+        currentUserId: '123',
+        userLocation: {
+          lat: 60.3913,
+          lng: 5.3221,
+          accuracy: 5,
+          heading: null,
+          speed: null,
+          altitude: 10,
+          timestamp: Date.now()
+        }
+      }
+    })
+
+    const text = document.body.textContent || ''
+    expect(text).toContain('For langt unna')
+    const quickCheckinBtn = document.body.querySelector('.btn-checkin-quick') as HTMLButtonElement
+    expect(quickCheckinBtn.disabled).toBe(true)
   })
 })
 

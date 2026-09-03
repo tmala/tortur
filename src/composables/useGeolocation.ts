@@ -144,3 +144,37 @@ export function useGeolocation() {
     stopTracking
   }
 }
+
+export const MAX_CHECKIN_DISTANCE_METERS = 100
+
+/**
+ * Beregner avstand i meter mellom to koordinater ved hjelp av Haversine-formelen.
+ */
+export function calculateDistanceMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371000 // Jordens radius i meter
+  const toRad = (deg: number) => (deg * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+/**
+ * Formaterer avstand i meter eller kilometer (f.eks. "45 m" eller "1.2 km").
+ */
+export function formatDistance(meters: number | null | undefined): string {
+  if (meters == null || isNaN(meters)) return 'Ukjent avstand'
+  if (meters < 1000) {
+    return `${Math.round(meters)} m`
+  }
+  return `${(meters / 1000).toFixed(1)} km`
+}
+

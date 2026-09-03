@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import L from 'leaflet'
-import type { GeoLocationState } from '@/composables/useGeolocation'
+import {
+  type GeoLocationState,
+  calculateDistanceMeters,
+  formatDistance,
+  MAX_CHECKIN_DISTANCE_METERS
+} from '@/composables/useGeolocation'
 import type { TurpostItem } from '@/composables/useTurposter'
 import type { AisVessel } from '@/composables/useAis'
 
@@ -162,12 +167,18 @@ const switchLayer = (layerKey: string) => {
   currentTileLayer = L.tileLayer(config.url, {
     attribution: config.attribution,
     maxZoom: config.maxZoom,
-    subdomains: config.subdomains || 'abc'
+    subdomains: config.subdomains || 'abc',
+    updateWhenIdle: true,
+    updateWhenZooming: false,
+    keepBuffer: 2
   }).addTo(map)
 
   if (config.overlayUrl) {
     currentOverlayLayer = L.tileLayer(config.overlayUrl, {
-      maxZoom: config.maxZoom
+      maxZoom: config.maxZoom,
+      updateWhenIdle: true,
+      updateWhenZooming: false,
+      keepBuffer: 2
     }).addTo(map)
   }
 }
@@ -246,35 +257,64 @@ const updateTurpostMarkers = (posts: TurpostItem[]) => {
       zIndexOffset: isVisited ? 550 : 500
     })
 
-    const popupHtml = `
-      <div class="turpost-popup">
-        <h4>${post.name}</h4>
-        ${post.alt ? `<div class="popup-badge">⛰️ ${post.alt} moh.</div>` : ''}
-        ${props.isLoggedIn ? `
-          <div class="popup-status-badge ${isVisited ? 'visited' : 'not-visited'}">
-            ${isVisited ? '✓ Besøkt' : 'Ikke besøkt'}
-          </div>
-        ` : ''}
-        <div class="popup-info">
-          Posisjon: ${post.lat.toFixed(5)}°, ${post.lng.toFixed(5)}°
-        </div>
-        ${props.isLoggedIn ? `
-          <div class="turpost-popup-actions">
-            <button type="button" class="btn-popup-view" id="view-checkins-btn-${post.id}">
-              👁️ Vis innsjekkinger
-            </button>
-            <button type="button" class="btn-popup-checkin" id="checkin-btn-${post.id}">
-              📍 Sjekk inn her
-            </button>
-          </div>
-        ` : `
-          <div class="popup-checkin-hint">Logg inn for å se innsjekkinger og sjekke inn</div>
-        `}
-      </div>
-    `
+    const getPopupHtml = () => {
+      const distance = props.userLocation
+        ? calculateDistanceMeters(props.userLocation.lat, props.userLocation.lng, post.lat, post.lng)
+        : null
+      const isWithinRange = distance !== null && distance <= MAX_CHECKIN_DISTANCE_METERS
 
-    marker.bindPopup(popupHtml)
+      let distanceBadgeHtml = ''
+      if (props.isLoggedIn) {
+        if (distance !== null) {
+          if (isWithinRange) {
+            distanceBadgeHtml = `<div class="popup-range-badge in-range">📍 Innen rekkevidde (${Math.round(distance)} m)</div>`
+          } else {
+            distanceBadgeHtml = `<div class="popup-range-badge out-of-range">⚠️ For langt unna (${formatDistance(distance)}) – må være innen 100m</div>`
+          }
+        } else {
+          distanceBadgeHtml = `<div class="popup-range-badge no-location">⚠️ Posisjon mangler – kreves for innsjekk (maks 100m)</div>`
+        }
+      }
+
+      return `
+        <div class="turpost-popup">
+          <h4>${post.name}</h4>
+          ${post.alt ? `<div class="popup-badge">⛰️ ${post.alt} moh.</div>` : ''}
+          ${props.isLoggedIn ? `
+            <div class="popup-status-badge ${isVisited ? 'visited' : 'not-visited'}">
+              ${isVisited ? '✓ Besøkt' : 'Ikke besøkt'}
+            </div>
+          ` : ''}
+          <div class="popup-info">
+            Posisjon: ${post.lat.toFixed(5)}°, ${post.lng.toFixed(5)}°
+          </div>
+          ${distanceBadgeHtml}
+          ${props.isLoggedIn ? `
+            <div class="turpost-popup-actions">
+              <button type="button" class="btn-popup-view" id="view-checkins-btn-${post.id}">
+                👁️ Vis innsjekkinger
+              </button>
+              ${isWithinRange ? `
+                <button type="button" class="btn-popup-checkin" id="checkin-btn-${post.id}">
+                  📍 Sjekk inn her
+                </button>
+              ` : `
+                <button type="button" class="btn-popup-checkin btn-popup-checkin-disabled" id="checkin-btn-${post.id}" disabled title="Du må være innen 100m fra turposten for å sjekke inn">
+                  📍 Sjekk inn (${distance !== null ? formatDistance(distance) : 'mangler posisjon'})
+                </button>
+              `}
+            </div>
+          ` : `
+            <div class="popup-checkin-hint">Logg inn for å se innsjekkinger og sjekke inn</div>
+          `}
+        </div>
+      `
+    }
+
+    marker.bindPopup(getPopupHtml())
     marker.on('popupopen', () => {
+      marker.setPopupContent(getPopupHtml())
+
       if (props.isLoggedIn) {
         const viewBtn = document.getElementById(`view-checkins-btn-${post.id}`)
         if (viewBtn) {
@@ -284,11 +324,18 @@ const updateTurpostMarkers = (posts: TurpostItem[]) => {
           }
         }
 
-        const checkinBtn = document.getElementById(`checkin-btn-${post.id}`)
-        if (checkinBtn) {
-          checkinBtn.onclick = (e) => {
-            e.stopPropagation()
-            emit('checkin-turpost', post)
+        const distance = props.userLocation
+          ? calculateDistanceMeters(props.userLocation.lat, props.userLocation.lng, post.lat, post.lng)
+          : null
+        const isWithinRange = distance !== null && distance <= MAX_CHECKIN_DISTANCE_METERS
+
+        if (isWithinRange) {
+          const checkinBtn = document.getElementById(`checkin-btn-${post.id}`)
+          if (checkinBtn) {
+            checkinBtn.onclick = (e) => {
+              e.stopPropagation()
+              emit('checkin-turpost', post)
+            }
           }
         }
       }
@@ -634,7 +681,7 @@ onMounted(() => {
 
   L.control.zoom({ position: 'topright' }).addTo(map)
 
-  switchLayer(props.activeLayer || 'standard')
+  switchLayer(props.activeLayer || 'norgeskart')
 
   turpostsLayerGroup = L.layerGroup().addTo(map)
   vesselsLayerGroup = L.layerGroup().addTo(map)
@@ -690,6 +737,16 @@ onMounted(() => {
   })
 
   updateMapState()
+  const handleResize = () => {
+    if (map) {
+      map.invalidateSize()
+    }
+  }
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('orientationchange', handleResize)
+  setTimeout(handleResize, 200)
+  setTimeout(handleResize, 600)
+
   emit('map-ready')
 })
 
@@ -714,22 +771,26 @@ onUnmounted(() => {
 <style scoped>
 .map-wrapper {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   z-index: 1;
 }
 
 .map-view {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
   height: 100%;
 }
 
 .admin-map-banner {
   position: absolute;
-  bottom: 32px;
+  bottom: calc(32px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   background: rgba(247, 201, 72, 0.92);

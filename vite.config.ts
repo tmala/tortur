@@ -14,7 +14,7 @@ export default defineConfig({
   base: '/tortur/',
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
-    __APP_NAME__: JSON.stringify(pkg.name)
+    __APP_NAME__: JSON.stringify(pkg.name),
   },
   plugins: [
     vue(),
@@ -22,11 +22,14 @@ export default defineConfig({
     vueDevTools(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: {
+        enabled: true,
+      },
       includeAssets: ['favicon.ico', 'icon.svg'],
       manifest: {
-        name: 'OpenStreetMap Kart',
-        short_name: 'Kart',
-        description: 'Interaktivt OpenStreetMap-kart med posisjonsvisning og PWA-støtte',
+        name: 'TorTur tur-app',
+        short_name: 'TorTur',
+        description: 'En app for å sjekke inn på tidligere postkassetrimmens turposter',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',
@@ -36,25 +39,26 @@ export default defineConfig({
             src: 'icon.svg',
             sizes: '192x192 512x512',
             type: 'image/svg+xml',
-            purpose: 'any maskable'
-          }
-        ]
+            purpose: 'any maskable',
+          },
+        ],
       },
       workbox: {
         runtimeCaching: [
           {
-            urlPattern: /https:\/\/(?:[abc]\.tile\.openstreetmap\.org|cache\.kartverket\.no|[abc]\.tile-cyclosm\.openstreetmap\.fr|[abc]\.tile\.opentopomap\.org|server\.arcgisonline\.com|mt[0-3]\.google\.com)\/.*/i,
+            urlPattern:
+              /https:\/\/(?:[abc]\.tile\.openstreetmap\.org|cache\.kartverket\.no|[abc]\.tile-cyclosm\.openstreetmap\.fr|[abc]\.tile\.opentopomap\.org|server\.arcgisonline\.com|mt[0-3]\.google\.com)\/.*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'map-tiles-cache',
               expiration: {
                 maxEntries: 1000,
-                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 dager
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 dager
               },
               cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
+                statuses: [0, 200],
+              },
+            },
           },
           {
             urlPattern: /\/data\/.*\.json/i,
@@ -63,16 +67,16 @@ export default defineConfig({
               cacheName: 'turposter-data-cache',
               expiration: {
                 maxEntries: 500,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 dager
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 dager
               },
               cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          }
-        ]
-      }
-    })
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
+      },
+    }),
   ],
   resolve: {
     alias: {
@@ -84,13 +88,13 @@ export default defineConfig({
       '/tortur/api/bw-token': {
         target: 'https://id.barentswatch.no',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/tortur\/api\/bw-token/, '/connect/token')
+        rewrite: (path) => path.replace(/^\/tortur\/api\/bw-token/, '/connect/token'),
       },
       '/tortur/api/bw-ais': {
         target: 'https://live.ais.barentswatch.no',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/tortur\/api\/bw-ais/, '')
-      }
-    }
-  }
+        rewrite: (path) => path.replace(/^\/tortur\/api\/bw-ais/, ''),
+      },
+    },
+  },
 })

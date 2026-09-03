@@ -113,12 +113,12 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
 const availableLayers = computed(() => {
   const baseLayers = [
-    { id: 'standard', name: 'Standard OpenStreetMap', desc: 'Klassisk detaljert verdenskart' },
     {
       id: 'norgeskart',
       name: 'Kartverket Norgeskart',
       desc: 'Offisielt detaljert norgeskart (Kartverket)',
     },
+    { id: 'standard', name: 'Standard OpenStreetMap', desc: 'Klassisk detaljert verdenskart' },
     {
       id: 'kartverket_sjokart',
       name: 'Kartverket Sjøkart',
@@ -634,10 +634,9 @@ const handleInstallClick = async () => {
 <style scoped>
 .controls-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   z-index: 10;
   display: flex;
@@ -655,8 +654,8 @@ const handleInstallClick = async () => {
 /* Topp-venstre modul */
 .top-left-wrapper {
   position: absolute;
-  top: 16px;
-  left: 16px;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: calc(16px + env(safe-area-inset-left, 0px));
   z-index: 1100;
   display: flex;
   flex-direction: column;
@@ -789,8 +788,8 @@ const handleInstallClick = async () => {
 
 @media (max-width: 640px) {
   .top-left-wrapper {
-    top: 10px;
-    left: 10px;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: calc(10px + env(safe-area-inset-left, 0px));
   }
   .app-top-left-panel {
     padding: 5px 10px 5px 6px;
@@ -1399,6 +1398,7 @@ const handleInstallClick = async () => {
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
+  margin-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Statuskapsel */

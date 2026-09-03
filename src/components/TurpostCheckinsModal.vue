@@ -3,6 +3,12 @@ import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Image as ImageIcon } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
+import {
+  type GeoLocationState,
+  calculateDistanceMeters,
+  formatDistance,
+  MAX_CHECKIN_DISTANCE_METERS
+} from '@/composables/useGeolocation'
 
 const props = defineProps<{
   isOpen: boolean
@@ -10,6 +16,7 @@ const props = defineProps<{
   isLoggedIn: boolean
   hasVisited: boolean
   currentUserId?: string
+  userLocation?: GeoLocationState | null
 }>()
 
 const emit = defineEmits<{
@@ -47,6 +54,21 @@ const sortedCheckins = computed(() => {
     const timeB = new Date(b.timestamp || 0).getTime()
     return timeB - timeA
   })
+})
+
+// Avstand til turposten
+const distance = computed(() => {
+  if (!props.userLocation || !props.turpost) return null
+  return calculateDistanceMeters(
+    props.userLocation.lat,
+    props.userLocation.lng,
+    props.turpost.lat,
+    props.turpost.lng
+  )
+})
+
+const isWithinRange = computed(() => {
+  return distance.value !== null && distance.value <= MAX_CHECKIN_DISTANCE_METERS
 })
 
 const loadCheckins = async () => {
@@ -128,15 +150,30 @@ onUnmounted(() => {
               </span>
             </div>
 
-            <button
-              v-if="isLoggedIn && turpost"
-              type="button"
-              class="btn-checkin-quick"
-              @click="emit('open-checkin', turpost)"
-            >
-              <Plus :size="16" />
-              <span>Sjekk inn</span>
-            </button>
+            <div class="checkin-quick-wrap" v-if="isLoggedIn && turpost">
+              <span
+                class="distance-status-pill"
+                :class="{
+                  'in-range': isWithinRange,
+                  'out-of-range': distance !== null && !isWithinRange,
+                  'no-location': distance === null
+                }"
+              >
+                {{ distance !== null ? formatDistance(distance) : 'Posisjon ukjent' }}
+              </span>
+
+              <button
+                type="button"
+                class="btn-checkin-quick"
+                :class="{ disabled: !isWithinRange }"
+                :disabled="!isWithinRange"
+                :title="!isWithinRange ? 'Du må være innen 100m fra turposten for å sjekke inn' : 'Sjekk inn'"
+                @click="isWithinRange && emit('open-checkin', turpost)"
+              >
+                <Plus :size="16" />
+                <span>{{ isWithinRange ? 'Sjekk inn' : 'For langt unna' }}</span>
+              </button>
+            </div>
           </div>
 
           <!-- Innsjekkingsliste -->
@@ -154,9 +191,12 @@ onUnmounted(() => {
                 v-if="isLoggedIn && turpost"
                 type="button"
                 class="btn-first-checkin"
-                @click="emit('open-checkin', turpost)"
+                :class="{ disabled: !isWithinRange }"
+                :disabled="!isWithinRange"
+                :title="!isWithinRange ? 'Du må være innen 100m fra turposten for å sjekke inn' : 'Sjekk inn her'"
+                @click="isWithinRange && emit('open-checkin', turpost)"
               >
-                📍 Sjekk inn nå
+                📍 {{ isWithinRange ? 'Sjekk inn nå' : 'For langt unna (maks 100m)' }}
               </button>
             </div>
 
@@ -366,6 +406,39 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.checkin-quick-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.distance-status-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.distance-status-pill.in-range {
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.distance-status-pill.out-of-range {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.distance-status-pill.no-location {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
 .btn-checkin-quick {
   display: inline-flex;
   align-items: center;
@@ -382,9 +455,18 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.btn-checkin-quick:hover {
+.btn-checkin-quick:hover:not(:disabled) {
   background: linear-gradient(135deg, #0369a1, #1d4ed8);
   transform: translateY(-1px);
+}
+
+.btn-checkin-quick:disabled,
+.btn-checkin-quick.disabled {
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  border-color: rgba(255, 255, 255, 0.12);
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Content */
@@ -458,9 +540,18 @@ onUnmounted(() => {
   transition: all 0.15s ease;
 }
 
-.btn-first-checkin:hover {
+.btn-first-checkin:hover:not(:disabled) {
   transform: translateY(-1px);
   background: linear-gradient(135deg, #0369a1, #1d4ed8);
+}
+
+.btn-first-checkin:disabled,
+.btn-first-checkin.disabled {
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  border-color: rgba(255, 255, 255, 0.12);
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Checkins List */
