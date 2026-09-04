@@ -124,6 +124,35 @@ describe('LocationControls', () => {
     expect(wrapper.text()).toContain('Google Terreng')
   })
 
+  it('renders map layers in ascending order of sortnum', async () => {
+    const wrapper = mount(LocationControls, {
+      props: {
+        userLocation: null,
+        isLocating: false,
+        isTracking: false,
+        error: null,
+        activeLayer: 'standard',
+        centerCoords: null,
+        isTurposterOpen: false,
+        activeKommuneName: null,
+        turpostCount: 0,
+        showMunicipalities: true,
+        isLoggedIn: false
+      }
+    })
+
+    await wrapper.find('.brand-badge-btn').trigger('click')
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+
+    const layerItems = wrapper.findAll('.layer-item .layer-name')
+    const layerNames = layerItems.map(item => item.text())
+
+    // Sjekk at Norgeskart (sortnum 10) kommer før Standard OSM (sortnum 20), og før Sjøkart (sortnum 30)
+    expect(layerNames[0]).toBe('Kartverket Norgeskart')
+    expect(layerNames[1]).toBe('Standard OpenStreetMap')
+    expect(layerNames[2]).toBe('Kartverket Sjøkart')
+  })
+
   it('emits locate event when clicking locate button in menu', async () => {
     const wrapper = mount(LocationControls, {
       props: {

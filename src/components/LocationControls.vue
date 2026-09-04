@@ -104,51 +104,98 @@ const handleKeyDown = (e: KeyboardEvent) => {
   }
 }
 
+interface MapLayerConfig {
+  id: string
+  name: string
+  desc: string
+  sortnum: number
+  requiresAuth?: boolean
+  requiresAdmin?: boolean
+}
+
+// Konfigurasjon for kartlag med sorteringstall (sortnum) og tilgangsstyring.
+// For å endre rekkefølgen i listen over kartlag: endre på 'sortnum' (sorteres i stigende rekkefølge: 10, 20, 30, ...).
+// For å kreve innlogging eller admin på et lag (f.eks. sjøkartene), sett:
+// - requiresAuth: true  (kartet vises kun hvis brukeren er innlogget)
+// - requiresAdmin: true (kartet vises kun hvis brukeren er administrator)
+const MAP_LAYERS: MapLayerConfig[] = [
+  {
+    id: 'norgeskart',
+    name: 'Kartverket Norgeskart',
+    desc: 'Offisielt detaljert norgeskart (Kartverket)',
+    sortnum: 10,
+  },
+  {
+    id: 'topo',
+    name: 'Topografisk (OpenTopoMap)',
+    desc: 'Høydekurver og terrengformasjoner',
+    sortnum: 20,
+  },
+  {
+    id: 'standard',
+    name: 'Standard OpenStreetMap',
+    desc: 'Klassisk detaljert verdenskart',
+    sortnum: 30,
+  },
+  {
+    id: 'satellite',
+    name: 'Satellitt & Flyfoto (Esri)',
+    desc: 'Ekte fly- og satellittbilder (Esri)',
+    sortnum: 40,
+  },
+  {
+    id: 'tur',
+    name: 'Tur- & Sykkelkart (CyclOSM)',
+    desc: 'Stier, turruter og terreng',
+    sortnum: 50,
+  },
+  {
+    id: 'google_streets',
+    name: 'Google Veikart',
+    desc: 'Googles klassiske veikart',
+    sortnum: 100,
+    requiresAuth: true,
+  },
+  {
+    id: 'google_hybrid',
+    name: 'Google Satellitt (Hybrid)',
+    desc: 'Googles satellittfoto med veinavn og steder',
+    sortnum: 110,
+    requiresAuth: true,
+  },
+  {
+    id: 'google_terrain',
+    name: 'Google Terreng',
+    desc: 'Googles terrengkart med høydeforskjeller',
+    sortnum: 120,
+    requiresAuth: true,
+  },
+  {
+    id: 'kartverket_sjokart',
+    name: 'Kartverket Sjøkart',
+    desc: 'Offisielt norsk sjøkart med dybder, fyr og merker',
+    sortnum: 200,
+    requiresAuth: true,
+    requiresAdmin: true,
+  },
+  {
+    id: 'seamap',
+    name: 'OpenSeaMap Sjøkart',
+    desc: 'Globalt sjøkart med fyr, bøyer og sjømerker',
+    sortnum: 210,
+    requiresAuth: true,
+    requiresAdmin: true,
+  },
+]
+
 const availableLayers = computed(() => {
-  const baseLayers = [
-    {
-      id: 'norgeskart',
-      name: 'Kartverket Norgeskart',
-      desc: 'Offisielt detaljert norgeskart (Kartverket)',
-    },
-    { id: 'standard', name: 'Standard OpenStreetMap', desc: 'Klassisk detaljert verdenskart' },
-    {
-      id: 'kartverket_sjokart',
-      name: 'Kartverket Sjøkart',
-      desc: 'Offisielt norsk sjøkart med dybder, fyr og merker',
-    },
-  ]
-
-  const googleLayers = [
-    { id: 'google_streets', name: 'Google Veikart', desc: 'Googles klassiske veikart' },
-    {
-      id: 'google_hybrid',
-      name: 'Google Satellitt (Hybrid)',
-      desc: 'Googles satellittfoto med veinavn og steder',
-    },
-    {
-      id: 'google_terrain',
-      name: 'Google Terreng',
-      desc: 'Googles terrengkart med høydeforskjeller',
-    },
-  ]
-
-  const otherLayers = [
-    { id: 'tur', name: 'Tur- & Sykkelkart (CyclOSM)', desc: 'Stier, turruter og terreng' },
-    { id: 'topo', name: 'Topografisk (OpenTopoMap)', desc: 'Høydekurver og terrengformasjoner' },
-    {
-      id: 'seamap',
-      name: 'OpenSeaMap Sjøkart',
-      desc: 'Globalt sjøkart med fyr, bøyer og sjømerker',
-    },
-    {
-      id: 'satellite',
-      name: 'Satellitt & Flyfoto (Esri)',
-      desc: 'Ekte fly- og satellittbilder (Esri)',
-    },
-  ]
-
-  return [...baseLayers, ...(props.isLoggedIn ? googleLayers : []), ...otherLayers]
+  return MAP_LAYERS.filter((layer) => {
+    if (layer.requiresAdmin && !props.isAdmin) return false
+    if (layer.requiresAuth && !props.isLoggedIn) return false
+    return true
+  })
+    .slice()
+    .sort((a, b) => a.sortnum - b.sortnum)
 })
 
 const toggleLayerMenu = () => {
@@ -360,134 +407,136 @@ const handleInstallClick = async () => {
       </transition>
 
       <!-- AIS Modal – kun synlig for admin -->
-    <transition name="fade-slide">
-      <div v-if="isAdmin && showAisModal" class="ais-modal glass-panel">
-        <div class="layer-modal-header">
-          <div class="ais-header-title">
-            <Anchor :size="18" class="anchor-title-icon" />
-            <h3>Båttrafikk i sanntid (AIS)</h3>
-          </div>
-          <button class="btn-close" @click="showAisModal = false">✕</button>
-        </div>
-        <div class="ais-modal-content">
-          <p class="ais-desc">
-            Viser posisjoner, fart og kurs for skip i sanntid fra
-            <strong>Kystverket / BarentsWatch</strong>.
-          </p>
-
-          <div
-            class="ais-status-box"
-            :class="{ ok: isZoomSufficient, warn: isAisToggled && !isZoomSufficient }"
-          >
-            <div class="status-box-header">
-              <strong>🔍 Zoom-status:</strong>
-              <span>Zoom {{ currentZoom || 13 }} / min. {{ minZoomForAis || 12 }}</span>
+      <transition name="fade-slide">
+        <div v-if="isAdmin && showAisModal" class="ais-modal glass-panel">
+          <div class="layer-modal-header">
+            <div class="ais-header-title">
+              <Anchor :size="18" class="anchor-title-icon" />
+              <h3>Båttrafikk i sanntid (AIS)</h3>
             </div>
-            <p v-if="!isZoomSufficient" class="status-box-msg">
-              Båttrafikk krever at du er zoomet inn på et nærområde (zoom 12 eller mer) for å unngå
-              overbelastning.
+            <button class="btn-close" @click="showAisModal = false">✕</button>
+          </div>
+          <div class="ais-modal-content">
+            <p class="ais-desc">
+              Viser posisjoner, fart og kurs for skip i sanntid fra
+              <strong>Kystverket / BarentsWatch</strong>.
             </p>
-            <p v-else class="status-box-msg ok-msg">
-              ✓ Kartutsnittet er nært nok til å vise båter i sanntid.
+
+            <div
+              class="ais-status-box"
+              :class="{ ok: isZoomSufficient, warn: isAisToggled && !isZoomSufficient }"
+            >
+              <div class="status-box-header">
+                <strong>🔍 Zoom-status:</strong>
+                <span>Zoom {{ currentZoom || 13 }} / min. {{ minZoomForAis || 12 }}</span>
+              </div>
+              <p v-if="!isZoomSufficient" class="status-box-msg">
+                Båttrafikk krever at du er zoomet inn på et nærområde (zoom 12 eller mer) for å
+                unngå overbelastning.
+              </p>
+              <p v-else class="status-box-msg ok-msg">
+                ✓ Kartutsnittet er nært nok til å vise båter i sanntid.
+              </p>
+            </div>
+
+            <div class="ais-credentials-section">
+              <div class="section-title">
+                <Radio :size="14" />
+                <span>BarentsWatch API</span>
+              </div>
+              <p class="section-subtext">
+                AIS krever at du er innlogget med google-konto (og at din google-bruker er på TorTur
+                sin WhiteList). Data leveres av <strong>Kystverket / BarentsWatch</strong>.
+              </p>
+              <div class="ais-config-info" :class="{ 'config-ok': isLoggedIn }">
+                <span v-if="isLoggedIn">✓ AIS-nøkler er aktive</span>
+                <span v-else>Logg inn for å aktivere AIS-tilgang</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- Kartlag-velgermeny -->
+      <transition name="fade-slide">
+        <div v-if="showLayerMenu" class="layer-modal glass-panel">
+          <div class="layer-modal-header">
+            <h3>Velg kartvisning</h3>
+            <button class="btn-close" @click="showLayerMenu = false">✕</button>
+          </div>
+          <div class="layer-options">
+            <button
+              v-for="layer in availableLayers"
+              :key="layer.id"
+              class="layer-item"
+              :class="{ selected: activeLayer === layer.id }"
+              @click="selectLayer(layer.id)"
+            >
+              <div class="layer-info">
+                <span class="layer-name">{{ layer.name }}</span>
+                <span class="layer-desc">{{ layer.desc }}</span>
+              </div>
+              <Check v-if="activeLayer === layer.id" :size="18" class="check-icon" />
+            </button>
+          </div>
+        </div>
+      </transition>
+
+      <!-- Info-modal -->
+      <transition name="fade-slide">
+        <div v-if="showInfoModal" class="info-modal glass-panel">
+          <div class="layer-modal-header">
+            <h3>Om kartappen</h3>
+            <button class="btn-close" @click="showInfoModal = false">✕</button>
+          </div>
+          <div class="info-content">
+            <p>
+              Dette er en <strong>Progressive Web App (PWA)</strong> med åpne kartdata fra
+              <strong>OpenStreetMap</strong> og <strong>Kartverket</strong>.
             </p>
-          </div>
-
-          <div class="ais-credentials-section">
-            <div class="section-title">
-              <Radio :size="14" />
-              <span>BarentsWatch API</span>
-            </div>
-            <p class="section-subtext">
-              AIS krever at du er innlogget med google-konto (og at din google-bruker er på TorTur
-              sin WhiteList). Data leveres av <strong>Kystverket / BarentsWatch</strong>.
-            </p>
-            <div class="ais-config-info" :class="{ 'config-ok': isLoggedIn }">
-              <span v-if="isLoggedIn">✓ AIS-nøkler er aktive</span>
-              <span v-else>Logg inn for å aktivere AIS-tilgang</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </transition>
-
-    <!-- Kartlag-velgermeny -->
-    <transition name="fade-slide">
-      <div v-if="showLayerMenu" class="layer-modal glass-panel">
-        <div class="layer-modal-header">
-          <h3>Velg kartvisning</h3>
-          <button class="btn-close" @click="showLayerMenu = false">✕</button>
-        </div>
-        <div class="layer-options">
-          <button
-            v-for="layer in availableLayers"
-            :key="layer.id"
-            class="layer-item"
-            :class="{ selected: activeLayer === layer.id }"
-            @click="selectLayer(layer.id)"
-          >
-            <div class="layer-info">
-              <span class="layer-name">{{ layer.name }}</span>
-              <span class="layer-desc">{{ layer.desc }}</span>
-            </div>
-            <Check v-if="activeLayer === layer.id" :size="18" class="check-icon" />
-          </button>
-        </div>
-      </div>
-    </transition>
-
-    <!-- Info-modal -->
-    <transition name="fade-slide">
-      <div v-if="showInfoModal" class="info-modal glass-panel">
-        <div class="layer-modal-header">
-          <h3>Om kartappen</h3>
-          <button class="btn-close" @click="showInfoModal = false">✕</button>
-        </div>
-        <div class="info-content">
-          <p>
-            Dette er en <strong>Progressive Web App (PWA)</strong> med åpne kartdata fra
-            <strong>OpenStreetMap</strong> og <strong>Kartverket</strong>.
-          </p>
-          <div class="info-feature-list">
-            <div class="info-feature-item">
-              <span class="bullet">📍</span>
-              <span><strong>Finn min posisjon:</strong> Viser hvor du er og sentrerer kartet.</span>
-            </div>
-            <div class="info-feature-item">
-              <span class="bullet">🧭</span>
-              <span><strong>Følg meg:</strong> Sporer bevegelsene dine fortløpende.</span>
-            </div>
-            <div class="info-feature-item">
-              <span class="bullet">🗺️</span>
-              <span
-                ><strong>Klikk i kartet:</strong> Slå på kommunegrenser og klikk direkte på en
-                kommune i kartet for å hente turpostene der.</span
-              >
-            </div>
-            <div class="info-feature-item">
-              <span class="bullet">⛰️</span>
-              <span
-                ><strong>Turposter i Norge:</strong> Utforsk over 15 000 turposter sortert etter
-                fylke og kommune.</span
-              >
-            </div>
-            <div class="info-feature-item">
-              <span class="bullet">⛵</span>
-              <span
-                ><strong>Sjøkart:</strong> Offisielt norsk sjøkart fra Kartverket (med dybder og
-                fyrlykter) og globalt OpenSeaMap.</span
-              >
-            </div>
-            <div class="info-feature-item">
-              <span class="bullet">⚡</span>
-              <span
-                ><strong>PWA Offline Cache:</strong> Kan installeres på mobilen eller
-                skrivebordet.</span
-              >
+            <div class="info-feature-list">
+              <div class="info-feature-item">
+                <span class="bullet">📍</span>
+                <span
+                  ><strong>Finn min posisjon:</strong> Viser hvor du er og sentrerer kartet.</span
+                >
+              </div>
+              <div class="info-feature-item">
+                <span class="bullet">🧭</span>
+                <span><strong>Følg meg:</strong> Sporer bevegelsene dine fortløpende.</span>
+              </div>
+              <div class="info-feature-item">
+                <span class="bullet">🗺️</span>
+                <span
+                  ><strong>Klikk i kartet:</strong> Slå på kommunegrenser og klikk direkte på en
+                  kommune i kartet for å hente turpostene der.</span
+                >
+              </div>
+              <div class="info-feature-item">
+                <span class="bullet">⛰️</span>
+                <span
+                  ><strong>Turposter i Norge:</strong> Utforsk over 15 000 turposter sortert etter
+                  fylke og kommune.</span
+                >
+              </div>
+              <div class="info-feature-item">
+                <span class="bullet">⛵</span>
+                <span
+                  ><strong>Sjøkart:</strong> Offisielt norsk sjøkart fra Kartverket (med dybder og
+                  fyrlykter) og globalt OpenSeaMap.</span
+                >
+              </div>
+              <div class="info-feature-item">
+                <span class="bullet">⚡</span>
+                <span
+                  ><strong>PWA Offline Cache:</strong> Kan installeres på mobilen eller
+                  skrivebordet.</span
+                >
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </transition>
+      </transition>
     </div>
 
     <!-- Feilmelding / Varsel -->
@@ -528,8 +577,6 @@ const handleInstallClick = async () => {
         </div>
       </div>
     </div>
-
-
   </div>
 </template>
 
@@ -709,7 +756,9 @@ const handleInstallClick = async () => {
   .info-modal,
   .ais-modal {
     max-width: calc(100vw - 20px);
-    max-height: calc(100dvh - 240px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-height: calc(
+      100dvh - 240px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    );
     padding: 10px;
   }
 }
@@ -819,7 +868,9 @@ const handleInstallClick = async () => {
   position: relative;
   width: 100%;
   max-width: 440px;
-  max-height: calc(100dvh - 220px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(
+    100dvh - 220px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+  );
   overflow-y: auto;
   padding: 14px;
   z-index: 20;
@@ -996,7 +1047,9 @@ const handleInstallClick = async () => {
   position: relative;
   width: 100%;
   max-width: 380px;
-  max-height: calc(100dvh - 220px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(
+    100dvh - 220px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+  );
   overflow-y: auto;
   padding: 10px 12px;
   z-index: 20;
