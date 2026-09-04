@@ -60,6 +60,7 @@ function handleToggleAdminMode() {
 const adminClickCoords = ref<{ lat: number; lng: number } | null>(null)
 
 function handleAdminMapClick(coords: { lat: number; lng: number }) {
+  if (adminClickCoords.value) return
   adminClickCoords.value = coords
 }
 

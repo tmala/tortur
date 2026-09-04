@@ -1,9 +1,17 @@
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="admin-modal-overlay" @click.self="$emit('close')">
-      <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title">
+    <div v-if="isOpen" class="admin-modal-overlay">
+      <div
+        ref="modalRef"
+        class="admin-modal"
+        :class="{ 'is-dragging': isDragging }"
+        :style="modalStyle"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-modal-title"
+      >
         <!-- Header -->
-        <div class="admin-modal-header">
+        <div class="admin-modal-header" @pointerdown="startDrag" title="Klikk og dra for å flytte">
           <h2 id="admin-modal-title">🛠️ Legg til ny turpost</h2>
           <button class="admin-modal-close" @click="$emit('close')" aria-label="Lukk">✕</button>
         </div>
@@ -251,6 +259,81 @@ watch(
   { immediate: true }
 )
 
+// Dra/flytte-logikk for modalen
+const modalRef = ref<HTMLElement | null>(null)
+const dragPosition = ref({ x: 0, y: 0 })
+const isDragging = ref(false)
+let dragStart = { x: 0, y: 0 }
+let initialPosition = { x: 0, y: 0 }
+
+const modalStyle = computed(() => {
+  if (dragPosition.value.x === 0 && dragPosition.value.y === 0) {
+    return {}
+  }
+  return {
+    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`
+  }
+})
+
+const startDrag = (e: PointerEvent) => {
+  if (e.button !== 0) return
+
+  const target = e.target as HTMLElement | null
+  if (target?.closest('button') || target?.closest('a') || target?.closest('input') || target?.closest('textarea')) {
+    return
+  }
+
+  isDragging.value = true
+  dragStart = { x: e.clientX, y: e.clientY }
+  initialPosition = { ...dragPosition.value }
+
+  window.addEventListener('pointermove', onDragMove)
+  window.addEventListener('pointerup', onDragEnd)
+  window.addEventListener('pointercancel', onDragEnd)
+}
+
+const onDragMove = (e: PointerEvent) => {
+  if (!isDragging.value) return
+
+  const deltaX = e.clientX - dragStart.x
+  const deltaY = e.clientY - dragStart.y
+
+  let newX = initialPosition.x + deltaX
+  let newY = initialPosition.y + deltaY
+
+  if (modalRef.value) {
+    const rect = modalRef.value.getBoundingClientRect()
+    const currentLeft = rect.left - initialPosition.x
+    const currentTop = rect.top - initialPosition.y
+
+    const minX = -currentLeft + 10
+    const maxX = window.innerWidth - (currentLeft + 80)
+    const minY = -currentTop + 10
+    const maxY = window.innerHeight - (currentTop + 40)
+
+    newX = Math.max(minX, Math.min(maxX, newX))
+    newY = Math.max(minY, Math.min(maxY, newY))
+  }
+
+  dragPosition.value = { x: newX, y: newY }
+}
+
+const onDragEnd = () => {
+  isDragging.value = false
+  window.removeEventListener('pointermove', onDragMove)
+  window.removeEventListener('pointerup', onDragEnd)
+  window.removeEventListener('pointercancel', onDragEnd)
+}
+
+watch(
+  () => props.isOpen,
+  (open) => {
+    if (open) {
+      dragPosition.value = { x: 0, y: 0 }
+    }
+  }
+)
+
 // Lukk med Esc
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && props.isOpen) {
@@ -264,6 +347,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('pointermove', onDragMove)
+  window.removeEventListener('pointerup', onDragEnd)
+  window.removeEventListener('pointercancel', onDragEnd)
 })
 </script>
 
@@ -271,16 +357,18 @@ onUnmounted(() => {
 .admin-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
   padding: 16px;
+  pointer-events: none;
 }
 
 .admin-modal {
-  background: #1e2530;
+  pointer-events: auto;
+  background: rgba(30, 37, 48, 0.96);
   border: 1px solid #3a4556;
   border-radius: 16px;
   width: 100%;
@@ -290,6 +378,13 @@ onUnmounted(() => {
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
   color: #e2e8f0;
   font-family: 'Inter', system-ui, sans-serif;
+  transition: box-shadow 0.2s ease;
+}
+
+.admin-modal.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 32px 72px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .admin-modal-header {
@@ -298,6 +393,15 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 20px 24px 16px;
   border-bottom: 1px solid #2d3748;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.admin-modal-header:active,
+.admin-modal.is-dragging .admin-modal-header {
+  cursor: grabbing;
 }
 
 .admin-modal-header h2 {
