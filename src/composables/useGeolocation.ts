@@ -16,15 +16,62 @@ export interface TrackPoint {
   timestamp?: number
 }
 
+const STORAGE_KEY_TRACK = 'tortur_track_points'
+
+const loadTrackFromStorage = (): TrackPoint[] => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_TRACK)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed)) return parsed
+    }
+  } catch (err) {
+    console.warn('[useGeolocation] Kunne ikke laste spor fra localStorage:', err)
+  }
+  return []
+}
+
+const saveTrackToStorage = (points: TrackPoint[]) => {
+  try {
+    if (points.length === 0) {
+      localStorage.removeItem(STORAGE_KEY_TRACK)
+    } else {
+      localStorage.setItem(STORAGE_KEY_TRACK, JSON.stringify(points))
+    }
+  } catch (err) {
+    console.warn('[useGeolocation] Kunne ikke lagre spor til localStorage:', err)
+  }
+}
+
 export function useGeolocation() {
   const isSupported = ref('geolocation' in navigator)
   const isLocating = ref(false)
   const isTracking = ref(false)
   const error = ref<string | null>(null)
   const coords = ref<GeoLocationState | null>(null)
-  const trackPoints = ref<TrackPoint[]>([])
+  const trackPoints = ref<TrackPoint[]>(loadTrackFromStorage())
 
   let watchId: number | null = null
+  let wakeLock: any = null
+
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLock = await (navigator as any).wakeLock.request('screen')
+      }
+    } catch {
+      // Ignorer dersom enheten nekter skjermlås-overstyring
+    }
+  }
+
+  const releaseWakeLock = () => {
+    if (wakeLock) {
+      try {
+        wakeLock.release()
+      } catch {}
+      wakeLock = null
+    }
+  }
 
   const getErrorMessage = (err: GeolocationPositionError): string => {
     switch (err.code) {
@@ -43,12 +90,14 @@ export function useGeolocation() {
     if (point.accuracy !== null && point.accuracy > 50) return
 
     const last = trackPoints.value[trackPoints.value.length - 1]
+    let added = false
     if (!last) {
       trackPoints.value.push({
         lat: point.lat,
         lng: point.lng,
         timestamp: point.timestamp || Date.now()
       })
+      added = true
     } else {
       const dist = calculateDistanceMeters(last.lat, last.lng, point.lat, point.lng)
       // Kun legg til nytt punkt dersom man har beveget seg minst 4 meter (fjerner GPS-jitter)
@@ -58,12 +107,18 @@ export function useGeolocation() {
           lng: point.lng,
           timestamp: point.timestamp || Date.now()
         })
+        added = true
       }
+    }
+
+    if (added) {
+      saveTrackToStorage(trackPoints.value)
     }
   }
 
   const clearTrack = () => {
     trackPoints.value = []
+    saveTrackToStorage([])
   }
 
   const handleSuccess = (position: GeolocationPosition) => {
@@ -136,6 +191,7 @@ export function useGeolocation() {
     isTracking.value = true
     isLocating.value = true
     error.value = null
+    requestWakeLock()
 
     // Hvis vi allerede har koordinater og ingen punkter i sporet, legg til startpunkt
     if (coords.value && trackPoints.value.length === 0) {
@@ -164,6 +220,7 @@ export function useGeolocation() {
   }
 
   const stopTracking = () => {
+    releaseWakeLock()
     if (watchId !== null) {
       navigator.geolocation.clearWatch(watchId)
       watchId = null

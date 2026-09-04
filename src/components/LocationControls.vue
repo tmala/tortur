@@ -5,6 +5,7 @@ import {
   Layers,
   Compass,
   Route,
+  FileDown,
   Trash2,
   AlertTriangle,
   Loader2,
@@ -51,6 +52,7 @@ const emit = defineEmits<{
   (e: 'locate'): void
   (e: 'toggle-tracking'): void
   (e: 'clear-track'): void
+  (e: 'open-track-modal'): void
   (e: 'change-layer', layer: string): void
   (e: 'clear-error'): void
   (e: 'toggle-turposter'): void
@@ -328,15 +330,15 @@ const handleInstallClick = async () => {
               <Route :size="18" :class="{ 'pulse-slow': isTracking }" />
             </button>
 
-            <!-- Slett spor-knapp (vises kun når spor finnes og sporing er stoppet) -->
+            <!-- Sporlogg-valg (last ned GPX eller slett) -->
             <button
-              v-if="hasTrack && !isTracking"
-              class="icon-btn btn-clear-track"
-              @click="emit('clear-track')"
-              title="Fjern sporet fra kartet"
-              aria-label="Fjern sporet fra kartet"
+              v-if="hasTrack"
+              class="icon-btn btn-track-menu"
+              @click="emit('open-track-modal')"
+              title="Sporlogg (last ned GPX eller slett spor)"
+              aria-label="Sporlogg"
             >
-              <Trash2 :size="16" />
+              <FileDown :size="18" />
             </button>
 
             <!-- AIS Båttrafikk-knapp – kun synlig for admin -->
@@ -1334,16 +1336,16 @@ const handleInstallClick = async () => {
   background: rgba(249, 115, 22, 0.1);
 }
 
-.icon-btn.btn-clear-track {
-  color: #fca5a5;
-  border-color: rgba(239, 68, 68, 0.35);
-  background: rgba(239, 68, 68, 0.08);
+.icon-btn.btn-track-menu {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.08);
 }
 
-.icon-btn.btn-clear-track:hover {
-  background: rgba(239, 68, 68, 0.25);
-  color: #ef4444;
-  border-color: #ef4444;
+.icon-btn.btn-track-menu:hover {
+  background: rgba(56, 189, 248, 0.22);
+  color: #ffffff;
+  border-color: #38bdf8;
 }
 
 .spinner {

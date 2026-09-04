@@ -7,6 +7,7 @@ import CheckinModal from './components/CheckinModal.vue'
 import TurpostCheckinsModal from './components/TurpostCheckinsModal.vue'
 import UserProfileModal from './components/UserProfileModal.vue'
 import AdminAddTurpostModal from './components/AdminAddTurpostModal.vue'
+import GpsTrackModal from './components/GpsTrackModal.vue'
 import { useGeolocation } from './composables/useGeolocation'
 import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from './composables/useTurposter'
 import { useAis } from './composables/useAis'
@@ -216,6 +217,7 @@ const mapViewerRef = ref<InstanceType<typeof MapViewer> | null>(null)
 const centerCoords = ref<{ lat: number; lng: number; zoom: number } | null>(null)
 const isTurposterOpen = ref(false)
 const showMunicipalities = ref(false)
+const isTrackModalOpen = ref(false)
 
 // Håndter åpning og lukking av turpost-panel
 const handleToggleTurposter = () => {
@@ -437,6 +439,7 @@ onUnmounted(() => {
       @locate="handleLocate"
       @toggle-tracking="handleToggleTracking"
       @clear-track="clearTrack"
+      @open-track-modal="isTrackModalOpen = true"
       @change-layer="handleChangeLayer"
       @clear-error="handleClearError"
       @toggle-turposter="handleToggleTurposter"
@@ -499,6 +502,16 @@ onUnmounted(() => {
       @close="isProfileOpen = false"
       @logout="handleLogoutFromProfile"
       @toggle-admin-mode="handleToggleAdminMode"
+    />
+
+    <!-- Modal for GPS-sporlogg (last ned GPX eller slett) -->
+    <GpsTrackModal
+      :is-open="isTrackModalOpen"
+      :track-points="trackPoints"
+      :is-tracking="isTracking"
+      @close="isTrackModalOpen = false"
+      @clear-track="clearTrack"
+      @toggle-tracking="handleToggleTracking"
     />
 
     <!-- Admin: Legg til ny turpost -->
