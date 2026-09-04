@@ -237,7 +237,7 @@ const updateUserMarker = (loc: GeoLocationState | null) => {
   }
 }
 
-const updateTurpostMarkers = (posts: TurpostItem[]) => {
+const updateTurpostMarkers = (posts: TurpostItem[], shouldFitBounds = false) => {
   if (!map || !turpostsLayerGroup) return
 
   turpostsLayerGroup.clearLayers()
@@ -350,8 +350,8 @@ const updateTurpostMarkers = (posts: TurpostItem[]) => {
     markerMap.set(post.id, marker)
   })
 
-  // Sentrer og tilpass kartet automatisk til alle postene i kommunen
-  if (bounds.isValid()) {
+  // Sentrer og tilpass kartet automatisk KUN dersom shouldFitBounds er true
+  if (shouldFitBounds && bounds.isValid()) {
     map.fitBounds(bounds, {
       padding: [60, 60],
       maxZoom: 14,
@@ -702,10 +702,25 @@ watch(
   }
 )
 
+let lastTurpostSignature = ''
+
 watch(
-  () => [props.turposter, props.isLoggedIn, props.visitedTurpostIds],
+  () => props.turposter,
+  (newPosts) => {
+    const signature = (newPosts || []).map(p => p.id).join(',')
+    const hasChanged = signature !== lastTurpostSignature
+    lastTurpostSignature = signature
+
+    // Tilpass kun kartutsnittet hvis det faktisk kom et nytt utvalg av turposter
+    updateTurpostMarkers(newPosts || [], hasChanged)
+  }
+)
+
+watch(
+  () => [props.isLoggedIn, props.visitedTurpostIds],
   () => {
-    updateTurpostMarkers(props.turposter)
+    // Rør aldri kartutsnittet når innloggingsstatus eller besøksliste oppdateres (f.eks. ved åpning av profil)
+    updateTurpostMarkers(props.turposter || [], false)
   },
   { deep: true }
 )
@@ -758,7 +773,8 @@ onMounted(() => {
   }
 
   if (props.turposter && props.turposter.length > 0) {
-    updateTurpostMarkers(props.turposter)
+    lastTurpostSignature = props.turposter.map(p => p.id).join(',')
+    updateTurpostMarkers(props.turposter, true)
   }
 
   if (props.vessels && props.vessels.length > 0) {
