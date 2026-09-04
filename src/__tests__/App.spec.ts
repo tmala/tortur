@@ -147,10 +147,10 @@ describe('LocationControls', () => {
     const layerItems = wrapper.findAll('.layer-item .layer-name')
     const layerNames = layerItems.map(item => item.text())
 
-    // Sjekk at Norgeskart (sortnum 10) kommer før Standard OSM (sortnum 20), og før Sjøkart (sortnum 30)
+    // Sjekk at kartlagene sorteres etter sortnum (Norgeskart 10, Topo 20, Standard OSM 30)
     expect(layerNames[0]).toBe('Kartverket Norgeskart')
-    expect(layerNames[1]).toBe('Standard OpenStreetMap')
-    expect(layerNames[2]).toBe('Kartverket Sjøkart')
+    expect(layerNames[1]).toBe('Topografisk (OpenTopoMap)')
+    expect(layerNames[2]).toBe('Standard OpenStreetMap')
   })
 
   it('emits locate event when clicking locate button in menu', async () => {

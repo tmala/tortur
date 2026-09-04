@@ -21,6 +21,7 @@ import {
   MapPin,
   ChevronDown,
   X,
+  FolderHeart,
 } from 'lucide-vue-next'
 import AuthPanel from './AuthPanel.vue'
 import type { GeoLocationState } from '@/composables/useGeolocation'
@@ -46,6 +47,8 @@ const props = defineProps<{
   isLoggedIn?: boolean
   isAdmin?: boolean
   isLoadingLocalTurposter?: boolean
+  savedTracksCount?: number
+  isSavedTracksOpen?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -53,6 +56,7 @@ const emit = defineEmits<{
   (e: 'toggle-tracking'): void
   (e: 'clear-track'): void
   (e: 'open-track-modal'): void
+  (e: 'open-saved-tracks'): void
   (e: 'change-layer', layer: string): void
   (e: 'clear-error'): void
   (e: 'toggle-turposter'): void
@@ -339,6 +343,20 @@ const handleInstallClick = async () => {
               aria-label="Sporlogg"
             >
               <FileDown :size="18" />
+            </button>
+
+            <!-- Mine lagrede GPS-spor -->
+            <button
+              class="icon-btn btn-saved-tracks"
+              :class="{ active: isSavedTracksOpen }"
+              @click="emit('open-saved-tracks')"
+              title="Mine lagrede GPS-spor"
+              aria-label="Mine lagrede GPS-spor"
+            >
+              <FolderHeart :size="18" />
+              <span v-if="savedTracksCount && savedTracksCount > 0" class="btn-badge-count">
+                {{ savedTracksCount }}
+              </span>
             </button>
 
             <!-- AIS Båttrafikk-knapp – kun synlig for admin -->
@@ -1346,6 +1364,41 @@ const handleInstallClick = async () => {
   background: rgba(56, 189, 248, 0.22);
   color: #ffffff;
   border-color: #38bdf8;
+}
+
+.icon-btn.btn-saved-tracks {
+  position: relative;
+  color: #cbd5e1;
+}
+
+.icon-btn.btn-saved-tracks:hover {
+  color: #f97316;
+  border-color: rgba(249, 115, 22, 0.5);
+  background: rgba(249, 115, 22, 0.1);
+}
+
+.icon-btn.btn-saved-tracks.active {
+  background: rgba(249, 115, 22, 0.2);
+  border-color: #f97316;
+  color: #f97316;
+}
+
+.icon-btn.btn-saved-tracks .btn-badge-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ea580c;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  border: 1px solid #0f172a;
 }
 
 .spinner {

@@ -10,13 +10,16 @@ import {
   Check,
   Play,
   Square,
-  AlertTriangle
+  AlertTriangle,
+  BookmarkPlus,
+  FolderHeart
 } from 'lucide-vue-next'
 import {
   type TrackPoint,
   calculateDistanceMeters,
   formatDistance
 } from '@/composables/useGeolocation'
+import { useGpsTrackStore } from '@/stores/gpsTrack'
 
 const props = defineProps<{
   isOpen: boolean
@@ -28,10 +31,15 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'clear-track'): void
   (e: 'toggle-tracking'): void
+  (e: 'open-saved-tracks'): void
 }>()
 
+const trackStore = useGpsTrackStore()
 const showConfirmDelete = ref(false)
 const hasDownloaded = ref(false)
+const showSaveForm = ref(false)
+const saveTrackName = ref('')
+const hasSaved = ref(false)
 
 // Beregn total distanse
 const totalDistanceMeters = computed(() => {
@@ -132,6 +140,32 @@ const handleDeleteTrack = () => {
   emit('close')
 }
 
+// Lagre til Pinia Store / Mine spor
+const handleStartSave = () => {
+  showSaveForm.value = true
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
+  const timeStr = now.toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' })
+  saveTrackName.value = `Tur ${dateStr}, kl. ${timeStr}`
+}
+
+const handleConfirmSave = () => {
+  if (props.trackPoints.length === 0) return
+  const saved = trackStore.saveTrack(props.trackPoints, saveTrackName.value)
+  showSaveForm.value = false
+  if (saved) {
+    hasSaved.value = true
+    setTimeout(() => {
+      hasSaved.value = false
+    }, 4000)
+  }
+}
+
+const handleOpenSavedTracks = () => {
+  emit('open-saved-tracks')
+  emit('close')
+}
+
 // Dra/flytte-funksjonalitet
 const modalRef = ref<HTMLElement | null>(null)
 const dragPosition = ref({ x: 0, y: 0 })
@@ -204,6 +238,8 @@ watch(
     if (open) {
       showConfirmDelete.value = false
       hasDownloaded.value = false
+      showSaveForm.value = false
+      hasSaved.value = false
       dragPosition.value = { x: 0, y: 0 }
     }
   }
@@ -307,6 +343,42 @@ onUnmounted(() => {
 
             <!-- Hovedhandlinger -->
             <div class="modal-actions" v-if="!showConfirmDelete">
+              <!-- Lagre spor-skjema eller knapp -->
+              <div v-if="showSaveForm" class="save-track-box">
+                <span class="save-track-label">Gi sporet et navn:</span>
+                <input
+                  v-model="saveTrackName"
+                  type="text"
+                  class="save-track-input"
+                  placeholder="Turnavn..."
+                  @keydown.enter="handleConfirmSave"
+                  @keydown.esc="showSaveForm = false"
+                  autofocus
+                />
+                <div class="save-box-buttons">
+                  <button class="btn-confirm-save" @click="handleConfirmSave">
+                    <Check :size="15" />
+                    <span>Bekreft lagring</span>
+                  </button>
+                  <button class="btn-cancel-save" @click="showSaveForm = false">
+                    Avbryt
+                  </button>
+                </div>
+              </div>
+
+              <!-- Lagre spor-knapp -->
+              <button
+                v-else
+                class="btn-action btn-save-track"
+                :disabled="trackPoints.length === 0"
+                @click="handleStartSave"
+                title="Lagre turen til Mine spor slik at du kan hente den frem senere"
+              >
+                <Check v-if="hasSaved" :size="18" class="download-check" />
+                <BookmarkPlus v-else :size="18" />
+                <span>{{ hasSaved ? 'Sporet er lagret i Mine spor!' : 'Lagre spor til Mine spor' }}</span>
+              </button>
+
               <!-- Last ned GPX -->
               <button
                 class="btn-action btn-download"
@@ -340,6 +412,18 @@ onUnmounted(() => {
                 <Trash2 :size="16" />
                 <span>Slett spor</span>
               </button>
+
+              <!-- Snarvei til Mine lagrede spor -->
+              <div class="modal-footer-link">
+                <button
+                  class="btn-open-saved"
+                  @click="handleOpenSavedTracks"
+                  title="Vis alle tidligere lagrede spor"
+                >
+                  <FolderHeart :size="15" />
+                  <span>Mine lagrede spor ({{ trackStore.savedTracks.length }})</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -667,6 +751,126 @@ onUnmounted(() => {
 .btn-delete:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Lagre spor-seksjon */
+.btn-save-track {
+  background: linear-gradient(135deg, #ea580c, #c2410c);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(234, 88, 12, 0.35);
+  border: 1px solid #f97316;
+}
+
+.btn-save-track:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  transform: translateY(-1px);
+}
+
+.btn-save-track:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.save-track-box {
+  background: #0b1120;
+  border: 1px solid #f97316;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.save-track-label {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.save-track-input {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  color: #f8fafc;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.save-track-input:focus {
+  border-color: #f97316;
+}
+
+.save-box-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn-confirm-save {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #22c55e;
+  border: none;
+  color: white;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-confirm-save:hover {
+  background: #16a34a;
+}
+
+.btn-cancel-save {
+  background: transparent;
+  border: 1px solid #475569;
+  color: #94a3b8;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-cancel-save:hover {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.modal-footer-link {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-open-saved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-open-saved:hover {
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.1);
 }
 
 /* Transitions */

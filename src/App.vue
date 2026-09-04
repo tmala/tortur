@@ -8,11 +8,13 @@ import TurpostCheckinsModal from './components/TurpostCheckinsModal.vue'
 import UserProfileModal from './components/UserProfileModal.vue'
 import AdminAddTurpostModal from './components/AdminAddTurpostModal.vue'
 import GpsTrackModal from './components/GpsTrackModal.vue'
+import SavedTracksPanel from './components/SavedTracksPanel.vue'
 import { useGeolocation } from './composables/useGeolocation'
 import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from './composables/useTurposter'
 import { useAis } from './composables/useAis'
 import { useAuth, type FirebaseCheckinItem } from './composables/useAuth'
 import { useGeoDetect } from './composables/useGeoDetect'
+import { useGpsTrackStore, type SavedTrack } from './stores/gpsTrack'
 
 const {
   isLocating,
@@ -219,6 +221,33 @@ const centerCoords = ref<{ lat: number; lng: number; zoom: number } | null>(null
 const isTurposterOpen = ref(false)
 const showMunicipalities = ref(false)
 const isTrackModalOpen = ref(false)
+const isSavedTracksOpen = ref(false)
+const trackStore = useGpsTrackStore()
+
+// Synkroniser innlogget bruker med Pinia-sporene
+watch(
+  () => user.value?.userId,
+  (newUid) => {
+    trackStore.setUser(newUid)
+  },
+  { immediate: true }
+)
+
+// Bestem hvilke sporpunkter som skal tegnes på kartet:
+// Dersom brukeren har valgt et lagret spor for visning, vises det.
+// Ellers vises det aktive live-sporet.
+const displayedTrackPoints = computed(() => {
+  if (trackStore.activeTrack) {
+    return trackStore.activeTrack.points
+  }
+  return trackPoints.value
+})
+
+const handleViewSavedTrack = (track: SavedTrack | null) => {
+  if (track && mapViewerRef.value) {
+    mapViewerRef.value.zoomToTrack(track.points)
+  }
+}
 
 // Håndter åpning og lukking av turpost-panel
 const handleToggleTurposter = () => {
@@ -331,6 +360,7 @@ const handleToggleTracking = () => {
   if (isTracking.value) {
     stopTracking()
   } else {
+    trackStore.clearActiveTrack()
     clearTrack()
     startTracking(
       { enableHighAccuracy: true },
@@ -394,7 +424,7 @@ onUnmounted(() => {
       :user-location="coords"
       :active-layer="activeLayer"
       :is-tracking="isTracking"
-      :track-points="trackPoints"
+      :track-points="displayedTrackPoints"
       :turposter="turposter"
       :show-municipalities="showMunicipalities"
       :selected-kommune-name="selectedKommune ? selectedKommune.name : null"
@@ -437,10 +467,13 @@ onUnmounted(() => {
       :is-logged-in="isLoggedIn"
       :is-admin="isAdmin"
       :is-loading-local-turposter="isLoadingLocalTurposter"
+      :saved-tracks-count="trackStore.savedTracks.length"
+      :is-saved-tracks-open="isSavedTracksOpen"
       @locate="handleLocate"
       @toggle-tracking="handleToggleTracking"
       @clear-track="clearTrack"
       @open-track-modal="isTrackModalOpen = true"
+      @open-saved-tracks="isSavedTracksOpen = !isSavedTracksOpen"
       @change-layer="handleChangeLayer"
       @clear-error="handleClearError"
       @toggle-turposter="handleToggleTurposter"
@@ -500,9 +533,11 @@ onUnmounted(() => {
       :checkins="myCheckins"
       :is-admin="isAdmin"
       :is-admin-mode-active="adminModeActive"
+      :saved-tracks-count="trackStore.savedTracks.length"
       @close="isProfileOpen = false"
       @logout="handleLogoutFromProfile"
       @toggle-admin-mode="handleToggleAdminMode"
+      @open-saved-tracks="isSavedTracksOpen = true"
     />
 
     <!-- Modal for GPS-sporlogg (last ned GPX eller slett) -->
@@ -513,6 +548,17 @@ onUnmounted(() => {
       @close="isTrackModalOpen = false"
       @clear-track="clearTrack"
       @toggle-tracking="handleToggleTracking"
+      @open-saved-tracks="isSavedTracksOpen = true"
+    />
+
+    <!-- Panel for administrering og visning av lagrede GPS-spor -->
+    <SavedTracksPanel
+      :is-open="isSavedTracksOpen"
+      :live-track-points="trackPoints"
+      :is-tracking="isTracking"
+      @close="isSavedTracksOpen = false"
+      @view-track="handleViewSavedTrack"
+      @open-live-track-modal="isTrackModalOpen = true"
     />
 
     <!-- Admin: Legg til ny turpost -->

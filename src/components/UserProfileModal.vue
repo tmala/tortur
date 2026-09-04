@@ -12,7 +12,8 @@ import {
   Maximize2,
   ShieldCheck,
   RotateCw,
-  ChevronDown
+  ChevronDown,
+  Route
 } from 'lucide-vue-next'
 import type { GoogleUser, FirebaseCheckinItem } from '@/composables/useAuth'
 
@@ -23,6 +24,7 @@ const props = defineProps<{
   isLoading?: boolean
   isAdmin?: boolean
   isAdminModeActive?: boolean
+  savedTracksCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -30,6 +32,7 @@ const emit = defineEmits<{
   (e: 'logout'): void
   (e: 'refresh'): void
   (e: 'toggle-admin-mode'): void
+  (e: 'open-saved-tracks'): void
 }>()
 
 const isRefreshing = ref(false)
@@ -335,6 +338,26 @@ onUnmounted(() => {
               </div>
             </div>
           </div>
+
+          <!-- Snarvei til Mine GPS-spor -->
+          <button
+            class="profile-tracks-banner"
+            @click="emit('open-saved-tracks'); emit('close')"
+            title="Se og administrer dine lagrede GPS-spor"
+          >
+            <div class="profile-tracks-left">
+              <div class="tracks-banner-icon">
+                <Route :size="18" />
+              </div>
+              <div class="tracks-banner-texts">
+                <span class="tracks-banner-title">Mine GPS-spor</span>
+                <span class="tracks-banner-sub">
+                  {{ savedTracksCount || 0 }} {{ (savedTracksCount || 0) === 1 ? 'spor lagret' : 'spor lagret' }}
+                </span>
+              </div>
+            </div>
+            <span class="tracks-banner-arrow">Åpne sporliste →</span>
+          </button>
 
           <!-- Seksjonstitel -->
           <div class="section-divider">
@@ -774,6 +797,68 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-weight: 600;
+}
+
+/* Snarvei-banner for GPS-spor */
+.profile-tracks-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 20px 4px 20px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(15, 23, 42, 0.8));
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  width: calc(100% - 40px);
+}
+
+.profile-tracks-banner:hover {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.22), rgba(15, 23, 42, 0.9));
+  border-color: #f97316;
+  transform: translateY(-1px);
+}
+
+.profile-tracks-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tracks-banner-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(249, 115, 22, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f97316;
+  flex-shrink: 0;
+}
+
+.tracks-banner-texts {
+  display: flex;
+  flex-direction: column;
+}
+
+.tracks-banner-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.tracks-banner-sub {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.tracks-banner-arrow {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f97316;
 }
 
 /* Seksjonslinje */

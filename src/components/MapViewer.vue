@@ -581,10 +581,26 @@ const panToCoordinate = (lat: number, lng: number, zoomLevel?: number) => {
   })
 }
 
+const zoomToTrack = (points?: TrackPoint[]) => {
+  if (!map) return
+  const pts = points || props.trackPoints || []
+  if (pts.length < 2) return
+  const latlngs = pts.map(p => [p.lat, p.lng] as [number, number])
+  const bounds = L.latLngBounds(latlngs)
+  if (bounds.isValid()) {
+    map.fitBounds(bounds, {
+      padding: [60, 60],
+      maxZoom: 16,
+      animate: true
+    })
+  }
+}
+
 defineExpose({
   centerOnUser,
   flyToPost,
   panToCoordinate,
+  zoomToTrack,
   getMapInstance: () => map
 })
 
