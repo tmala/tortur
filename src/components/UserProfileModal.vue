@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   X,
   LogOut,
@@ -119,6 +119,81 @@ const formatDate = (isoString?: string) => {
   }
 }
 
+// Dra/flytte-logikk for profilmodalen
+const modalRef = ref<HTMLElement | null>(null)
+const dragPosition = ref({ x: 0, y: 0 })
+const isDragging = ref(false)
+let dragStart = { x: 0, y: 0 }
+let initialPosition = { x: 0, y: 0 }
+
+const modalStyle = computed(() => {
+  if (dragPosition.value.x === 0 && dragPosition.value.y === 0) {
+    return {}
+  }
+  return {
+    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`
+  }
+})
+
+const startDrag = (e: PointerEvent) => {
+  if (e.button !== 0) return
+
+  const target = e.target as HTMLElement | null
+  if (target?.closest('button') || target?.closest('a') || target?.closest('input')) {
+    return
+  }
+
+  isDragging.value = true
+  dragStart = { x: e.clientX, y: e.clientY }
+  initialPosition = { ...dragPosition.value }
+
+  window.addEventListener('pointermove', onDragMove)
+  window.addEventListener('pointerup', onDragEnd)
+  window.addEventListener('pointercancel', onDragEnd)
+}
+
+const onDragMove = (e: PointerEvent) => {
+  if (!isDragging.value) return
+
+  const deltaX = e.clientX - dragStart.x
+  const deltaY = e.clientY - dragStart.y
+
+  let newX = initialPosition.x + deltaX
+  let newY = initialPosition.y + deltaY
+
+  if (modalRef.value) {
+    const rect = modalRef.value.getBoundingClientRect()
+    const currentLeft = rect.left - initialPosition.x
+    const currentTop = rect.top - initialPosition.y
+
+    const minX = -currentLeft + 10
+    const maxX = window.innerWidth - (currentLeft + 80)
+    const minY = -currentTop + 10
+    const maxY = window.innerHeight - (currentTop + 40)
+
+    newX = Math.max(minX, Math.min(maxX, newX))
+    newY = Math.max(minY, Math.min(maxY, newY))
+  }
+
+  dragPosition.value = { x: newX, y: newY }
+}
+
+const onDragEnd = () => {
+  isDragging.value = false
+  window.removeEventListener('pointermove', onDragMove)
+  window.removeEventListener('pointerup', onDragEnd)
+  window.removeEventListener('pointercancel', onDragEnd)
+}
+
+watch(
+  () => props.isOpen,
+  (open) => {
+    if (open) {
+      dragPosition.value = { x: 0, y: 0 }
+    }
+  }
+)
+
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Escape') {
     if (lightboxImage.value) {
@@ -135,6 +210,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('pointermove', onDragMove)
+  window.removeEventListener('pointerup', onDragEnd)
+  window.removeEventListener('pointercancel', onDragEnd)
 })
 </script>
 
@@ -142,9 +220,16 @@ onUnmounted(() => {
   <Teleport to="body">
     <transition name="profile-modal-fade">
       <div v-if="isOpen" class="profile-modal-backdrop" @click.self="emit('close')">
-        <div class="profile-modal-card glass-panel" role="dialog" aria-modal="true">
+        <div
+          ref="modalRef"
+          class="profile-modal-card glass-panel"
+          :class="{ 'is-dragging': isDragging }"
+          :style="modalStyle"
+          role="dialog"
+          aria-modal="true"
+        >
           <!-- Header med brukerinfo og Lukk-knapp -->
-          <div class="profile-modal-header">
+          <div class="profile-modal-header" @pointerdown="startDrag" title="Klikk og dra for å flytte">
             <!-- Øverste rad: Profilbilde, navn, e-post og Lukk-knapp -->
             <div class="profile-header-top">
               <div class="user-info-row">
@@ -394,6 +479,14 @@ onUnmounted(() => {
   border-radius: 18px;
   box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
   overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.profile-modal-card.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  transition: none !important;
+  box-shadow: 0 35px 80px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 /* Header */
@@ -404,6 +497,15 @@ onUnmounted(() => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(15, 23, 42, 0.5);
   gap: 12px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.profile-modal-header:active,
+.profile-modal-card.is-dragging .profile-modal-header {
+  cursor: grabbing;
 }
 
 .profile-header-top {

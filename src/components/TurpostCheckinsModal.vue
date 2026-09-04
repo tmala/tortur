@@ -86,11 +86,79 @@ const loadCheckins = async () => {
   }
 }
 
+// Dra/flytte-logikk for modalen
+const modalRef = ref<HTMLElement | null>(null)
+const dragPosition = ref({ x: 0, y: 0 })
+const isDragging = ref(false)
+let dragStart = { x: 0, y: 0 }
+let initialPosition = { x: 0, y: 0 }
+
+const modalStyle = computed(() => {
+  if (dragPosition.value.x === 0 && dragPosition.value.y === 0) {
+    return {}
+  }
+  return {
+    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`
+  }
+})
+
+const startDrag = (e: PointerEvent) => {
+  if (e.button !== 0) return // Kun primær museknapp / touch
+
+  const target = e.target as HTMLElement | null
+  // Ikke start draing hvis brukeren klikker på knapper eller interaktive elementer
+  if (target?.closest('button') || target?.closest('a') || target?.closest('input')) {
+    return
+  }
+
+  isDragging.value = true
+  dragStart = { x: e.clientX, y: e.clientY }
+  initialPosition = { ...dragPosition.value }
+
+  window.addEventListener('pointermove', onDragMove)
+  window.addEventListener('pointerup', onDragEnd)
+  window.addEventListener('pointercancel', onDragEnd)
+}
+
+const onDragMove = (e: PointerEvent) => {
+  if (!isDragging.value) return
+
+  const deltaX = e.clientX - dragStart.x
+  const deltaY = e.clientY - dragStart.y
+
+  let newX = initialPosition.x + deltaX
+  let newY = initialPosition.y + deltaY
+
+  if (modalRef.value) {
+    const rect = modalRef.value.getBoundingClientRect()
+    const currentLeft = rect.left - initialPosition.x
+    const currentTop = rect.top - initialPosition.y
+
+    const minX = -currentLeft + 10
+    const maxX = window.innerWidth - (currentLeft + 80)
+    const minY = -currentTop + 10
+    const maxY = window.innerHeight - (currentTop + 40)
+
+    newX = Math.max(minX, Math.min(maxX, newX))
+    newY = Math.max(minY, Math.min(maxY, newY))
+  }
+
+  dragPosition.value = { x: newX, y: newY }
+}
+
+const onDragEnd = () => {
+  isDragging.value = false
+  window.removeEventListener('pointermove', onDragMove)
+  window.removeEventListener('pointerup', onDragEnd)
+  window.removeEventListener('pointercancel', onDragEnd)
+}
+
 watch(
   () => [props.isOpen, props.turpost?.id],
   ([open]) => {
     if (open && props.turpost) {
       selectedImage.value = null
+      dragPosition.value = { x: 0, y: 0 }
       loadCheckins()
     }
   },
@@ -113,6 +181,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('pointermove', onDragMove)
+  window.removeEventListener('pointerup', onDragEnd)
+  window.removeEventListener('pointercancel', onDragEnd)
 })
 </script>
 
@@ -120,9 +191,16 @@ onUnmounted(() => {
   <Teleport to="body">
     <Transition name="fade">
       <div v-if="isOpen" class="modal-overlay" @click.self="emit('close')">
-        <div class="checkins-card glass-panel" role="dialog" aria-modal="true">
-          <!-- Header -->
-          <div class="card-header">
+        <div
+          ref="modalRef"
+          class="checkins-card glass-panel"
+          :class="{ 'is-dragging': isDragging }"
+          :style="modalStyle"
+          role="dialog"
+          aria-modal="true"
+        >
+          <!-- Header (klikk og dra for å flytte modalen) -->
+          <div class="card-header" @pointerdown="startDrag" title="Klikk og dra for å flytte">
             <div class="header-left">
               <div class="post-badge" :class="{ 'is-visited': hasVisited }">
                 <Mountain :size="20" />
@@ -291,6 +369,13 @@ onUnmounted(() => {
   flex-direction: column;
   color: #f8fafc;
   overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.checkins-card.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 35px 80px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 /* Header */
@@ -301,6 +386,15 @@ onUnmounted(() => {
   padding: 16px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.02);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.card-header:active,
+.checkins-card.is-dragging .card-header {
+  cursor: grabbing;
 }
 
 .header-left {

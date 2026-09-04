@@ -4,6 +4,8 @@ import {
   Navigation,
   Layers,
   Compass,
+  Route,
+  Trash2,
   AlertTriangle,
   Loader2,
   Download,
@@ -26,6 +28,7 @@ const props = defineProps<{
   userLocation: GeoLocationState | null
   isLocating: boolean
   isTracking: boolean
+  hasTrack?: boolean
   error: string | null
   activeLayer: string
   centerCoords: { lat: number; lng: number; zoom: number } | null
@@ -47,6 +50,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'locate'): void
   (e: 'toggle-tracking'): void
+  (e: 'clear-track'): void
   (e: 'change-layer', layer: string): void
   (e: 'clear-error'): void
   (e: 'toggle-turposter'): void
@@ -283,18 +287,6 @@ const handleInstallClick = async () => {
               <span v-else>Turposter</span>
             </button>
 
-            <!-- Hvor er jeg? -->
-            <button
-              class="icon-btn btn-locate"
-              :disabled="isLocating"
-              @click="emit('locate')"
-              :title="isLocating ? 'Finner posisjon...' : 'Hvor er jeg?'"
-              aria-label="Hvor er jeg?"
-            >
-              <Loader2 v-if="isLocating" class="spinner" :size="18" />
-              <LocateFixed v-else :size="18" />
-            </button>
-
             <!-- Vis turposter i min kommune -->
             <button
               class="icon-btn btn-local-turposter"
@@ -307,15 +299,44 @@ const handleInstallClick = async () => {
               <MapPin v-else :size="18" />
             </button>
 
-            <!-- Følg meg -->
+            <!-- Hvor er jeg? -->
+            <button
+              class="icon-btn btn-locate"
+              :disabled="isLocating"
+              @click="emit('locate')"
+              :title="isLocating ? 'Finner posisjon...' : 'Hvor er jeg?'"
+              aria-label="Hvor er jeg?"
+            >
+              <Loader2 v-if="isLocating" class="spinner" :size="18" />
+              <LocateFixed v-else :size="18" />
+            </button>
+
+            <!-- Sporlogg / Følg meg -->
             <button
               class="icon-btn btn-track"
-              :class="{ active: isTracking, 'is-tracking': isTracking }"
+              :class="{ active: isTracking, 'is-tracking': isTracking, 'has-track': hasTrack }"
               @click="emit('toggle-tracking')"
-              :title="isTracking ? 'Følger deg' : 'Følg meg'"
+              :title="
+                isTracking
+                  ? 'Følger deg (sporing aktiv)'
+                  : hasTrack
+                  ? 'Sporing stoppet (sporet vises på kartet)'
+                  : 'Følg meg'
+              "
               aria-label="Følg meg"
             >
-              <Compass :size="18" :class="{ 'pulse-slow': isTracking }" />
+              <Route :size="18" :class="{ 'pulse-slow': isTracking }" />
+            </button>
+
+            <!-- Slett spor-knapp (vises kun når spor finnes og sporing er stoppet) -->
+            <button
+              v-if="hasTrack && !isTracking"
+              class="icon-btn btn-clear-track"
+              @click="emit('clear-track')"
+              title="Fjern sporet fra kartet"
+              aria-label="Fjern sporet fra kartet"
+            >
+              <Trash2 :size="16" />
             </button>
 
             <!-- AIS Båttrafikk-knapp – kun synlig for admin -->
@@ -1305,6 +1326,24 @@ const handleInstallClick = async () => {
   border-color: #34d399;
   color: white;
   box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4);
+}
+
+.icon-btn.btn-track.has-track:not(.is-tracking) {
+  border-color: rgba(249, 115, 22, 0.6);
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.1);
+}
+
+.icon-btn.btn-clear-track {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.icon-btn.btn-clear-track:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+  border-color: #ef4444;
 }
 
 .spinner {

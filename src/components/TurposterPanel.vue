@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { 
   Mountain, 
   Search, 
@@ -38,6 +38,84 @@ const emit = defineEmits<{
 const fylkeFilter = ref('')
 const kommuneFilter = ref('')
 const activeRegion = ref<'norge' | 'utlandet'>('norge')
+
+// Dra/flytte-logikk for panelet
+const panelRef = ref<HTMLElement | null>(null)
+const dragPosition = ref({ x: 0, y: 0 })
+const isDragging = ref(false)
+let dragStart = { x: 0, y: 0 }
+let initialPosition = { x: 0, y: 0 }
+
+const panelStyle = computed(() => {
+  if (dragPosition.value.x === 0 && dragPosition.value.y === 0) {
+    return {}
+  }
+  return {
+    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`
+  }
+})
+
+const startDrag = (e: PointerEvent) => {
+  if (e.button !== 0) return
+
+  const target = e.target as HTMLElement | null
+  if (target?.closest('button') || target?.closest('a') || target?.closest('input')) {
+    return
+  }
+
+  isDragging.value = true
+  dragStart = { x: e.clientX, y: e.clientY }
+  initialPosition = { ...dragPosition.value }
+
+  window.addEventListener('pointermove', onDragMove)
+  window.addEventListener('pointerup', onDragEnd)
+  window.addEventListener('pointercancel', onDragEnd)
+}
+
+const onDragMove = (e: PointerEvent) => {
+  if (!isDragging.value) return
+
+  const deltaX = e.clientX - dragStart.x
+  const deltaY = e.clientY - dragStart.y
+
+  let newX = initialPosition.x + deltaX
+  let newY = initialPosition.y + deltaY
+
+  if (panelRef.value) {
+    const rect = panelRef.value.getBoundingClientRect()
+    const currentLeft = rect.left - initialPosition.x
+    const currentTop = rect.top - initialPosition.y
+
+    const minX = -currentLeft + 10
+    const maxX = window.innerWidth - (currentLeft + 80)
+    const minY = -currentTop + 10
+    const maxY = window.innerHeight - (currentTop + 40)
+
+    newX = Math.max(minX, Math.min(maxX, newX))
+    newY = Math.max(minY, Math.min(maxY, newY))
+  }
+
+  dragPosition.value = { x: newX, y: newY }
+}
+
+const onDragEnd = () => {
+  isDragging.value = false
+  window.removeEventListener('pointermove', onDragMove)
+  window.removeEventListener('pointerup', onDragEnd)
+  window.removeEventListener('pointercancel', onDragEnd)
+}
+
+watch(() => props.isOpen, (open) => {
+  if (open) {
+    dragPosition.value = { x: 0, y: 0 }
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pointermove', onDragMove)
+  window.removeEventListener('pointerup', onDragEnd)
+  window.removeEventListener('pointercancel', onDragEnd)
+})
 
 const norwayFylker = computed(() => {
   return props.hierarchy.filter(f => f.slug !== 'utlandet')
@@ -130,9 +208,15 @@ const filteredUtlandKommuner = () => {
 
 <template>
   <transition name="fade-slide">
-    <div v-if="isOpen" class="turposter-panel">
+    <div
+      v-if="isOpen"
+      ref="panelRef"
+      class="turposter-panel"
+      :class="{ 'is-dragging': isDragging }"
+      :style="panelStyle"
+    >
       <!-- Header -->
-      <div class="panel-header">
+      <div class="panel-header" @pointerdown="startDrag" title="Klikk og dra for å flytte panelet">
         <div class="header-title">
           <Mountain :size="20" class="header-icon" />
           <h3>{{ activeRegion === 'utlandet' ? 'Turposter i Utlandet' : 'Turposter i Norge' }}</h3>
@@ -410,6 +494,14 @@ const filteredUtlandKommuner = () => {
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75);
   pointer-events: auto;
   color: #f8fafc;
+  transition: box-shadow 0.2s ease;
+}
+
+.turposter-panel.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  transition: none !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(56, 189, 248, 0.4);
 }
 
 .panel-header {
@@ -419,6 +511,15 @@ const filteredUtlandKommuner = () => {
   padding: 14px 16px;
   border-bottom: 1px solid #334155;
   background: #1e293b;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.panel-header:active,
+.turposter-panel.is-dragging .panel-header {
+  cursor: grabbing;
 }
 
 .header-title {

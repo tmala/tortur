@@ -10,12 +10,19 @@ export interface GeoLocationState {
   timestamp: number | null
 }
 
+export interface TrackPoint {
+  lat: number
+  lng: number
+  timestamp?: number
+}
+
 export function useGeolocation() {
   const isSupported = ref('geolocation' in navigator)
   const isLocating = ref(false)
   const isTracking = ref(false)
   const error = ref<string | null>(null)
   const coords = ref<GeoLocationState | null>(null)
+  const trackPoints = ref<TrackPoint[]>([])
 
   let watchId: number | null = null
 
@@ -32,6 +39,33 @@ export function useGeolocation() {
     }
   }
 
+  const recordTrackPoint = (point: GeoLocationState) => {
+    if (point.accuracy !== null && point.accuracy > 50) return
+
+    const last = trackPoints.value[trackPoints.value.length - 1]
+    if (!last) {
+      trackPoints.value.push({
+        lat: point.lat,
+        lng: point.lng,
+        timestamp: point.timestamp || Date.now()
+      })
+    } else {
+      const dist = calculateDistanceMeters(last.lat, last.lng, point.lat, point.lng)
+      // Kun legg til nytt punkt dersom man har beveget seg minst 4 meter (fjerner GPS-jitter)
+      if (dist >= 4) {
+        trackPoints.value.push({
+          lat: point.lat,
+          lng: point.lng,
+          timestamp: point.timestamp || Date.now()
+        })
+      }
+    }
+  }
+
+  const clearTrack = () => {
+    trackPoints.value = []
+  }
+
   const handleSuccess = (position: GeolocationPosition) => {
     coords.value = {
       lat: position.coords.latitude,
@@ -44,6 +78,10 @@ export function useGeolocation() {
     }
     isLocating.value = false
     error.value = null
+
+    if (isTracking.value) {
+      recordTrackPoint(coords.value)
+    }
   }
 
   const handleError = (err: GeolocationPositionError) => {
@@ -99,6 +137,11 @@ export function useGeolocation() {
     isLocating.value = true
     error.value = null
 
+    // Hvis vi allerede har koordinater og ingen punkter i sporet, legg til startpunkt
+    if (coords.value && trackPoints.value.length === 0) {
+      recordTrackPoint(coords.value)
+    }
+
     const geoOptions: PositionOptions = {
       enableHighAccuracy: true,
       timeout: 15000,
@@ -139,9 +182,11 @@ export function useGeolocation() {
     isTracking,
     error,
     coords,
+    trackPoints,
     getCurrentPosition,
     startTracking,
-    stopTracking
+    stopTracking,
+    clearTrack
   }
 }
 

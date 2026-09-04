@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import L from 'leaflet'
 import {
   type GeoLocationState,
+  type TrackPoint,
   calculateDistanceMeters,
   formatDistance,
   MAX_CHECKIN_DISTANCE_METERS
@@ -24,6 +25,7 @@ const props = defineProps<{
   isLoggedIn?: boolean
   visitedTurpostIds?: Set<string>
   isAdmin?: boolean
+  trackPoints?: TrackPoint[]
 }>()
 
 const emit = defineEmits<{
@@ -485,8 +487,11 @@ const renderMunicipalitiesLayer = () => {
   geoJsonLayer.bringToBack()
 }
 
+const isAutoCenter = ref(true)
+
 const centerOnUser = (animate = true, zoomLevel?: number) => {
   if (!map || !props.userLocation) return
+  isAutoCenter.value = true
 
   const targetZoom = zoomLevel ?? Math.max(map.getZoom(), 16)
   const targetLatLng: L.LatLngExpression = [props.userLocation.lat, props.userLocation.lng]
@@ -500,6 +505,56 @@ const centerOnUser = (animate = true, zoomLevel?: number) => {
     map.setView(targetLatLng, targetZoom)
   }
 }
+
+let trackPolyline: L.Polyline | null = null
+let trackBgPolyline: L.Polyline | null = null
+
+const updateTrackLayer = () => {
+  if (!map) return
+  const points = props.trackPoints || []
+  if (points.length < 2) {
+    if (trackPolyline) {
+      trackPolyline.remove()
+      trackPolyline = null
+    }
+    if (trackBgPolyline) {
+      trackBgPolyline.remove()
+      trackBgPolyline = null
+    }
+    return
+  }
+
+  const latlngs = points.map(p => [p.lat, p.lng] as [number, number])
+
+  if (!trackPolyline || !trackBgPolyline) {
+    trackBgPolyline = L.polyline(latlngs, {
+      color: '#0f172a',
+      weight: 6,
+      opacity: 0.55,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(map)
+
+    trackPolyline = L.polyline(latlngs, {
+      color: '#f97316',
+      weight: 3.5,
+      opacity: 0.95,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(map)
+  } else {
+    trackBgPolyline.setLatLngs(latlngs)
+    trackPolyline.setLatLngs(latlngs)
+  }
+}
+
+watch(
+  () => props.trackPoints,
+  () => {
+    updateTrackLayer()
+  },
+  { deep: true }
+)
 
 const flyToPost = (post: TurpostItem) => {
   if (!map) return
@@ -538,12 +593,24 @@ watch(
   (newLoc) => {
     if (newLoc) {
       updateUserMarker(newLoc)
-      if (props.isTracking && map) {
+      if (props.isTracking && isAutoCenter.value && map) {
         map.panTo([newLoc.lat, newLoc.lng], { animate: true, duration: 0.5 })
       }
     }
   },
   { deep: true }
+)
+
+watch(
+  () => props.isTracking,
+  (tracking) => {
+    if (tracking) {
+      isAutoCenter.value = true
+      if (props.userLocation && map) {
+        map.panTo([props.userLocation.lat, props.userLocation.lng], { animate: true, duration: 0.5 })
+      }
+    }
+  }
 )
 
 const createVesselIcon = (vessel: AisVessel) => {
@@ -702,7 +769,10 @@ onMounted(() => {
     loadMunicipalitiesGeoJson()
   }
 
+  updateTrackLayer()
+
   map.on('dragstart', () => {
+    isAutoCenter.value = false
     emit('map-dragged')
   })
 
@@ -751,6 +821,14 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (trackPolyline) {
+    trackPolyline.remove()
+    trackPolyline = null
+  }
+  if (trackBgPolyline) {
+    trackBgPolyline.remove()
+    trackBgPolyline = null
+  }
   if (map) {
     map.remove()
     map = null

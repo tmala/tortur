@@ -18,9 +18,11 @@ const {
   isTracking,
   error: geoError,
   coords,
+  trackPoints,
   getCurrentPosition,
   startTracking,
-  stopTracking
+  stopTracking,
+  clearTrack
 } = useGeolocation()
 
 const {
@@ -295,7 +297,7 @@ const handleShowLocalTurposter = async () => {
       // Posisjon er i utlandet – forsøk å vise turposter for Utlandet
       const utlandResult = await selectKommuneByName('Utlandet')
       if (utlandResult) {
-        isTurposterOpen.value = true
+        isTurposterOpen.value = false
         if (mapViewerRef.value) {
           mapViewerRef.value.centerOnUser(true, 13)
         }
@@ -307,7 +309,7 @@ const handleShowLocalTurposter = async () => {
 
     const result = await selectKommuneByName(geoResult.kommune)
     if (result) {
-      isTurposterOpen.value = true
+      isTurposterOpen.value = false
       if (mapViewerRef.value) {
         mapViewerRef.value.centerOnUser(true, 13)
       }
@@ -321,11 +323,12 @@ const handleShowLocalTurposter = async () => {
   }
 }
 
-// Håndter live sporing / "Følg meg"
+// Håndter live sporing / sporlogg ("Følg meg")
 const handleToggleTracking = () => {
   if (isTracking.value) {
     stopTracking()
   } else {
+    clearTrack()
     startTracking(
       { enableHighAccuracy: true },
       (newCoords) => {
@@ -337,11 +340,9 @@ const handleToggleTracking = () => {
   }
 }
 
-// Hvis brukeren drar manuelt i kartet, pause "følg meg"-modus
+// Hvis brukeren drar manuelt i kartet, lar vi GPS-sporingen fortsette i bakgrunnen
 const handleMapDragged = () => {
-  if (isTracking.value) {
-    stopTracking()
-  }
+  // Panning i kartet stopper ikke sporloggen
 }
 
 // Kartlagbytte
@@ -390,6 +391,7 @@ onUnmounted(() => {
       :user-location="coords"
       :active-layer="activeLayer"
       :is-tracking="isTracking"
+      :track-points="trackPoints"
       :turposter="turposter"
       :show-municipalities="showMunicipalities"
       :selected-kommune-name="selectedKommune ? selectedKommune.name : null"
@@ -415,6 +417,7 @@ onUnmounted(() => {
       :user-location="coords"
       :is-locating="isLocating"
       :is-tracking="isTracking"
+      :has-track="trackPoints.length > 0"
       :error="geoError || turError || aisError"
       :active-layer="activeLayer"
       :center-coords="centerCoords"
@@ -433,6 +436,7 @@ onUnmounted(() => {
       :is-loading-local-turposter="isLoadingLocalTurposter"
       @locate="handleLocate"
       @toggle-tracking="handleToggleTracking"
+      @clear-track="clearTrack"
       @change-layer="handleChangeLayer"
       @clear-error="handleClearError"
       @toggle-turposter="handleToggleTurposter"
