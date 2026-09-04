@@ -1880,5 +1880,17 @@
         "count": 1
       }
     ]
+  },
+  {
+    "name": "Utlandet",
+    "slug": "utlandet",
+    "count": 4,
+    "kommuner": [
+      {
+        "name": "Spania",
+        "slug": "spania",
+        "count": 4
+      }
+    ]
   }
 ]

@@ -249,6 +249,79 @@ describe('TurposterPanel', () => {
     expect(wrapper.text()).toContain('412 poster')
   })
 
+  it('handles region switching and empty state for Utlandet', async () => {
+    const wrapper = mount(TurposterPanel, {
+      props: {
+        isOpen: true,
+        hierarchy: sampleHierarchy,
+        selectedFylke: null,
+        selectedKommune: null,
+        turposter: [],
+        filteredTurposter: [],
+        isLoadingHierarchy: false,
+        isLoadingPosts: false,
+        searchQuery: ''
+      }
+    })
+
+    expect(wrapper.text()).toContain('Norge')
+    expect(wrapper.text()).toContain('Utlandet')
+
+    // Klikk på Utlandet-fanen
+    const buttons = wrapper.findAll('.region-tab-btn')
+    expect(buttons.length).toBe(2)
+    await buttons[1]!.trigger('click')
+
+    // Siden sampleHierarchy ikke har utlandet, vises tom-tilstand
+    expect(wrapper.text()).toContain('Ingen turposter i utlandet ennå')
+  })
+
+  it('renders country list when Utlandet fylke exists in hierarchy', async () => {
+    const hierarchyWithUtland = [
+      ...sampleHierarchy,
+      {
+        name: 'Utlandet',
+        slug: 'utlandet',
+        count: 5,
+        kommuner: [
+          { name: 'Spania', slug: 'spania', count: 3 },
+          { name: 'Sverige', slug: 'sverige', count: 2 }
+        ]
+      }
+    ]
+
+    const wrapper = mount(TurposterPanel, {
+      props: {
+        isOpen: true,
+        hierarchy: hierarchyWithUtland,
+        selectedFylke: null,
+        selectedKommune: null,
+        turposter: [],
+        filteredTurposter: [],
+        isLoadingHierarchy: false,
+        isLoadingPosts: false,
+        searchQuery: ''
+      }
+    })
+
+    // Klikk på Utlandet-fanen
+    const buttons = wrapper.findAll('.region-tab-btn')
+    await buttons[1]!.trigger('click')
+
+    // Sjekk at event 'select-fylke' ble trigget med Utlandet-fylket
+    expect(wrapper.emitted('select-fylke')).toBeTruthy()
+    const emittedFylke = wrapper.emitted('select-fylke')![0]![0] as any
+    expect(emittedFylke.slug).toBe('utlandet')
+
+    // Oppdater props som om forelder valgte Utlandet
+    await wrapper.setProps({ selectedFylke: hierarchyWithUtland[1] })
+    expect(wrapper.text()).toContain('Velg land eller område')
+    expect(wrapper.text()).toContain('Spania')
+    expect(wrapper.text()).toContain('3 poster')
+    expect(wrapper.text()).toContain('Sverige')
+    expect(wrapper.text()).toContain('2 poster')
+  })
+
   it('does not render checkin button in turposter list (must check in from map)', () => {
     const samplePost = {
       id: 'luster-1',

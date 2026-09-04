@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { 
   Mountain, 
   Search, 
   ChevronRight, 
   X, 
   Loader2,
-  Navigation2
+  Navigation2,
+  Globe
 } from 'lucide-vue-next'
 import type { FylkeInfo, KommuneInfo, TurpostItem } from '@/composables/useTurposter'
 
@@ -36,11 +37,80 @@ const emit = defineEmits<{
 
 const fylkeFilter = ref('')
 const kommuneFilter = ref('')
+const activeRegion = ref<'norge' | 'utlandet'>('norge')
+
+const norwayFylker = computed(() => {
+  return props.hierarchy.filter(f => f.slug !== 'utlandet')
+})
+
+const utlandetFylke = computed(() => {
+  return props.hierarchy.find(f => f.slug === 'utlandet') || null
+})
+
+const norgeTotalCount = computed(() => {
+  return norwayFylker.value.reduce((acc, f) => acc + f.count, 0)
+})
+
+const utlandetTotalCount = computed(() => {
+  return utlandetFylke.value ? utlandetFylke.value.count : 0
+})
+
+watch(() => props.selectedFylke, (fylke) => {
+  if (fylke?.slug === 'utlandet') {
+    activeRegion.value = 'utlandet'
+  } else if (fylke !== null) {
+    activeRegion.value = 'norge'
+  }
+})
+
+watch(utlandetFylke, (newVal) => {
+  if (activeRegion.value === 'utlandet' && newVal && props.selectedFylke?.slug !== 'utlandet') {
+    emit('select-fylke', newVal)
+  }
+})
+
+const selectRegion = (region: 'norge' | 'utlandet') => {
+  activeRegion.value = region
+  fylkeFilter.value = ''
+  kommuneFilter.value = ''
+  if (region === 'norge') {
+    if (props.selectedFylke?.slug === 'utlandet') {
+      emit('select-fylke', null)
+      emit('select-kommune', null)
+    }
+  } else {
+    // Utlandet
+    if (utlandetFylke.value) {
+      emit('select-fylke', utlandetFylke.value)
+    }
+    emit('select-kommune', null)
+  }
+}
+
+const handleSelectNorgeRoot = () => {
+  emit('select-fylke', null)
+  emit('select-kommune', null)
+}
+
+const handleResetUtland = () => {
+  emit('select-kommune', null)
+  if (utlandetFylke.value) {
+    emit('select-fylke', utlandetFylke.value)
+  }
+}
+
+const handleSelectUtlandKommune = (kommune: KommuneInfo) => {
+  if (utlandetFylke.value) {
+    emit('select-fylke', utlandetFylke.value)
+  }
+  emit('select-kommune', kommune)
+}
 
 const filteredFylker = () => {
-  if (!fylkeFilter.value.trim()) return props.hierarchy
+  const list = norwayFylker.value
+  if (!fylkeFilter.value.trim()) return list
   const q = fylkeFilter.value.toLowerCase().trim()
-  return props.hierarchy.filter(f => f.name.toLowerCase().includes(q))
+  return list.filter(f => f.name.toLowerCase().includes(q))
 }
 
 const filteredKommunerList = () => {
@@ -48,6 +118,13 @@ const filteredKommunerList = () => {
   if (!kommuneFilter.value.trim()) return props.selectedFylke.kommuner
   const q = kommuneFilter.value.toLowerCase().trim()
   return props.selectedFylke.kommuner.filter(k => k.name.toLowerCase().includes(q))
+}
+
+const filteredUtlandKommuner = () => {
+  if (!utlandetFylke.value) return []
+  if (!kommuneFilter.value.trim()) return utlandetFylke.value.kommuner
+  const q = kommuneFilter.value.toLowerCase().trim()
+  return utlandetFylke.value.kommuner.filter(k => k.name.toLowerCase().includes(q))
 }
 </script>
 
@@ -58,31 +135,64 @@ const filteredKommunerList = () => {
       <div class="panel-header">
         <div class="header-title">
           <Mountain :size="20" class="header-icon" />
-          <h3>Turposter i Norge</h3>
+          <h3>{{ activeRegion === 'utlandet' ? 'Turposter i Utlandet' : 'Turposter i Norge' }}</h3>
         </div>
         <button class="btn-close" @click="emit('close')" title="Lukk panel">
           <X :size="18" />
         </button>
       </div>
 
+      <!-- Område-faner (Norge / Utlandet) -->
+      <div class="region-tabs">
+        <button
+          class="region-tab-btn"
+          :class="{ active: activeRegion === 'norge' }"
+          @click="selectRegion('norge')"
+        >
+          <span class="region-flag">🇳🇴</span>
+          <span class="region-label">Norge</span>
+          <span class="region-count">{{ norgeTotalCount.toLocaleString('no') }}</span>
+        </button>
+        <button
+          class="region-tab-btn"
+          :class="{ active: activeRegion === 'utlandet' }"
+          @click="selectRegion('utlandet')"
+        >
+          <span class="region-flag">🌍</span>
+          <span class="region-label">Utlandet</span>
+          <span v-if="utlandetTotalCount > 0" class="region-count">{{ utlandetTotalCount.toLocaleString('no') }}</span>
+        </button>
+      </div>
+
       <!-- Trinnvis navigasjonslinje / Brødsmuler -->
       <div class="breadcrumbs">
-        <button 
-          class="crumb-btn" 
-          :class="{ active: !selectedFylke }"
-          @click="emit('select-fylke', null)"
-        >
-          Hele landet
-        </button>
-        <span v-if="selectedFylke" class="crumb-sep">/</span>
-        <button 
-          v-if="selectedFylke" 
-          class="crumb-btn"
-          :class="{ active: selectedFylke && !selectedKommune }"
-          @click="emit('select-kommune', null)"
-        >
-          {{ selectedFylke.name }}
-        </button>
+        <template v-if="activeRegion === 'norge'">
+          <button 
+            class="crumb-btn" 
+            :class="{ active: !selectedFylke }"
+            @click="handleSelectNorgeRoot"
+          >
+            Hele landet
+          </button>
+          <span v-if="selectedFylke" class="crumb-sep">/</span>
+          <button 
+            v-if="selectedFylke" 
+            class="crumb-btn"
+            :class="{ active: selectedFylke && !selectedKommune }"
+            @click="emit('select-kommune', null)"
+          >
+            {{ selectedFylke.name }}
+          </button>
+        </template>
+        <template v-else>
+          <button 
+            class="crumb-btn" 
+            :class="{ active: !selectedKommune }"
+            @click="handleResetUtland"
+          >
+            Utlandet
+          </button>
+        </template>
         <span v-if="selectedKommune" class="crumb-sep">/</span>
         <span v-if="selectedKommune" class="crumb-text active">
           {{ selectedKommune.name }}
@@ -97,72 +207,8 @@ const filteredKommunerList = () => {
           <span>Laster inn fylker og kommuner...</span>
         </div>
 
-        <!-- Trinn 1: Velg Fylke -->
-        <div v-else-if="!selectedFylke" class="step-container">
-          <div class="step-desc">
-            <span class="step-label">Trinn 1: Velg fylke</span>
-            <div class="search-input-wrapper">
-              <Search :size="15" class="search-icon" />
-              <input 
-                v-model="fylkeFilter" 
-                type="text" 
-                placeholder="Søk etter fylke..." 
-                class="search-input"
-              />
-              <button v-if="fylkeFilter" class="btn-clear-search" @click="fylkeFilter = ''">✕</button>
-            </div>
-          </div>
-
-          <div class="items-list scrollable">
-            <button 
-              v-for="fylke in filteredFylker()" 
-              :key="fylke.slug"
-              class="selection-item"
-              @click="emit('select-fylke', fylke)"
-            >
-              <div class="item-main">
-                <span class="item-name">{{ fylke.name }}</span>
-                <span class="item-count">{{ fylke.count.toLocaleString('no') }} poster</span>
-              </div>
-              <ChevronRight :size="16" class="chevron-icon" />
-            </button>
-          </div>
-        </div>
-
-        <!-- Trinn 2: Velg Kommune i valgt Fylke -->
-        <div v-else-if="selectedFylke && !selectedKommune" class="step-container">
-          <div class="step-desc">
-            <span class="step-label">Trinn 2: Velg kommune i {{ selectedFylke.name }}</span>
-            <div class="search-input-wrapper">
-              <Search :size="15" class="search-icon" />
-              <input 
-                v-model="kommuneFilter" 
-                type="text" 
-                placeholder="Søk etter kommune..." 
-                class="search-input"
-              />
-              <button v-if="kommuneFilter" class="btn-clear-search" @click="kommuneFilter = ''">✕</button>
-            </div>
-          </div>
-
-          <div class="items-list scrollable">
-            <button 
-              v-for="kommune in filteredKommunerList()" 
-              :key="kommune.slug"
-              class="selection-item"
-              @click="emit('select-kommune', kommune)"
-            >
-              <div class="item-main">
-                <span class="item-name">{{ kommune.name }}</span>
-                <span class="item-count">{{ kommune.count }} poster</span>
-              </div>
-              <ChevronRight :size="16" class="chevron-icon" />
-            </button>
-          </div>
-        </div>
-
-        <!-- Trinn 3: Viser poster for valgt Kommune -->
-        <div v-else-if="selectedFylke && selectedKommune" class="step-container">
+        <!-- Visning av turposter for valgt kommune eller land (felles for Norge og Utlandet) -->
+        <div v-else-if="selectedKommune" class="step-container">
           <div v-if="isLoadingPosts" class="loading-state">
             <Loader2 :size="24" class="spin-icon" />
             <span>Henter turposter for {{ selectedKommune.name }}...</span>
@@ -212,12 +258,122 @@ const filteredKommunerList = () => {
                   >
                     👁️
                   </button>
-                  <button class="btn-focus" title="Sentrer kartet på denne posten">
-                    <Navigation2 :size="16" />
-                  </button>
+                  <Navigation2 :size="16" class="nav-arrow-icon" />
                 </div>
               </div>
+
+              <div v-if="filteredTurposter.length === 0" class="empty-search-state">
+                <p>Ingen turposter matcher «{{ searchQuery }}»</p>
+              </div>
             </div>
+          </div>
+        </div>
+
+        <!-- UTLANDET: Velg land eller område -->
+        <template v-else-if="activeRegion === 'utlandet'">
+          <!-- Tom tilstand for Utlandet dersom ingen poster ennå -->
+          <div v-if="!utlandetFylke || utlandetTotalCount === 0" class="empty-utlandet-state">
+            <Globe :size="44" class="empty-utlandet-icon" />
+            <h4>Ingen turposter i utlandet ennå</h4>
+            <p>
+              Som admin kan du klikke hvor som helst på verdenskartet for å legge til nye turposter i utlandet.
+            </p>
+          </div>
+
+          <!-- Liste over land og områder i utlandet -->
+          <div v-else class="step-container">
+            <div class="step-desc">
+              <span class="step-label">Velg land eller område</span>
+              <div class="search-input-wrapper">
+                <Search :size="15" class="search-icon" />
+                <input 
+                  v-model="kommuneFilter" 
+                  type="text" 
+                  placeholder="Søk etter land / område..." 
+                  class="search-input"
+                />
+                <button v-if="kommuneFilter" class="btn-clear-search" @click="kommuneFilter = ''">✕</button>
+              </div>
+            </div>
+
+            <div class="items-list scrollable">
+              <button 
+                v-for="kommune in filteredUtlandKommuner()" 
+                :key="kommune.slug"
+                class="selection-item"
+                @click="handleSelectUtlandKommune(kommune)"
+              >
+                <div class="item-main">
+                  <span class="item-name">{{ kommune.name }}</span>
+                  <span class="item-count">{{ kommune.count }} poster</span>
+                </div>
+                <ChevronRight :size="16" class="chevron-icon" />
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <!-- NORGE: Trinn 1 (Velg fylke) -->
+        <div v-else-if="!selectedFylke" class="step-container">
+          <div class="step-desc">
+            <span class="step-label">Trinn 1: Velg fylke</span>
+            <div class="search-input-wrapper">
+              <Search :size="15" class="search-icon" />
+              <input 
+                v-model="fylkeFilter" 
+                type="text" 
+                placeholder="Søk etter fylke..." 
+                class="search-input"
+              />
+              <button v-if="fylkeFilter" class="btn-clear-search" @click="fylkeFilter = ''">✕</button>
+            </div>
+          </div>
+
+          <div class="items-list scrollable">
+            <button 
+              v-for="fylke in filteredFylker()" 
+              :key="fylke.slug"
+              class="selection-item"
+              @click="emit('select-fylke', fylke)"
+            >
+              <div class="item-main">
+                <span class="item-name">{{ fylke.name }}</span>
+                <span class="item-count">{{ fylke.count.toLocaleString('no') }} poster</span>
+              </div>
+              <ChevronRight :size="16" class="chevron-icon" />
+            </button>
+          </div>
+        </div>
+
+        <!-- NORGE: Trinn 2 (Velg kommune i valgt fylke) -->
+        <div v-else class="step-container">
+          <div class="step-desc">
+            <span class="step-label">Trinn 2: Velg kommune i {{ selectedFylke.name }}</span>
+            <div class="search-input-wrapper">
+              <Search :size="15" class="search-icon" />
+              <input 
+                v-model="kommuneFilter" 
+                type="text" 
+                placeholder="Søk etter kommune..." 
+                class="search-input"
+              />
+              <button v-if="kommuneFilter" class="btn-clear-search" @click="kommuneFilter = ''">✕</button>
+            </div>
+          </div>
+
+          <div class="items-list scrollable">
+            <button 
+              v-for="kommune in filteredKommunerList()" 
+              :key="kommune.slug"
+              class="selection-item"
+              @click="emit('select-kommune', kommune)"
+            >
+              <div class="item-main">
+                <span class="item-name">{{ kommune.name }}</span>
+                <span class="item-count">{{ kommune.count }} poster</span>
+              </div>
+              <ChevronRight :size="16" class="chevron-icon" />
+            </button>
           </div>
         </div>
       </div>
@@ -225,7 +381,7 @@ const filteredKommunerList = () => {
       <!-- Bunnkontroll i panelet -->
       <div v-if="selectedKommune" class="panel-footer">
         <button class="btn-change" @click="emit('select-kommune', null)">
-          Bytt kommune
+          {{ activeRegion === 'utlandet' ? 'Bytt land' : 'Bytt kommune' }}
         </button>
         <button class="btn-clear" @click="emit('clear-all')">
           Skjul fra kart
@@ -297,6 +453,89 @@ const filteredKommunerList = () => {
 .btn-close:hover {
   color: white;
   background: #475569;
+}
+
+/* Område-faner (Norge / Utlandet) */
+.region-tabs {
+  display: flex;
+  background: #0b1120;
+  border-bottom: 1px solid #334155;
+  padding: 6px 12px;
+  gap: 8px;
+}
+
+.region-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.region-tab-btn:hover {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.region-tab-btn.active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+}
+
+.region-flag {
+  font-size: 14px;
+}
+
+.region-count {
+  font-size: 10.5px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.region-tab-btn.active .region-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.empty-utlandet-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 36px 16px;
+  color: #94a3b8;
+}
+
+.empty-utlandet-icon {
+  color: #38bdf8;
+  margin-bottom: 12px;
+  opacity: 0.8;
+}
+
+.empty-utlandet-state h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 8px;
+}
+
+.empty-utlandet-state p {
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 280px;
 }
 
 /* Brødsmuler */

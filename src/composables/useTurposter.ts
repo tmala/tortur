@@ -89,12 +89,12 @@ export function useTurposter() {
     )
   })
 
-  const loadHierarchy = async () => {
-    if (hierarchy.value.length > 0) return
+  const loadHierarchy = async (force = false) => {
+    if (hierarchy.value.length > 0 && !force) return
     isLoadingHierarchy.value = true
     error.value = null
     try {
-      const res = await fetch(`${import.meta.env.BASE_URL}data/hierarchy.json`)
+      const res = await fetch(`${import.meta.env.BASE_URL}data/hierarchy.json?v=${__APP_VERSION__}`)
       if (!res.ok) throw new Error(`Kunne ikke laste fylkesoversikt (${res.status})`)
       const contentType = res.headers.get('content-type') || ''
       if (!contentType.includes('application/json')) {
@@ -127,7 +127,7 @@ export function useTurposter() {
     isLoadingPosts.value = true
     error.value = null
     try {
-      const url = `${import.meta.env.BASE_URL}data/turposter/${selectedFylke.value.slug}/${kommune.slug}.json`
+      const url = `${import.meta.env.BASE_URL}data/turposter/${selectedFylke.value.slug}/${kommune.slug}.json?v=${__APP_VERSION__}`
       const res = await fetch(url)
       if (!res.ok) throw new Error(`Kunne ikke laste turposter for ${kommune.name} (${res.status})`)
       const contentType = res.headers.get('content-type') || ''

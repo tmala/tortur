@@ -109,7 +109,13 @@ async function buildData() {
   // Lag struktur for hierarchy.json
   const hierarchy = []
 
-  for (const fylkeName of Object.keys(fylker).sort((a, b) => a.localeCompare(b, 'no'))) {
+  const sortedFylker = Object.keys(fylker).sort((a, b) => {
+    if (a.toLowerCase() === 'utlandet') return 1
+    if (b.toLowerCase() === 'utlandet') return -1
+    return a.localeCompare(b, 'no')
+  })
+
+  for (const fylkeName of sortedFylker) {
     const fylkeSlug = slugify(fylkeName)
     const fylkeOutDir = path.join(turposterDir, fylkeSlug)
     fs.mkdirSync(fylkeOutDir, { recursive: true })

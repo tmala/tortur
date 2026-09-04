@@ -61,6 +61,20 @@ export default defineConfig({
             },
           },
           {
+            urlPattern: /\/data\/hierarchy\.json/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'turposter-hierarchy-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24, // 1 dag
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
             urlPattern: /\/data\/.*\.json/i,
             handler: 'StaleWhileRevalidate',
             options: {

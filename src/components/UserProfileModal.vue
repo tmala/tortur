@@ -39,15 +39,7 @@ const handleForceRefresh = async () => {
   isRefreshing.value = true
 
   try {
-    // 1. Be service worker sjekke etter oppdatering og hente nyeste versjon
-    if ('serviceWorker' in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations()
-      for (const reg of registrations) {
-        await reg.update()
-      }
-    }
-
-    // 2. Tøm eventuell statisk app-cache (men spar på kart-tiles)
+    // 1. Tøm eventuell statisk app-cache (men spar på kart-tiles)
     if ('caches' in window) {
       const cacheNames = await caches.keys()
       await Promise.all(
@@ -56,11 +48,24 @@ const handleForceRefresh = async () => {
           .map((name) => caches.delete(name))
       )
     }
+
+    // 2. Be service worker sjekke etter oppdatering og avregistrer for å sikre nyeste versjon
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      for (const reg of registrations) {
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+        }
+        await reg.update()
+        await reg.unregister()
+      }
+    }
   } catch (err) {
     console.warn('Kunne ikke oppdatere cache fullstendig:', err)
   } finally {
-    // 3. Tving en full reload fra serveren
-    window.location.reload()
+    // 3. Tving en full reload fra serveren med cache-busting parameter
+    const baseUrl = window.location.origin + window.location.pathname
+    window.location.replace(`${baseUrl}?refresh=${Date.now()}`)
   }
 }
 

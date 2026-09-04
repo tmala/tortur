@@ -28,17 +28,27 @@
             <span class="spinner">⏳</span> Detekterer kommune...
           </div>
           <div v-else-if="geoResult" class="admin-geo-result">
-            <div class="admin-coord-item">
-              <label>Fylke</label>
-              <span class="geo-value">{{ geoResult.fylke || '(ukjent)' }}</span>
+            <div v-if="isOutsideNorway" class="admin-geo-intl-badge">
+              🌍 Punktet er utenfor Norge – registreres under <strong>Utlandet</strong>.
             </div>
-            <div class="admin-coord-item">
-              <label>Kommune</label>
-              <span class="geo-value">{{ geoResult.kommune }}</span>
+            <div class="admin-coords">
+              <div class="admin-coord-item">
+                <label>Fylke / Kategori</label>
+                <span class="geo-value">{{ geoResult.fylke }}</span>
+              </div>
+              <div class="admin-coord-item">
+                <label>{{ isOutsideNorway ? 'Land / Område (Kommune)' : 'Kommune' }}</label>
+                <input
+                  v-if="isOutsideNorway"
+                  v-model="customKommune"
+                  type="text"
+                  placeholder="F.eks. Spania, Sverige eller Utlandet"
+                  class="admin-input admin-input-compact"
+                  @input="onKommuneChange"
+                />
+                <span v-else class="geo-value">{{ geoResult.kommune }}</span>
+              </div>
             </div>
-          </div>
-          <div v-else class="admin-geo-miss">
-            ⚠️ Punktet er utenfor kjente kommuner. Velg et punkt på norsk fastland eller øyer.
           </div>
         </div>
 
@@ -64,7 +74,7 @@
                 type="number"
                 placeholder="F.eks. 456"
                 min="0"
-                max="2500"
+                max="9000"
                 class="admin-input admin-input-small"
                 @input="onInputChange"
               />
@@ -133,6 +143,8 @@ const { detectKommune } = useGeoDetect()
 
 const geoResult  = ref<GeoResult | null>(null)
 const isDetecting = ref(false)
+const isOutsideNorway = ref(false)
+const customKommune = ref('Utlandet')
 const turpostName = ref('')
 const turpostAlt  = ref<number | null>(null)
 const turpostId   = ref('')
@@ -151,6 +163,13 @@ function regenId() {
 
 function onInputChange() {
   copied.value = false
+}
+
+function onKommuneChange() {
+  copied.value = false
+  if (geoResult.value && isOutsideNorway.value) {
+    geoResult.value.kommune = customKommune.value.trim() || 'Utlandet'
+  }
 }
 
 const csvLine = computed(() => {
@@ -202,13 +221,29 @@ watch(
     turpostId.value   = generateId()
     geoResult.value   = null
     copied.value      = false
+    isOutsideNorway.value = false
+    customKommune.value = 'Utlandet'
 
     isDetecting.value = true
     try {
-      geoResult.value = await detectKommune(lat, lng)
+      const detected = await detectKommune(lat, lng)
+      if (detected) {
+        geoResult.value = detected
+        isOutsideNorway.value = false
+      } else {
+        isOutsideNorway.value = true
+        geoResult.value = {
+          fylke: 'Utlandet',
+          kommune: 'Utlandet'
+        }
+      }
     } catch (err) {
       console.error('Geo-deteksjon feilet:', err)
-      geoResult.value = null
+      isOutsideNorway.value = true
+      geoResult.value = {
+        fylke: 'Utlandet',
+        kommune: 'Utlandet'
+      }
     } finally {
       isDetecting.value = false
     }
@@ -314,6 +349,23 @@ onUnmounted(() => {
 .admin-detecting {
   color: #94a3b8;
   font-size: 0.9rem;
+}
+
+.admin-geo-intl-badge {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid #38bdf8;
+  color: #bae6fd;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.admin-input-compact {
+  padding: 6px 10px;
+  font-size: 13px;
+  margin-top: 2px;
 }
 
 .spinner {

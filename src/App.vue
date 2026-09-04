@@ -229,6 +229,9 @@ const handleSelectFylke = (fylke: FylkeInfo | null) => {
 
 const handleSelectKommune = (kommune: KommuneInfo | null) => {
   selectKommune(kommune)
+  if (selectedFylke.value?.slug === 'utlandet' && activeLayer.value === 'norgeskart') {
+    activeLayer.value = 'standard'
+  }
 }
 
 // Når brukeren velger "Vis turposter" i popupen på kartet
@@ -289,7 +292,16 @@ const handleShowLocalTurposter = async () => {
 
     const geoResult = await detectKommune(loc.lat, loc.lng)
     if (!geoResult || !geoResult.kommune) {
-      turError.value = 'Finner ingen norsk kommune på din nåværende posisjon.'
+      // Posisjon er i utlandet – forsøk å vise turposter for Utlandet
+      const utlandResult = await selectKommuneByName('Utlandet')
+      if (utlandResult) {
+        isTurposterOpen.value = true
+        if (mapViewerRef.value) {
+          mapViewerRef.value.centerOnUser(true, 13)
+        }
+        return
+      }
+      turError.value = 'Du er i utlandet, og det er ikke registrert noen turposter her ennå.'
       return
     }
 
