@@ -21,7 +21,7 @@ export default defineConfig({
     vueJsx(),
     vueDevTools(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       devOptions: {
         enabled: true,
       },
