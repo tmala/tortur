@@ -15,6 +15,7 @@ import { useAis } from './composables/useAis'
 import { useAuth, type FirebaseCheckinItem } from './composables/useAuth'
 import { useGeoDetect } from './composables/useGeoDetect'
 import { useGpsTrackStore, type SavedTrack } from './stores/gpsTrack'
+import { useAppUpdate } from './composables/useAppUpdate'
 
 const {
   isLocating,
@@ -45,6 +46,7 @@ const {
 } = useAis()
 
 const { user, isLoggedIn, isAdmin, aisClientId, aisClientSecret, fetchMyCheckins, logout } = useAuth()
+const { needsUpdate, applyUpdate } = useAppUpdate()
 const activeLayer = ref<string>('norgeskart')
 const activeCheckinPost = ref<TurpostItem | null>(null)
 const activeViewCheckinsPost = ref<TurpostItem | null>(null)
@@ -514,6 +516,7 @@ onUnmounted(() => {
       :is-loading-local-turposter="isLoadingLocalTurposter"
       :saved-tracks-count="trackStore.savedTracks.length"
       :is-saved-tracks-open="isSavedTracksOpen"
+      :needs-update="needsUpdate"
       @locate="handleLocate"
       @toggle-tracking="handleToggleTracking"
       @clear-track="clearTrack"
@@ -526,6 +529,7 @@ onUnmounted(() => {
       @toggle-ais="handleToggleAis"
       @show-local-turposter="handleShowLocalTurposter"
       @open-profile="handleOpenProfile"
+      @apply-update="applyUpdate"
     />
 
     <TurposterPanel

@@ -22,6 +22,7 @@ import {
   ChevronDown,
   X,
   FolderHeart,
+  RefreshCw,
 } from 'lucide-vue-next'
 import AuthPanel from './AuthPanel.vue'
 import type { GeoLocationState } from '@/composables/useGeolocation'
@@ -49,6 +50,8 @@ const props = defineProps<{
   isLoadingLocalTurposter?: boolean
   savedTracksCount?: number
   isSavedTracksOpen?: boolean
+  /** true når en ny versjon er tilgjengelig via Service Worker */
+  needsUpdate?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -64,6 +67,7 @@ const emit = defineEmits<{
   (e: 'toggle-ais'): void
   (e: 'show-local-turposter'): void
   (e: 'open-profile'): void
+  (e: 'apply-update'): void
 }>()
 
 const showLayerMenu = ref(false)
@@ -262,7 +266,11 @@ const handleInstallClick = async () => {
           aria-label="Åpne eller lukk verktøymeny"
           :aria-expanded="isMenuOpen"
         >
-          <img :src="logoUrl" alt="TorTur logo" class="brand-logo-img" />
+          <!-- Logo med pulserende oppdateringsprikk når ny versjon er klar -->
+          <span class="brand-logo-wrap">
+            <img :src="logoUrl" alt="TorTur logo" class="brand-logo-img" />
+            <span v-if="needsUpdate" class="update-dot" title="Ny versjon tilgjengelig!" />
+          </span>
           <div class="brand-title-wrap">
             <span class="brand-title">{{ appTitle }}</span>
             <span class="brand-version">v{{ appVersion }}</span>
@@ -444,6 +452,20 @@ const handleInstallClick = async () => {
               <X :size="16" />
             </button>
           </div>
+
+          <!-- Oppdateringsbanner – vises når ny versjon er lastet ned -->
+          <transition name="fade-slide">
+            <button
+              v-if="needsUpdate"
+              class="update-banner"
+              @click="emit('apply-update')"
+              title="Last inn ny versjon av appen"
+              aria-label="Oppdater app til ny versjon"
+            >
+              <RefreshCw :size="15" class="update-banner-icon" />
+              <span>Ny versjon tilgjengelig – trykk for å laste inn</span>
+            </button>
+          </transition>
         </div>
       </transition>
 
@@ -686,6 +708,67 @@ const handleInstallClick = async () => {
 
 .brand-badge-btn.active {
   background: rgba(56, 189, 248, 0.15);
+}
+
+/* Logo-wrapper for å posisjonere oppdateringsprikken */
+.brand-logo-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* Pulserende rød prikk øverst til høyre på logoen */
+.update-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  background: #ef4444;
+  border-radius: 50%;
+  border: 2px solid #0f172a;
+  animation: update-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes update-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.75; }
+}
+
+/* Oppdateringsbanner i nedtrekksmenyen */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(251, 146, 60, 0.18));
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 10px;
+  color: #fca5a5;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.update-banner:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(251, 146, 60, 0.3));
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.update-banner-icon {
+  flex-shrink: 0;
+  animation: spin-slow 3s linear infinite;
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .brand-logo-img {
