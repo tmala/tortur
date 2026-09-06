@@ -301,13 +301,13 @@ const handleInstallClick = async () => {
               <span v-else>Turposter</span>
             </button>
 
-            <!-- Vis turposter i min kommune -->
+            <!-- Vis turposter der jeg er -->
             <button
               class="icon-btn btn-local-turposter"
               :disabled="isLoadingLocalTurposter"
               @click="emit('show-local-turposter')"
-              title="Vis turposter i min kommune"
-              aria-label="Vis turposter i min kommune"
+              title="Vis turposter der jeg er"
+              aria-label="Vis turposter der jeg er"
             >
               <Loader2 v-if="isLoadingLocalTurposter" class="spinner" :size="18" />
               <MapPin v-else :size="18" />
@@ -334,8 +334,8 @@ const handleInstallClick = async () => {
                 isTracking
                   ? 'Følger deg (sporing aktiv)'
                   : hasTrack
-                  ? 'Sporing stoppet (sporet vises på kartet)'
-                  : 'Følg meg'
+                    ? 'Sporing stoppet (sporet vises på kartet)'
+                    : 'Følg meg'
               "
               aria-label="Følg meg"
             >
@@ -732,8 +732,15 @@ const handleInstallClick = async () => {
 }
 
 @keyframes update-pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.3); opacity: 0.75; }
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.75;
+  }
 }
 
 /* Oppdateringsbanner i nedtrekksmenyen */
@@ -752,7 +759,9 @@ const handleInstallClick = async () => {
   font-weight: 600;
   cursor: pointer;
   text-align: left;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .update-banner:hover {
@@ -767,8 +776,12 @@ const handleInstallClick = async () => {
 }
 
 @keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .brand-logo-img {
