@@ -28,6 +28,8 @@ const {
   clearTrack
 } = useGeolocation()
 
+const { detectKommune, isAbroad } = useGeoDetect()
+
 const {
   isEnabled: isAisToggled,
   isZoomSufficient,
@@ -47,6 +49,27 @@ const activeLayer = ref<string>('norgeskart')
 const activeCheckinPost = ref<TurpostItem | null>(null)
 const activeViewCheckinsPost = ref<TurpostItem | null>(null)
 const isProfileOpen = ref(false)
+
+// Sjekk om posisjon er i utlandet, og bytt til OpenStreetMap dersom Norgeskart er valgt
+const checkAndApplyAbroadLayer = async (lat: number, lng: number) => {
+  if (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart') {
+    const abroad = await isAbroad(lat, lng)
+    if (abroad) {
+      activeLayer.value = 'standard'
+    }
+  }
+}
+
+// Watcher for brukerposisjon: hvis brukeren befinner seg i utlandet, velges automatisk OpenStreetMap
+watch(
+  coords,
+  async (newCoords) => {
+    if (newCoords) {
+      await checkAndApplyAbroadLayer(newCoords.lat, newCoords.lng)
+    }
+  },
+  { immediate: true }
+)
 
 // Admin-modus: brukeren MÅ aktivere det manuelt fra profilen
 // isAdmin = rettigheten (fra regnearket), adminModeActive = om modus er PÅ
@@ -132,9 +155,12 @@ watch(
       setBwCredentials('', '')
       // Slå av AIS dersom bruker logger ut
       if (isAisToggled.value) toggleAis()
-      // Hvis aktivt kartlag er et Google-kartlag ved utlogging, bytt tilbake til norgeskart
+      // Hvis aktivt kartlag er et Google-kartlag ved utlogging, bytt tilbake til standard (hvis i utlandet) eller norgeskart
       if (activeLayer.value.startsWith('google_')) {
-        activeLayer.value = 'norgeskart'
+        const abroad = coords.value ? isAbroad(coords.value.lat, coords.value.lng) : false
+        Promise.resolve(abroad).then((isAbr) => {
+          activeLayer.value = isAbr ? 'standard' : 'norgeskart'
+        })
       }
     }
   },
@@ -259,11 +285,14 @@ const handleToggleTurposter = () => {
 
 const handleSelectFylke = (fylke: FylkeInfo | null) => {
   selectFylke(fylke)
+  if (fylke?.slug === 'utlandet' && (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')) {
+    activeLayer.value = 'standard'
+  }
 }
 
 const handleSelectKommune = (kommune: KommuneInfo | null) => {
   selectKommune(kommune)
-  if (selectedFylke.value?.slug === 'utlandet' && activeLayer.value === 'norgeskart') {
+  if (selectedFylke.value?.slug === 'utlandet' && (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')) {
     activeLayer.value = 'standard'
   }
 }
@@ -273,6 +302,9 @@ const handleSelectKommuneByName = async (kommuneName: string) => {
   const result = await selectKommuneByName(kommuneName)
   if (result) {
     isTurposterOpen.value = true
+    if (result.fylke?.slug === 'utlandet' && (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')) {
+      activeLayer.value = 'standard'
+    }
   }
 }
 
@@ -286,6 +318,9 @@ const getKommuneInfo = (name: string) => {
 }
 
 const handleFocusPost = (post: TurpostItem) => {
+  if (selectedFylke.value?.slug === 'utlandet' && (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')) {
+    activeLayer.value = 'standard'
+  }
   if (mapViewerRef.value) {
     mapViewerRef.value.flyToPost(post)
   }
@@ -299,8 +334,11 @@ const handleClearAllTurposter = () => {
 const handleLocate = async () => {
   try {
     const location = await getCurrentPosition()
-    if (location && mapViewerRef.value) {
-      mapViewerRef.value.centerOnUser(true, 16)
+    if (location) {
+      await checkAndApplyAbroadLayer(location.lat, location.lng)
+      if (mapViewerRef.value) {
+        mapViewerRef.value.centerOnUser(true, 16)
+      }
     }
   } catch (err) {
     console.warn('Kunne ikke hente posisjon:', err)
@@ -308,7 +346,6 @@ const handleLocate = async () => {
 }
 
 // Håndter "Vis turposter i min kommune"
-const { detectKommune } = useGeoDetect()
 const isLoadingLocalTurposter = ref(false)
 
 const handleShowLocalTurposter = async () => {
@@ -326,7 +363,11 @@ const handleShowLocalTurposter = async () => {
 
     const geoResult = await detectKommune(loc.lat, loc.lng)
     if (!geoResult || !geoResult.kommune) {
-      // Posisjon er i utlandet – forsøk å vise turposter for Utlandet
+      // Posisjon er i utlandet – bytt automatisk til OpenStreetMap dersom Norgeskart er aktivt
+      if (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart') {
+        activeLayer.value = 'standard'
+      }
+      // Forsøk å vise turposter for Utlandet
       const utlandResult = await selectKommuneByName('Utlandet')
       if (utlandResult) {
         isTurposterOpen.value = false
@@ -379,9 +420,10 @@ const handleMapDragged = () => {
 }
 
 // Kartlagbytte
-const handleChangeLayer = (layerId: string) => {
+const handleChangeLayer = async (layerId: string) => {
   if (layerId.startsWith('google_') && !isLoggedIn.value) {
-    activeLayer.value = 'norgeskart'
+    const abroad = coords.value ? await isAbroad(coords.value.lat, coords.value.lng) : false
+    activeLayer.value = abroad ? 'standard' : 'norgeskart'
     return
   }
   activeLayer.value = layerId
@@ -403,8 +445,11 @@ onMounted(async () => {
   loadHierarchy()
   try {
     const loc = await getCurrentPosition({ timeout: 5000, enableHighAccuracy: true })
-    if (loc && mapViewerRef.value) {
-      mapViewerRef.value.centerOnUser(true, 15)
+    if (loc) {
+      await checkAndApplyAbroadLayer(loc.lat, loc.lng)
+      if (mapViewerRef.value) {
+        mapViewerRef.value.centerOnUser(true, 15)
+      }
     }
   } catch {
     // Hvis brukeren ikke gir tilgang, forblir kartet elegant på Bergen

@@ -6,13 +6,15 @@
  * Slår opp fylke fra hierarchy.json via kommunenavn.
  */
 
+import type { FeatureCollection, Geometry } from 'geojson'
+
 export interface GeoResult {
   fylke: string
   kommune: string
 }
 
 // ─── Interne cache-variabler ─────────────────────────────────────────────────
-let geojsonCache: GeoJSON.FeatureCollection | null = null
+let geojsonCache: FeatureCollection | null = null
 let kommuneToFylke: Map<string, string> | null = null
 
 // ─── Punkt-i-polygon (ray casting) ───────────────────────────────────────────
@@ -30,12 +32,12 @@ function pointInPolygon(lat: number, lng: number, ring: number[][]): boolean {
   return inside
 }
 
-function pointInGeometry(lat: number, lng: number, geometry: GeoJSON.Geometry): boolean {
+function pointInGeometry(lat: number, lng: number, geometry: Geometry): boolean {
   if (geometry.type === 'Polygon') {
     return pointInPolygon(lat, lng, geometry.coordinates[0] as number[][])
   }
   if (geometry.type === 'MultiPolygon') {
-    return geometry.coordinates.some((polygon) =>
+    return (geometry.coordinates as number[][][][]).some((polygon: number[][][]) =>
       pointInPolygon(lat, lng, polygon[0] as number[][])
     )
   }
@@ -55,7 +57,7 @@ async function loadGeoData(): Promise<void> {
     throw new Error('Kunne ikke laste geodata')
   }
 
-  geojsonCache = (await geoRes.json()) as GeoJSON.FeatureCollection
+  geojsonCache = (await geoRes.json()) as FeatureCollection
 
   const hierarchy = (await hierRes.json()) as Array<{
     name: string
@@ -89,5 +91,19 @@ export function useGeoDetect() {
     return null
   }
 
-  return { detectKommune }
+  async function isAbroad(lat: number, lng: number): Promise<boolean> {
+    // Fastlands-Norge og nærliggende kystområder ligger innenfor ca. 57.0° - 71.5° N og 4.0° - 31.5° Ø.
+    // Koordinater utenfor denne avgrensningen er garantert i utlandet.
+    if (lat < 57.0 || lat > 71.5 || lng < 4.0 || lng > 31.5) {
+      return true
+    }
+    try {
+      const match = await detectKommune(lat, lng)
+      return match === null
+    } catch {
+      return false
+    }
+  }
+
+  return { detectKommune, isAbroad }
 }

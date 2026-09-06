@@ -132,7 +132,7 @@ const MAP_LAYERS: MapLayerConfig[] = [
   {
     id: 'norgeskart',
     name: 'Kartverket Norgeskart',
-    desc: 'Offisielt detaljert norgeskart (Kartverket)',
+    desc: 'Offisielt detaljert norgeskart (Kartverket - kun Norge)',
     sortnum: 10,
   },
   {

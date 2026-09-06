@@ -1,5 +1,7 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia } from 'pinia'
+import App from '../App.vue'
 import LocationControls from '../components/LocationControls.vue'
 import TurposterPanel from '../components/TurposterPanel.vue'
 import CheckinModal from '../components/CheckinModal.vue'
@@ -676,3 +678,157 @@ describe('UserProfileModal', () => {
     expect(wrapper.emitted('logout')).toBeTruthy()
   })
 })
+
+describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Guardamar del Segura)', () => {
+  it('velger automatisk Standard OpenStreetMap når brukeren befinner seg i Guardamar del Segura (Spania)', async () => {
+    const guardamarCoords = {
+      latitude: 38.0904, // Guardamar del Segura, Spania
+      longitude: -0.6577,
+      accuracy: 10,
+      heading: null,
+      speed: null,
+      altitude: null
+    }
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+      const urlStr = String(url)
+      if (urlStr.includes('hierarchy.json')) {
+        return {
+          ok: true,
+          headers: { get: () => 'application/json' },
+          json: async () => [
+            {
+              name: 'Utlandet',
+              slug: 'utlandet',
+              count: 6,
+              kommuner: [{ name: 'Spania', slug: 'spania', count: 6 }]
+            }
+          ]
+        } as unknown as Response
+      }
+      return { ok: false, headers: { get: () => '' } } as unknown as Response
+    })
+
+    const mockGeolocation = {
+      getCurrentPosition: vi.fn((success) => {
+        success({
+          coords: guardamarCoords,
+          timestamp: Date.now()
+        })
+      }),
+      watchPosition: vi.fn(),
+      clearWatch: vi.fn()
+    }
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      geolocation: mockGeolocation
+    })
+
+    const wrapper = mount(App, {
+      global: {
+        plugins: [createPinia()],
+        stubs: {
+          MapViewer: true
+        }
+      }
+    })
+
+    // Vent på at onMounted og async isAbroad har fullført
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // Sjekk at LocationControls mottar activeLayer='standard' (Standard OpenStreetMap)
+    const locationControls = wrapper.findComponent(LocationControls)
+    expect(locationControls.exists()).toBe(true)
+    expect(locationControls.props('activeLayer')).toBe('standard')
+  })
+
+  it('beholder Norgeskart når brukeren befinner seg i Norge (f.eks. Bergen)', async () => {
+    const bergenCoords = {
+      latitude: 60.3913, // Bergen, Norge
+      longitude: 5.3221,
+      accuracy: 10,
+      heading: null,
+      speed: null,
+      altitude: null
+    }
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+      const urlStr = String(url)
+      if (urlStr.includes('hierarchy.json')) {
+        return {
+          ok: true,
+          headers: { get: () => 'application/json' },
+          json: async () => [
+            {
+              name: 'Vestland',
+              slug: 'vestland',
+              count: 100,
+              kommuner: [{ name: 'Bergen', slug: 'bergen', count: 50 }]
+            }
+          ]
+        } as unknown as Response
+      }
+      if (urlStr.includes('kommuner.geojson')) {
+        return {
+          ok: true,
+          json: async () => ({
+            type: 'FeatureCollection',
+            features: [
+              {
+                type: 'Feature',
+                properties: { name: 'Bergen' },
+                geometry: {
+                  type: 'Polygon',
+                  coordinates: [
+                    [
+                      [5.1, 60.2],
+                      [5.5, 60.2],
+                      [5.5, 60.5],
+                      [5.1, 60.5],
+                      [5.1, 60.2]
+                    ]
+                  ]
+                }
+              }
+            ]
+          })
+        } as unknown as Response
+      }
+      return { ok: false, headers: { get: () => '' } } as unknown as Response
+    })
+
+    const mockGeolocation = {
+      getCurrentPosition: vi.fn((success) => {
+        success({
+          coords: bergenCoords,
+          timestamp: Date.now()
+        })
+      }),
+      watchPosition: vi.fn(),
+      clearWatch: vi.fn()
+    }
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      geolocation: mockGeolocation
+    })
+
+    const wrapper = mount(App, {
+      global: {
+        plugins: [createPinia()],
+        stubs: {
+          MapViewer: true
+        }
+      }
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    const locationControls = wrapper.findComponent(LocationControls)
+    expect(locationControls.exists()).toBe(true)
+    // For posisjon i Norge forblir kartet på norgeskart
+    expect(locationControls.props('activeLayer')).toBe('norgeskart')
+  })
+})
+
