@@ -605,6 +605,7 @@ onUnmounted(() => {
       :is-open="isSavedTracksOpen"
       :live-track-points="trackPoints"
       :is-tracking="isTracking"
+      :is-logged-in="isLoggedIn"
       @close="isSavedTracksOpen = false"
       @view-track="handleViewSavedTrack"
       @open-live-track-modal="isTrackModalOpen = true"

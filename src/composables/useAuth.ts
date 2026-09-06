@@ -372,11 +372,31 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
     if (!res.ok) return []
     const data = await res.json()
     if (!data || typeof data !== 'object') return []
-    return Object.values(data) as FirebaseCheckinItem[]
+    // Filtrer ut eventuelle undernoder som ikke er innsjekkinger (f.eks. 'tracks')
+    return (Object.values(data) as any[]).filter(
+      (item) => item && typeof item === 'object' && item.turpostId != null
+    ) as FirebaseCheckinItem[]
   } catch (err) {
     console.warn('[useAuth] Kunne ikke hente bruker-innsjekkinger fra Firebase:', err)
     return []
   }
+}
+
+// =============================================================================
+// getFirebaseConfig – hjelpefunksjon for moduler som trenger Firebase-tilkobling
+// =============================================================================
+export async function getFirebaseConfig(): Promise<{ dbUrl: string; prefix: string } | null> {
+  let dbUrl = (systemConfig.value.FIREBASE_DB_URL || '').replace(/\/$/, '')
+  let prefix = (systemConfig.value.FIREBASE_SECRET_PREFIX || '').replace(/^\/|\/$/g, '')
+
+  if (!dbUrl || !prefix) {
+    await refreshSystemConfig()
+    dbUrl = (systemConfig.value.FIREBASE_DB_URL || '').replace(/\/$/, '')
+    prefix = (systemConfig.value.FIREBASE_SECRET_PREFIX || '').replace(/^\/|\/$/g, '')
+  }
+
+  if (!dbUrl || !prefix) return null
+  return { dbUrl, prefix }
 }
 
 // =============================================================================
@@ -404,6 +424,7 @@ export function useAuth() {
     logout,
     submitCheckin,
     fetchTurpostCheckins,
-    fetchMyCheckins
+    fetchMyCheckins,
+    getFirebaseConfig
   }
 }

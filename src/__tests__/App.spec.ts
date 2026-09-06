@@ -38,7 +38,7 @@ describe('LocationControls', () => {
     expect(wrapper.find('.brand-menu-dropdown').exists()).toBe(true)
     expect(wrapper.text()).toContain('Turposter')
     expect(wrapper.find('.btn-locate').attributes('title')).toBe('Hvor er jeg?')
-    expect(wrapper.find('.btn-local-turposter').attributes('title')).toBe('Vis turposter i min kommune')
+    expect(wrapper.find('.btn-local-turposter').attributes('title')).toBe('Vis turposter der jeg er')
     expect(wrapper.find('.btn-track').attributes('title')).toBe('Følg meg')
 
     // Click close button to dismiss menu

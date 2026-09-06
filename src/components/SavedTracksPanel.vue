@@ -14,7 +14,9 @@ import {
   Check,
   PlusCircle,
   AlertTriangle,
-  FolderHeart
+  FolderHeart,
+  RefreshCw,
+  Loader2
 } from 'lucide-vue-next'
 import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import { formatDistance, type TrackPoint } from '@/composables/useGeolocation'
@@ -23,6 +25,7 @@ const props = defineProps<{
   isOpen: boolean
   liveTrackPoints?: TrackPoint[]
   isTracking?: boolean
+  isLoggedIn?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -32,6 +35,11 @@ const emit = defineEmits<{
 }>()
 
 const trackStore = useGpsTrackStore()
+
+const handleManualSync = async () => {
+  if (trackStore.isSyncing) return
+  await trackStore.syncTracksWithFirebase()
+}
 
 // Dra/flytte-funksjonalitet
 const panelRef = ref<HTMLElement | null>(null)
@@ -240,9 +248,23 @@ const handleConfirmSaveLiveTrack = () => {
           <h3>Mine GPS-spor</h3>
           <span class="tracks-count-badge">{{ trackStore.savedTracks.length }}</span>
         </div>
-        <button class="btn-close" @click="emit('close')" title="Lukk (Esc)" aria-label="Lukk">
-          <X :size="18" />
-        </button>
+        <div class="header-actions">
+          <button
+            v-if="isLoggedIn"
+            class="btn-sync"
+            :class="{ 'is-syncing': trackStore.isSyncing }"
+            :disabled="trackStore.isSyncing"
+            @click="handleManualSync"
+            title="Synkroniser med skyen (Firebase)"
+            aria-label="Synkroniser med skyen"
+          >
+            <Loader2 v-if="trackStore.isSyncing" class="spinner" :size="15" />
+            <RefreshCw v-else :size="15" />
+          </button>
+          <button class="btn-close" @click="emit('close')" title="Lukk (Esc)" aria-label="Lukk">
+            <X :size="18" />
+          </button>
+        </div>
       </div>
 
       <!-- Statistikk-sammendrag -->
@@ -255,6 +277,13 @@ const handleConfirmSaveLiveTrack = () => {
         <div class="summary-item">
           <span class="summary-label">Total distanse</span>
           <span class="summary-val">{{ formatDistance(totalAllTracksDistanceMeters) }}</span>
+        </div>
+        <div class="summary-divider" v-if="isLoggedIn" />
+        <div class="summary-item" v-if="isLoggedIn" :title="trackStore.syncError || 'Synkronisert med skyen'">
+          <span class="summary-label">Sky-status</span>
+          <span v-if="trackStore.isSyncing" class="summary-val status-syncing">Synker...</span>
+          <span v-else-if="trackStore.syncError" class="summary-val status-error">Kun lokal</span>
+          <span v-else class="summary-val status-synced">Sky</span>
         </div>
       </div>
 
@@ -539,6 +568,44 @@ const handleConfirmSaveLiveTrack = () => {
   border-radius: 10px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-sync {
+  background: #334155;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-sync:hover:not(:disabled) {
+  color: #38bdf8;
+  background: #475569;
+}
+
+.btn-sync:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .btn-close {
   background: #334155;
   border: none;
@@ -583,6 +650,18 @@ const handleConfirmSaveLiveTrack = () => {
   font-size: 14px;
   font-weight: 700;
   color: #f8fafc;
+}
+
+.summary-val.status-synced {
+  color: #38bdf8;
+}
+
+.summary-val.status-syncing {
+  color: #fbbf24;
+}
+
+.summary-val.status-error {
+  color: #f87171;
 }
 
 .summary-divider {

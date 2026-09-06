@@ -4,6 +4,10 @@ import {
   type TrackPoint,
   calculateDistanceMeters
 } from '@/composables/useGeolocation'
+import {
+  useFirebaseTracks,
+  formatTrackKey
+} from '@/composables/useFirebaseTracks'
 
 export interface SavedTrack {
   id: string
@@ -15,6 +19,7 @@ export interface SavedTrack {
   durationMs: number
   startTime: number | null
   endTime: number | null
+  firebaseKey?: string
 }
 
 const STORAGE_PREFIX = 'tortur_saved_tracks_'
@@ -28,6 +33,9 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
   const currentUserId = ref<string>('guest')
   const savedTracks = ref<SavedTrack[]>([])
   const activeTrackId = ref<string | null>(null)
+  const isSyncing = ref<boolean>(false)
+  const syncError = ref<string | null>(null)
+  const lastSyncTime = ref<number | null>(null)
 
   // Aktivt valgt spor som vises på kartet (hvis bruker har valgt et fra historikken)
   const activeTrack = computed<SavedTrack | null>(() => {
@@ -76,6 +84,62 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
     const newId = userId && userId.trim().length > 0 ? userId.trim() : 'guest'
     if (newId !== currentUserId.value || savedTracks.value.length === 0) {
       loadTracks(newId)
+    }
+    if (newId !== 'guest') {
+      syncTracksWithFirebase(newId).catch((err) => {
+        console.warn('[gpsTrackStore] Bakgrunnssynkronisering ved setUser feilet:', err)
+      })
+    }
+  }
+
+  // Synkroniser spor mot Firebase Realtime Database
+  const syncTracksWithFirebase = async (targetUserId?: string | null): Promise<void> => {
+    const uid = targetUserId && targetUserId.trim().length > 0 ? targetUserId.trim() : currentUserId.value
+    if (!uid || uid === 'guest') return
+
+    isSyncing.value = true
+    syncError.value = null
+
+    try {
+      const { fetchUserTracksFromFirebase, saveTrackToFirebase } = useFirebaseTracks()
+      const remoteTracks = await fetchUserTracksFromFirebase(uid)
+
+      // Bygg kart over eksterne spor indeksert på firebaseKey eller startTime
+      const remoteMap = new Map<string, SavedTrack>()
+      for (const rt of remoteTracks) {
+        const key = rt.firebaseKey || (rt.startTime ? formatTrackKey(rt.startTime) : rt.id)
+        remoteMap.set(key, rt)
+      }
+
+      // Flett lokale spor som ennå ikke finnes i skyen (f.eks. sporet offline)
+      const mergedList: SavedTrack[] = [...remoteTracks]
+      const mergedKeys = new Set(remoteMap.keys())
+
+      for (const localTrack of savedTracks.value) {
+        const localKey =
+          localTrack.firebaseKey ||
+          (localTrack.startTime ? formatTrackKey(localTrack.startTime) : localTrack.id)
+
+        if (!mergedKeys.has(localKey)) {
+          // Lokalt spor finnes ikke i skyen – last det opp!
+          mergedKeys.add(localKey)
+          mergedList.push(localTrack)
+          saveTrackToFirebase(uid, localTrack).catch((err) => {
+            console.warn('[gpsTrackStore] Opplasting av lokalt spor til skyen feilet:', err)
+          })
+        }
+      }
+
+      // Sorter kronologisk: nyeste tur øverst
+      mergedList.sort((a, b) => (b.startTime || b.createdAt) - (a.startTime || a.createdAt))
+      savedTracks.value = mergedList
+      persistTracks()
+      lastSyncTime.value = Date.now()
+    } catch (err: any) {
+      console.warn('[gpsTrackStore] Feil ved synkronisering mot Firebase:', err)
+      syncError.value = err?.message || 'Kunne ikke hente spor fra skyen'
+    } finally {
+      isSyncing.value = false
     }
   }
 
@@ -129,12 +193,22 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
       distanceMeters,
       durationMs,
       startTime,
-      endTime
+      endTime,
+      firebaseKey: formatTrackKey(startTime)
     }
 
-    // Legg til øverst i listen
+    // Legg til øverst i listen og lagre lokalt umiddelbart
     savedTracks.value.unshift(newTrack)
     persistTracks()
+
+    // Synkroniser til Firebase i bakgrunnen hvis innlogget
+    if (currentUserId.value && currentUserId.value !== 'guest') {
+      const { saveTrackToFirebase } = useFirebaseTracks()
+      saveTrackToFirebase(currentUserId.value, newTrack).catch((err) => {
+        console.warn('[gpsTrackStore] Lagring til Firebase feilet:', err)
+      })
+    }
+
     return newTrack
   }
 
@@ -143,11 +217,20 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
     const index = savedTracks.value.findIndex((t) => t.id === id)
     if (index === -1) return false
 
-    savedTracks.value.splice(index, 1)
+    const [deletedTrack] = savedTracks.value.splice(index, 1)
     if (activeTrackId.value === id) {
       activeTrackId.value = null
     }
     persistTracks()
+
+    // Slett fra Firebase i bakgrunnen hvis innlogget
+    if (deletedTrack && currentUserId.value && currentUserId.value !== 'guest') {
+      const { deleteTrackFromFirebase } = useFirebaseTracks()
+      deleteTrackFromFirebase(currentUserId.value, deletedTrack).catch((err) => {
+        console.warn('[gpsTrackStore] Sletting fra Firebase feilet:', err)
+      })
+    }
+
     return true
   }
 
@@ -158,6 +241,15 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
 
     track.name = newName.trim() || generateDefaultName(new Date(track.createdAt))
     persistTracks()
+
+    // Oppdater i Firebase i bakgrunnen hvis innlogget
+    if (currentUserId.value && currentUserId.value !== 'guest') {
+      const { renameTrackInFirebase } = useFirebaseTracks()
+      renameTrackInFirebase(currentUserId.value, track, track.name).catch((err) => {
+        console.warn('[gpsTrackStore] Omdøping i Firebase feilet:', err)
+      })
+    }
+
     return true
   }
 
@@ -242,8 +334,12 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
     savedTracks,
     activeTrackId,
     activeTrack,
+    isSyncing,
+    syncError,
+    lastSyncTime,
     setUser,
     loadTracks,
+    syncTracksWithFirebase,
     saveTrack,
     deleteTrack,
     renameTrack,

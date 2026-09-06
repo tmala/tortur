@@ -120,4 +120,18 @@ describe('useGpsTrackStore', () => {
     store.viewTrackOnMap(saved!.id)
     expect(store.activeTrackId).toBeNull()
   })
+
+  it('sets firebaseKey with ISO format without dots when saving a track', () => {
+    const store = useGpsTrackStore()
+    const points: TrackPoint[] = [
+      { lat: 60.3913, lng: 5.3221, timestamp: 1725450000000 }
+    ]
+
+    const saved = store.saveTrack(points, 'ISO-tur')
+    expect(saved).not.toBeNull()
+    expect(saved?.firebaseKey).toBeDefined()
+    // Sjekk at nøkkelen ikke inneholder forbudte Firebase-tegn som punktum
+    expect(saved?.firebaseKey).not.toContain('.')
+    expect(saved?.firebaseKey).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}_\d{3}Z$/)
+  })
 })
