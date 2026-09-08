@@ -348,6 +348,7 @@ turpostId;turpostNavn;latitude;longitude;altitude;fylke;kommune
 640e39ca5294a1a62e4d1dd5;Benken;59.479842;7.367923;1002;Agder;Bykle
 65bff1d42e99e976a117c5e0;Benken oppå legene;62.043213;5.537917;154;Møre og Romsdal;Vanylven
 674b40bfab92ef8b5e50cd11;Benken ved Bergmannsstien;59.640071;9.606223;405;Buskerud;Kongsberg
+490f7b0db5dff9382e2ceef8;Benken ved Liavatnet;60.474212;5.340124;87;Vestland;Bergen
 60df89943849448474e5e57d;Benkene;62.40792;7.09593;1185;Møre og Romsdal;Fjord
 60df89b83849448474e5e5b8;Bentsjordtinden;69.51188;18.61845;1168;Troms;Tromsø
 60df8a723849448474e5e6f7;Bentsjordtinden, nordre;69.51532;18.64126;1096;Troms;Tromsø
@@ -5989,6 +5990,7 @@ a91c3aa1c9cae877730762c5;Hafskorsundet;60.244612;5.662036;3;Vestland;Bjørnafjor
 60df86d43849448474e5e0da;Koll;60.1004;7.05258;1518;Vestland;Ullensvang
 6341c0300e1c966903db5723;Koll;59.212759;6.060913;363;Rogaland;Hjelmeland
 60df85e7e72fbe83218127bc;Kolla;62.2918;9.48653;1651;Trøndelag;Oppdal
+c96a2982d04242f23ffd33bc;Kollbudalen;60.475161;5.269724;175;Vestland;Bergen
 60df88213849448474e5e310;Kollefjellet;62.02763;6.27077;1344;Møre og Romsdal;Volda
 60df86e03849448474e5e0ee;Kollen;62.25564;7.63303;1513;Møre og Romsdal;Fjord
 60f4a422557645106ab07943;Kollen;68.67052214830044;15.522136688232424;304;Nordland;Sortland

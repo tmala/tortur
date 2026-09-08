@@ -1,6 +1,6 @@
 {
   "name": "tortur",
-  "version": "0.1.05-beta",
+  "version": "0.1.06-beta",
   "private": true,
   "type": "module",
   "scripts": {
