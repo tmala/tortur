@@ -100,8 +100,8 @@ function doPost(e) {
       return handleDeleteCheckin(body)
     }
 
-    if (action === 'update_checkin_image') {
-      return handleUpdateCheckinImage(body)
+    if (action === 'update_checkin' || action === 'update_checkin_image') {
+      return handleUpdateCheckin(body)
     }
 
     if (action === 'getconfig' || action === 'config') {
@@ -531,12 +531,12 @@ function handleDeleteCheckin(body) {
 }
 
 // =============================================================================
-// handleUpdateCheckinImage
-// Oppdaterer eller fjerner turbildet for en innsjekking i Google Regneark og Firebase,
-// samt sletter gammelt bilde fra Google Drive og laster opp eventuelt nytt bilde.
+// handleUpdateCheckin
+// Oppdaterer turbeskrivelse og/eller turbildet for en innsjekking i Google Regneark og Firebase,
+// samt sletter gammelt bilde fra Google Drive dersom det erstattes eller fjernes.
 // Kun eieren av innsjekkingen (UserID) har tillatelse til å oppdatere den.
 // =============================================================================
-function handleUpdateCheckinImage(body) {
+function handleUpdateCheckin(body) {
   var turpostId = body.turpostId
   var checkinId = body.checkinId
   var timestamp = body.timestamp
@@ -553,20 +553,20 @@ function handleUpdateCheckinImage(body) {
   if (!userId) {
     return jsonResponse({
       success: false,
-      error: 'Ugyldig eller manglende brukeridentifikator for bildeoppdatering.',
+      error: 'Ugyldig eller manglende brukeridentifikator for oppdatering.',
     })
   }
 
   if (!turpostId && !checkinId) {
     return jsonResponse({
       success: false,
-      error: 'Mangler turpostId eller checkinId for bildeoppdatering.',
+      error: 'Mangler turpostId eller checkinId for oppdatering.',
     })
   }
 
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
   var innsjekkSheet = ss.getSheetByName(SHEET_INNSJEKK)
-  var updatedImageUrl = ''
+  var updatedImageUrl = undefined
   var foundRowIndex = -1
   var oldImageUrl = ''
 
@@ -604,27 +604,34 @@ function handleUpdateCheckinImage(body) {
     }
   }
 
-  // 1. Slett gammelt bilde fra Google Drive hvis det finnes
-  if (oldImageUrl) {
-    var oldFileId = extractDriveFileId(oldImageUrl)
-    if (oldFileId) {
-      deleteDriveFile(oldFileId)
+  // 1. Beskrivelse
+  var updatedDescription = body.description !== undefined ? body.description.toString().trim() : undefined
+  if (foundRowIndex > 0 && innsjekkSheet && updatedDescription !== undefined) {
+    innsjekkSheet.getRange(foundRowIndex, COL_INNSJEKK_DESC).setValue(updatedDescription)
+  }
+
+  // 2. Bildehåndtering
+  if (body.image && body.image.base64) {
+    if (oldImageUrl) {
+      var oldFileId = extractDriveFileId(oldImageUrl)
+      if (oldFileId) deleteDriveFile(oldFileId)
+    }
+    updatedImageUrl = uploadCheckinImage(ss, turpostId, body.image)
+    if (foundRowIndex > 0 && innsjekkSheet) {
+      innsjekkSheet.getRange(foundRowIndex, COL_INNSJEKK_IMAGE_URL).setValue(updatedImageUrl)
+    }
+  } else if (body.removeImage === true) {
+    if (oldImageUrl) {
+      var oldFileId = extractDriveFileId(oldImageUrl)
+      if (oldFileId) deleteDriveFile(oldFileId)
+    }
+    updatedImageUrl = ''
+    if (foundRowIndex > 0 && innsjekkSheet) {
+      innsjekkSheet.getRange(foundRowIndex, COL_INNSJEKK_IMAGE_URL).setValue('')
     }
   }
 
-  // 2. Hvis nytt bilde er oppgitt, last opp til Google Drive
-  if (body.image && body.image.base64) {
-    updatedImageUrl = uploadCheckinImage(ss, turpostId, body.image)
-  } else {
-    updatedImageUrl = ''
-  }
-
-  // 3. Oppdater rad i regnearket hvis funnet
-  if (foundRowIndex > 0 && innsjekkSheet) {
-    innsjekkSheet.getRange(foundRowIndex, COL_INNSJEKK_IMAGE_URL).setValue(updatedImageUrl)
-  }
-
-  // 4. Oppdater Firebase Realtime Database hvis konfigurert
+  // 3. Oppdater Firebase Realtime Database hvis konfigurert
   try {
     var sysConfig = getSystemConfig(ss)
     var firebaseUrl = (sysConfig.FIREBASE_DB_URL || '').toString().trim().replace(/\/$/, '')
@@ -634,46 +641,62 @@ function handleUpdateCheckinImage(body) {
       .replace(/^\/|\/$/g, '')
 
     if (firebaseUrl && secretPrefix && checkinId) {
-      var fetchOptions = {
-        method: 'patch',
-        contentType: 'application/json',
-        payload: JSON.stringify({ imageUrl: updatedImageUrl }),
-        muteHttpExceptions: true,
+      var patchPayload = {}
+      if (updatedDescription !== undefined) {
+        patchPayload.description = updatedDescription
+      }
+      if (updatedImageUrl !== undefined) {
+        patchPayload.imageUrl = updatedImageUrl
       }
 
-      if (turpostId) {
-        var turpostUrl =
+      if (Object.keys(patchPayload).length > 0) {
+        var fetchOptions = {
+          method: 'patch',
+          contentType: 'application/json',
+          payload: JSON.stringify(patchPayload),
+          muteHttpExceptions: true,
+        }
+
+        if (turpostId) {
+          var turpostUrl =
+            firebaseUrl +
+            '/' +
+            secretPrefix +
+            '/turposter/' +
+            encodeURIComponent(turpostId) +
+            '/' +
+            encodeURIComponent(checkinId) +
+            '.json'
+          UrlFetchApp.fetch(turpostUrl, fetchOptions)
+        }
+
+        var brukerUrl =
           firebaseUrl +
           '/' +
           secretPrefix +
-          '/turposter/' +
-          encodeURIComponent(turpostId) +
+          '/brukere/' +
+          encodeURIComponent(userId) +
           '/' +
           encodeURIComponent(checkinId) +
           '.json'
-        UrlFetchApp.fetch(turpostUrl, fetchOptions)
+        UrlFetchApp.fetch(brukerUrl, fetchOptions)
       }
-
-      var brukerUrl =
-        firebaseUrl +
-        '/' +
-        secretPrefix +
-        '/brukere/' +
-        encodeURIComponent(userId) +
-        '/' +
-        encodeURIComponent(checkinId) +
-        '.json'
-      UrlFetchApp.fetch(brukerUrl, fetchOptions)
     }
   } catch (fbErr) {
-    Logger.log('Feil ved bildeoppdatering i Firebase: ' + fbErr.message)
+    Logger.log('Feil ved oppdatering i Firebase: ' + fbErr.message)
   }
 
   return jsonResponse({
     success: true,
     checkinId: checkinId,
-    imageUrl: updatedImageUrl,
+    description: updatedDescription,
+    imageUrl: updatedImageUrl !== undefined ? updatedImageUrl : oldImageUrl,
   })
+}
+
+// Bakoverkompatibilitet
+function handleUpdateCheckinImage(body) {
+  return handleUpdateCheckin(body)
 }
 
 // =============================================================================

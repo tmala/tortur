@@ -351,19 +351,21 @@ async function deletePublicCheckin(params: {
 }
 
 // =============================================================================
-// Oppdater eller fjern bilde på en offentlig innsjekking
+// Oppdater offentlig innsjekking (beskrivelse og/eller bilde)
 // =============================================================================
-async function updatePublicCheckinImage(params: {
+async function updatePublicCheckin(params: {
   turpostId: string | number
   checkinId: string
   timestamp?: string
+  description?: string
   imageFile?: File | null
-}): Promise<string> {
+  removeImage?: boolean
+}): Promise<{ imageUrl?: string; description?: string }> {
   if (!user.value) {
-    throw new Error('Du må være innlogget for å oppdatere bilde.')
+    throw new Error('Du må være innlogget for å oppdatere en innsjekking.')
   }
 
-  let newImageUrl = ''
+  let finalImageUrl: string | undefined = undefined
 
   if (APPSCRIPT_URL) {
     let imagePayload: { base64: string; mimeType: string; fileName: string } | null = null
@@ -377,13 +379,15 @@ async function updatePublicCheckinImage(params: {
     }
 
     const payload = {
-      action: 'update_checkin_image',
+      action: 'update_checkin',
       idToken: currentIdToken.value || undefined,
       userId: user.value.userId,
       turpostId: String(params.turpostId),
       checkinId: params.checkinId,
       timestamp: params.timestamp,
-      image: imagePayload
+      description: params.description,
+      image: imagePayload,
+      removeImage: params.removeImage
     }
 
     const response = await fetch(APPSCRIPT_URL, {
@@ -405,29 +409,60 @@ async function updatePublicCheckinImage(params: {
     }
 
     if (!data.success) {
-      throw new Error(data.error || 'Oppdatering av bilde feilet.')
+      throw new Error(data.error || 'Oppdatering av innsjekking feilet.')
     }
 
-    newImageUrl = data.imageUrl || ''
+    finalImageUrl = data.imageUrl
   }
 
-  // Synkroniser direkte til Firebase RTDB for å sikre oppdatering
+  // Synkroniser direkte til Firebase RTDB for å sikre umiddelbar oppdatering
   const fbConfig = await getFirebaseConfig()
   if (fbConfig && params.checkinId) {
     try {
-      const patchBody = JSON.stringify({ imageUrl: newImageUrl })
-      const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(params.checkinId)}.json`
-      const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(params.checkinId)}.json`
-      await Promise.all([
-        fetch(turpostUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody }),
-        fetch(userUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody })
-      ])
+      const patchData: Record<string, any> = {}
+      if (params.description !== undefined) {
+        patchData.description = params.description
+      }
+      if (params.removeImage) {
+        patchData.imageUrl = ''
+      } else if (finalImageUrl !== undefined) {
+        patchData.imageUrl = finalImageUrl
+      }
+
+      if (Object.keys(patchData).length > 0) {
+        const patchBody = JSON.stringify(patchData)
+        const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(params.checkinId)}.json`
+        const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(params.checkinId)}.json`
+        await Promise.all([
+          fetch(turpostUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody }),
+          fetch(userUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody })
+        ])
+      }
     } catch (err) {
       console.warn('[useAuth] Feil ved direkte oppdatering i Firebase:', err)
     }
   }
 
-  return newImageUrl
+  return { imageUrl: finalImageUrl, description: params.description }
+}
+
+// =============================================================================
+// Oppdater eller fjern bilde på en offentlig innsjekking
+// =============================================================================
+async function updatePublicCheckinImage(params: {
+  turpostId: string | number
+  checkinId: string
+  timestamp?: string
+  imageFile?: File | null
+}): Promise<string> {
+  const res = await updatePublicCheckin({
+    turpostId: params.turpostId,
+    checkinId: params.checkinId,
+    timestamp: params.timestamp,
+    imageFile: params.imageFile,
+    removeImage: params.imageFile === null
+  })
+  return res.imageUrl || ''
 }
 
 // =============================================================================
@@ -564,6 +599,7 @@ export function useAuth() {
     logout,
     submitCheckin,
     deletePublicCheckin,
+    updatePublicCheckin,
     updatePublicCheckinImage,
     fetchTurpostCheckins,
     fetchMyCheckins,

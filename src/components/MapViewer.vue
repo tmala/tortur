@@ -206,35 +206,31 @@ const switchLayer = (layerKey: string) => {
 }
 
 const updateUserMarker = (loc: GeoLocationState | null) => {
-  if (!map || !loc) return
+  if (!map) return
+
+  if (!loc) {
+    if (userMarker) {
+      map.removeLayer(userMarker)
+      userMarker = null
+    }
+    if (accuracyCircle) {
+      map.removeLayer(accuracyCircle)
+      accuracyCircle = null
+    }
+    return
+  }
 
   const latLng: L.LatLngExpression = [loc.lat, loc.lng]
 
   if (!userMarker) {
     userMarker = L.marker(latLng, {
       icon: createUserIcon(loc.heading),
-      zIndexOffset: 1000
+      interactive: false,
+      zIndexOffset: 400
     }).addTo(map)
-
-    userMarker.bindPopup(`
-      <div style="font-family: inherit; font-size: 13px; color: #f8fafc; line-height: 1.4;">
-        <strong style="color: #38bdf8;">Du er her</strong><br/>
-        Lat: ${loc.lat.toFixed(5)}<br/>
-        Lng: ${loc.lng.toFixed(5)}<br/>
-        ${loc.accuracy ? `Nøyaktighet: ±${Math.round(loc.accuracy)} meter` : ''}
-      </div>
-    `)
   } else {
     userMarker.setLatLng(latLng)
     userMarker.setIcon(createUserIcon(loc.heading))
-    userMarker.setPopupContent(`
-      <div style="font-family: inherit; font-size: 13px; color: #f8fafc; line-height: 1.4;">
-        <strong style="color: #38bdf8;">Du er her</strong><br/>
-        Lat: ${loc.lat.toFixed(5)}<br/>
-        Lng: ${loc.lng.toFixed(5)}<br/>
-        ${loc.accuracy ? `Nøyaktighet: ±${Math.round(loc.accuracy)} meter` : ''}
-      </div>
-    `)
   }
 
   if (loc.accuracy && loc.accuracy > 0) {
@@ -245,7 +241,8 @@ const updateUserMarker = (loc: GeoLocationState | null) => {
         fillColor: '#38bdf8',
         fillOpacity: 0.15,
         weight: 1.5,
-        dashArray: '4, 4'
+        dashArray: '4, 4',
+        interactive: false
       }).addTo(map)
     } else {
       accuracyCircle.setLatLng(latLng)

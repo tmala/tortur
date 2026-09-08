@@ -105,10 +105,10 @@ describe('Checkin deletion and image updates', () => {
 
     expect(resultUrl).toBe('https://lh3.googleusercontent.com/d/file123')
 
-    // Should call Apps Script with update_checkin_image
+    // Should call Apps Script with update_checkin or update_checkin_image
     const appsScriptCall = fetchSpy.mock.calls.find(c => {
       const body = typeof c[1]?.body === 'string' ? JSON.parse(c[1].body) : null
-      return body?.action === 'update_checkin_image'
+      return body?.action === 'update_checkin' || body?.action === 'update_checkin_image'
     })
     expect(appsScriptCall).toBeDefined()
 
@@ -119,6 +119,60 @@ describe('Checkin deletion and image updates', () => {
     expect(fbTurpostPatch).toBeDefined()
     const patchBody = JSON.parse(fbTurpostPatch![1]?.body as string)
     expect(patchBody.imageUrl).toBe('https://lh3.googleusercontent.com/d/file123')
+  })
+
+  it('updatePublicCheckin updates description and removes image', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+      if (typeof url === 'string' && url.includes('script.google.com')) {
+        return {
+          ok: true,
+          text: async () => JSON.stringify({ success: true, checkinId: 'c_103' }),
+          json: async () => ({ success: true, checkinId: 'c_103' })
+        } as any
+      }
+      return {
+        ok: true,
+        text: async () => JSON.stringify({}),
+        json: async () => ({})
+      } as any
+    })
+
+    const { user, systemConfig, updatePublicCheckin } = useAuth()
+    user.value = {
+      userId: 'test_user_sub',
+      userName: 'Test User',
+      email: 'test@example.com',
+      avatarUrl: '',
+      lastLogin: new Date().toISOString()
+    }
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    await updatePublicCheckin({
+      turpostId: '789',
+      checkinId: 'c_103',
+      description: 'Fin tur til toppen!',
+      removeImage: true
+    })
+
+    const appsScriptCall = fetchSpy.mock.calls.find(c => {
+      const body = typeof c[1]?.body === 'string' ? JSON.parse(c[1].body) : null
+      return body?.action === 'update_checkin'
+    })
+    expect(appsScriptCall).toBeDefined()
+    const payload = JSON.parse(appsScriptCall![1]?.body as string)
+    expect(payload.description).toBe('Fin tur til toppen!')
+    expect(payload.removeImage).toBe(true)
+
+    const fbTurpostPatch = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/turposter/789/c_103.json') && c[1]?.method === 'PATCH'
+    )
+    expect(fbTurpostPatch).toBeDefined()
+    const patchBody = JSON.parse(fbTurpostPatch![1]?.body as string)
+    expect(patchBody.description).toBe('Fin tur til toppen!')
+    expect(patchBody.imageUrl).toBe('')
   })
 
   it('updatePrivateCheckinImage patches imageUrl in user private checkins', async () => {

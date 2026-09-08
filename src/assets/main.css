@@ -55,11 +55,13 @@ body,
 }
 
 /* Custom User Location Marker Pulsing Animation */
+.custom-user-pin,
 .user-location-marker {
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
+  pointer-events: none !important;
 }
 
 .user-location-marker .pulse-ring {

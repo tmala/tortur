@@ -16,12 +16,12 @@ import {
   Route,
   Star,
   ClipboardList,
-  Trash2,
-  Camera,
-  Loader2
+  Loader2,
+  Pencil
 } from 'lucide-vue-next'
 import { useAuth, type GoogleUser, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
+import EditCheckinModal from './EditCheckinModal.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -47,76 +47,20 @@ const emit = defineEmits<{
   (e: 'checkin-updated'): void
 }>()
 
-const { deletePublicCheckin, updatePublicCheckinImage } = useAuth()
-const { deletePrivateCheckin, updatePrivateCheckinImage } = usePrivateTurposter()
+const { deletePublicCheckin } = useAuth()
+const { deletePrivateCheckin } = usePrivateTurposter()
 
 const isActionLoading = ref<string | null>(null)
-const fileInputRef = ref<HTMLInputElement | null>(null)
-const activeTargetCheckin = ref<FirebaseCheckinItem | null>(null)
+const editingCheckin = ref<FirebaseCheckinItem | null>(null)
 
-function triggerImagePicker(item: FirebaseCheckinItem) {
-  activeTargetCheckin.value = item
-  if (fileInputRef.value) {
-    fileInputRef.value.value = ''
-    fileInputRef.value.click()
-  }
+function handleCheckinEdited(updatedItem: FirebaseCheckinItem) {
+  emit('checkin-updated')
+  editingCheckin.value = null
 }
 
-async function handleImageFileSelected(e: Event) {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file || !activeTargetCheckin.value) return
-
-  const item = activeTargetCheckin.value
-  isActionLoading.value = item.id
-
-  try {
-    if (item.isPrivate) {
-      if (!props.user) return
-      const newUrl = await updatePrivateCheckinImage(props.user.userId, item.spotId || item.turpostId, item.id, file)
-      item.imageUrl = newUrl
-    } else {
-      const newUrl = await updatePublicCheckinImage({
-        turpostId: item.turpostId,
-        checkinId: item.id,
-        timestamp: item.timestamp,
-        imageFile: file
-      })
-      item.imageUrl = newUrl
-    }
-    emit('checkin-updated')
-  } catch (err: any) {
-    alert(err?.message || 'Kunne ikke oppdatere bildet.')
-  } finally {
-    isActionLoading.value = null
-    activeTargetCheckin.value = null
-  }
-}
-
-async function handleRemoveImage(item: FirebaseCheckinItem) {
-  if (!confirm('Er du sikker på at du vil fjerne bildet fra denne innsjekkingen?')) return
-  isActionLoading.value = item.id
-
-  try {
-    if (item.isPrivate) {
-      if (!props.user) return
-      await updatePrivateCheckinImage(props.user.userId, item.spotId || item.turpostId, item.id, null)
-      item.imageUrl = ''
-    } else {
-      await updatePublicCheckinImage({
-        turpostId: item.turpostId,
-        checkinId: item.id,
-        timestamp: item.timestamp,
-        imageFile: null
-      })
-      item.imageUrl = ''
-    }
-    emit('checkin-updated')
-  } catch (err: any) {
-    alert(err?.message || 'Kunne ikke fjerne bildet.')
-  } finally {
-    isActionLoading.value = null
-  }
+function handleCheckinDeleted(deletedId: string) {
+  emit('checkin-deleted', deletedId)
+  editingCheckin.value = null
 }
 
 async function handleDeleteCheckin(item: FirebaseCheckinItem) {
@@ -606,36 +550,11 @@ onUnmounted(() => {
                       <button
                         type="button"
                         class="btn-checkin-action"
-                        :disabled="isActionLoading === item.id"
-                        @click.stop="triggerImagePicker(item)"
-                        :title="item.imageUrl ? 'Bytt ut turbildet' : 'Legg til turbilde'"
+                        @click.stop="editingCheckin = item"
+                        title="Rediger eller slett denne innsjekkingen"
                       >
-                        <Camera :size="12" />
-                        <span>{{ item.imageUrl ? 'Endre bilde' : 'Legg til bilde' }}</span>
-                      </button>
-
-                      <button
-                        v-if="item.imageUrl"
-                        type="button"
-                        class="btn-checkin-action danger-subtle"
-                        :disabled="isActionLoading === item.id"
-                        @click.stop="handleRemoveImage(item)"
-                        title="Fjern bildet fra innsjekkingen"
-                      >
-                        <X :size="12" />
-                        <span>Fjern bilde</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        class="btn-checkin-action danger"
-                        :disabled="isActionLoading === item.id"
-                        @click.stop="handleDeleteCheckin(item)"
-                        title="Slett denne innsjekkingen"
-                      >
-                        <Loader2 v-if="isActionLoading === item.id" class="spinner" :size="12" />
-                        <Trash2 v-else :size="12" />
-                        <span>Slett</span>
+                        <Pencil :size="12" />
+                        <span>Edit</span>
                       </button>
                     </div>
                   </div>
@@ -645,13 +564,15 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Skjult filvelger for bildeendring -->
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept="image/*"
-          style="display: none"
-          @change="handleImageFileSelected"
+        <!-- Redigeringsmodal for innsjekking -->
+        <EditCheckinModal
+          :is-open="!!editingCheckin"
+          :checkin="editingCheckin"
+          :turpost-name="editingCheckin?.turpostName"
+          :is-private="editingCheckin?.isPrivate"
+          @close="editingCheckin = null"
+          @saved="handleCheckinEdited"
+          @deleted="handleCheckinDeleted"
         />
 
         <!-- Lightbox for fullskjermvisning av turbilder -->

@@ -295,6 +295,52 @@ export function usePrivateTurposter() {
   }
 
   /**
+   * Oppdaterer en privat innsjekking (beskrivelse og/eller bilde).
+   */
+  async function updatePrivateCheckin(
+    userId: string,
+    spotId: string,
+    checkinId: string,
+    params: {
+      description?: string
+      imageFile?: File | null
+      removeImage?: boolean
+    }
+  ): Promise<{ imageUrl?: string; description?: string }> {
+    if (!userId || userId === 'guest' || !spotId || !checkinId) {
+      throw new Error('Mangler parametre for oppdatering av privat innsjekking.')
+    }
+    const config = await getFirebaseConfig()
+    if (!config) {
+      throw new Error('Firebase-konfigurasjon er ikke tilgjengelig.')
+    }
+
+    const patchData: Record<string, any> = {}
+    if (params.description !== undefined) {
+      patchData.description = params.description
+    }
+
+    if (params.imageFile) {
+      patchData.imageUrl = await fileToDataUrl(params.imageFile)
+    } else if (params.removeImage) {
+      patchData.imageUrl = ''
+    }
+
+    const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}/${encodeURIComponent(checkinId)}.json`
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patchData)
+    })
+
+    if (!res.ok) {
+      throw new Error(`Kunne ikke oppdatere privat innsjekking (status ${res.status})`)
+    }
+
+    return { imageUrl: patchData.imageUrl, description: patchData.description }
+  }
+
+  /**
    * Oppdaterer eller fjerner turbildet for en privat innsjekking.
    */
   async function updatePrivateCheckinImage(
@@ -303,31 +349,11 @@ export function usePrivateTurposter() {
     checkinId: string,
     imageFile?: File | null
   ): Promise<string> {
-    if (!userId || userId === 'guest' || !spotId || !checkinId) {
-      throw new Error('Mangler parametre for oppdatering av privat turbilde.')
-    }
-    const config = await getFirebaseConfig()
-    if (!config) {
-      throw new Error('Firebase-konfigurasjon er ikke tilgjengelig.')
-    }
-
-    let photoUrl = ''
-    if (imageFile) {
-      photoUrl = await fileToDataUrl(imageFile)
-    }
-
-    const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}/${encodeURIComponent(checkinId)}.json`
-    const res = await fetch(url, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageUrl: photoUrl })
+    const res = await updatePrivateCheckin(userId, spotId, checkinId, {
+      imageFile,
+      removeImage: imageFile === null
     })
-
-    if (!res.ok) {
-      throw new Error(`Kunne ikke oppdatere bilde på privat innsjekking (status ${res.status})`)
-    }
-
-    return photoUrl
+    return res.imageUrl || ''
   }
 
   /**
@@ -563,6 +589,7 @@ export function usePrivateTurposter() {
     fetchMyPrivateCheckins,
     fetchPrivateCheckinsForSpot,
     deletePrivateCheckin,
+    updatePrivateCheckin,
     updatePrivateCheckinImage,
     submitPrivateCheckin,
     fetchSpotSuggestions,
