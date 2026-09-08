@@ -6,6 +6,16 @@ export interface TurpostItem {
   lat: number
   lng: number
   alt: number | null
+  fylke?: string
+  kommune?: string
+  isPrivate?: boolean
+  ownerId?: string
+  ownerName?: string
+  createdAt?: string
+  suggestedForPublic?: boolean
+  status?: 'private' | 'pending' | 'approved'
+  csvLine?: string
+  csvLineHint?: string
 }
 
 export interface KommuneInfo {

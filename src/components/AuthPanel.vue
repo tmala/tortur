@@ -206,8 +206,7 @@ onUnmounted(() => {
   padding: 12px;
   border-radius: 12px;
   z-index: 9999;
-  backdrop-filter: blur(16px);
-  background: rgba(15, 23, 42, 0.96);
+  background: #0f172a;
   border: 1px solid rgba(56, 189, 248, 0.25);
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
 }
@@ -336,9 +335,7 @@ onUnmounted(() => {
   inset: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -353,8 +350,6 @@ onUnmounted(() => {
   padding: 36px 28px 24px;
   border-radius: 20px;
   background: rgba(15, 23, 42, 0.98);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(56, 189, 248, 0.25);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
   text-align: center;

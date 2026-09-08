@@ -7,10 +7,13 @@ import CheckinModal from './components/CheckinModal.vue'
 import TurpostCheckinsModal from './components/TurpostCheckinsModal.vue'
 import UserProfileModal from './components/UserProfileModal.vue'
 import AdminAddTurpostModal from './components/AdminAddTurpostModal.vue'
+import MySpotsModal from './components/MySpotsModal.vue'
+import SpotSuggestionsModal from './components/SpotSuggestionsModal.vue'
 import GpsTrackModal from './components/GpsTrackModal.vue'
 import SavedTracksPanel from './components/SavedTracksPanel.vue'
-import { useGeolocation } from './composables/useGeolocation'
+import { useGeolocation, calculateDistanceMeters } from './composables/useGeolocation'
 import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from './composables/useTurposter'
+import { usePrivateTurposter, type SpotSuggestion } from './composables/usePrivateTurposter'
 import { useAis } from './composables/useAis'
 import { useAuth, type FirebaseCheckinItem } from './composables/useAuth'
 import { useGeoDetect } from './composables/useGeoDetect'
@@ -83,7 +86,24 @@ function handleToggleAdminMode() {
   }
 }
 
-// Admin: ny turpost
+// Private turposter (my_spots) og innkommende forslag
+const {
+  fetchMySpots,
+  saveMySpot,
+  suggestExistingSpotForPublic,
+  deleteMySpot,
+  fetchMyPrivateCheckins,
+  fetchSpotSuggestions
+} = usePrivateTurposter()
+
+const mySpots = ref<TurpostItem[]>([])
+const isMySpotsLoading = ref(false)
+const isMySpotsOpen = ref(false)
+const isSpotSuggestionsOpen = ref(false)
+const spotSuggestionsCount = ref(0)
+const isAddSpotModeActive = ref(false)
+
+// Admin / Bruker: ny turpost (kart-klikk)
 const adminClickCoords = ref<{ lat: number; lng: number } | null>(null)
 
 function handleAdminMapClick(coords: { lat: number; lng: number }) {
@@ -91,17 +111,90 @@ function handleAdminMapClick(coords: { lat: number; lng: number }) {
   adminClickCoords.value = coords
 }
 
-// Brukerens egne innsjekkinger fra Firebase
+const loadMySpots = async () => {
+  if (!isLoggedIn.value || !user.value) {
+    mySpots.value = []
+    return
+  }
+  try {
+    isMySpotsLoading.value = true
+    mySpots.value = await fetchMySpots(user.value.userId)
+  } catch (err) {
+    console.warn('[App] Kunne ikke laste brukerens private turposter:', err)
+  } finally {
+    isMySpotsLoading.value = false
+  }
+}
+
+const loadSpotSuggestions = async () => {
+  if (!isAdmin.value) return
+  try {
+    const list = await fetchSpotSuggestions()
+    spotSuggestionsCount.value = list.length
+  } catch (err) {
+    console.warn('[App] Kunne ikke hente forslag:', err)
+  }
+}
+
+function handleSpotSaved(spot: TurpostItem) {
+  mySpots.value = [spot, ...mySpots.value.filter((s) => s.id !== spot.id)]
+  isAddSpotModeActive.value = false
+  adminClickCoords.value = null
+  if (isAdmin.value) {
+    loadSpotSuggestions()
+  }
+}
+
+async function handleSuggestExistingSpotForPublic(spot: TurpostItem) {
+  if (!user.value) return
+  try {
+    await suggestExistingSpotForPublic(user.value.userId, spot, {
+      name: user.value.userName || 'Ukjent bruker',
+      email: user.value.email || ''
+    })
+    alert(`Forslag om å gjøre «${spot.name}» til en offentlig turpost er sendt inn!`)
+    await loadMySpots()
+    if (isAdmin.value) {
+      await loadSpotSuggestions()
+    }
+  } catch (err: any) {
+    console.warn('[App] Kunne ikke foreslå turpost som offentlig:', err)
+    alert('Kunne ikke sende inn forslag: ' + (err?.message || 'Ukjent feil'))
+  }
+}
+
+async function handleDeletePrivateSpot(spotId: string) {
+  if (!user.value) return
+  try {
+    await deleteMySpot(user.value.userId, spotId)
+    mySpots.value = mySpots.value.filter((s) => s.id !== spotId)
+    await loadMyCheckins()
+  } catch (err) {
+    console.warn('[App] Kunne ikke slette privat turpost:', err)
+  }
+}
+
+function handleViewSpotOnMap(spot: TurpostItem | SpotSuggestion) {
+  if (mapViewerRef.value) {
+    mapViewerRef.value.panToCoordinate(spot.lat, spot.lng, 15)
+  }
+}
+
+// Brukerens egne innsjekkinger fra Firebase (både offentlige og private)
 const myCheckins = ref<FirebaseCheckinItem[]>([])
 const visitedTurpostIds = computed(() => new Set(myCheckins.value.map(c => String(c.turpostId))))
 
 const loadMyCheckins = async () => {
-  if (!isLoggedIn.value) {
+  if (!isLoggedIn.value || !user.value) {
     myCheckins.value = []
     return
   }
   try {
-    myCheckins.value = await fetchMyCheckins()
+    const [publicCheckins, privateCheckins] = await Promise.all([
+      fetchMyCheckins(),
+      fetchMyPrivateCheckins(user.value.userId)
+    ])
+    myCheckins.value = [...publicCheckins, ...privateCheckins]
   } catch (err) {
     console.warn('[App] Kunne ikke laste brukerens innsjekkinger:', err)
   }
@@ -112,8 +205,14 @@ watch(
   (loggedIn) => {
     if (loggedIn) {
       loadMyCheckins()
+      loadMySpots()
+      if (isAdmin.value) {
+        loadSpotSuggestions()
+      }
     } else {
       myCheckins.value = []
+      mySpots.value = []
+      spotSuggestionsCount.value = 0
     }
   },
   { immediate: true }
@@ -123,8 +222,21 @@ const handleOpenCheckin = (post: TurpostItem) => {
   activeCheckinPost.value = post
 }
 
-const handleViewCheckins = (post: TurpostItem) => {
+const activeMatchingPrivateSpot = ref<TurpostItem | null>(null)
+const activeViewCheckinsTab = ref<'public' | 'private' | undefined>(undefined)
+
+const handleViewCheckins = (
+  post: TurpostItem,
+  initialTab?: 'public' | 'private',
+  matchingPrivate?: TurpostItem | null
+) => {
   activeViewCheckinsPost.value = post
+  activeViewCheckinsTab.value = initialTab
+  activeMatchingPrivateSpot.value = matchingPrivate || (
+    !post.isPrivate
+      ? (mySpots.value.find(s => String(s.id) === String(post.id) || (calculateDistanceMeters(s.lat, s.lng, post.lat, post.lng) < 15)) || null)
+      : null
+  )
 }
 
 const handleOpenProfile = async () => {
@@ -466,6 +578,12 @@ onUnmounted(() => {
 <template>
   <main class="app-root">
 
+    <!-- Banner når brukeren skal klikke i kartet for å legge til turpost -->
+    <div v-if="isAddSpotModeActive" class="add-spot-banner">
+      <span>📍 Klikk hvor som helst i kartet for å plassere turposten</span>
+      <button class="btn-cancel-add-spot" @click="isAddSpotModeActive = false">✕ Avbryt</button>
+    </div>
+
     <MapViewer
       ref="mapViewerRef"
       :user-location="coords"
@@ -473,6 +591,8 @@ onUnmounted(() => {
       :is-tracking="isTracking"
       :track-points="displayedTrackPoints"
       :turposter="turposter"
+      :private-turposter="mySpots"
+      :is-add-spot-active="isAddSpotModeActive"
       :show-municipalities="showMunicipalities"
       :selected-kommune-name="selectedKommune ? selectedKommune.name : null"
       :get-kommune-info="getKommuneInfo"
@@ -491,6 +611,7 @@ onUnmounted(() => {
       @select-kommune-by-name="handleSelectKommuneByName"
       @clear-turposter="handleClearAllTurposter"
       @admin-map-click="handleAdminMapClick"
+      @delete-private-spot="handleDeletePrivateSpot"
     />
 
     <LocationControls
@@ -517,11 +638,16 @@ onUnmounted(() => {
       :saved-tracks-count="trackStore.savedTracks.length"
       :is-saved-tracks-open="isSavedTracksOpen"
       :needs-update="needsUpdate"
+      :my-spots-count="mySpots.length"
+      :is-my-spots-open="isMySpotsOpen"
+      :is-add-spot-mode-active="isAddSpotModeActive"
       @locate="handleLocate"
       @toggle-tracking="handleToggleTracking"
       @clear-track="clearTrack"
       @open-track-modal="isTrackModalOpen = true"
       @open-saved-tracks="isSavedTracksOpen = !isSavedTracksOpen"
+      @open-my-spots="isMySpotsOpen = true"
+      @toggle-add-spot-mode="isAddSpotModeActive = !isAddSpotModeActive"
       @change-layer="handleChangeLayer"
       @clear-error="handleClearError"
       @toggle-turposter="handleToggleTurposter"
@@ -567,12 +693,16 @@ onUnmounted(() => {
     <TurpostCheckinsModal
       :is-open="!!activeViewCheckinsPost"
       :turpost="activeViewCheckinsPost"
+      :matching-private-spot="activeMatchingPrivateSpot"
       :is-logged-in="isLoggedIn"
       :has-visited="activeViewCheckinsPost ? visitedTurpostIds.has(String(activeViewCheckinsPost.id)) : false"
       :current-user-id="user?.userId"
       :user-location="coords"
-      @close="activeViewCheckinsPost = null"
-      @open-checkin="(post) => { activeViewCheckinsPost = null; activeCheckinPost = post }"
+      :initial-tab="activeViewCheckinsTab"
+      @close="activeViewCheckinsPost = null; activeMatchingPrivateSpot = null; activeViewCheckinsTab = undefined"
+      @open-checkin="(post: TurpostItem) => { activeViewCheckinsPost = null; activeCheckinPost = post }"
+      @private-checkin-deleted="loadMyCheckins"
+      @delete-private-spot="handleDeletePrivateSpot"
     />
 
     <!-- Profilvisning med brukerens innsjekkede turposter og utlogging -->
@@ -583,10 +713,35 @@ onUnmounted(() => {
       :is-admin="isAdmin"
       :is-admin-mode-active="adminModeActive"
       :saved-tracks-count="trackStore.savedTracks.length"
+      :my-spots-count="mySpots.length"
+      :spot-suggestions-count="spotSuggestionsCount"
       @close="isProfileOpen = false"
       @logout="handleLogoutFromProfile"
       @toggle-admin-mode="handleToggleAdminMode"
       @open-saved-tracks="isSavedTracksOpen = true"
+      @open-my-spots="isMySpotsOpen = true"
+      @open-spot-suggestions="isSpotSuggestionsOpen = true"
+    />
+
+    <!-- Mine turposter modal -->
+    <MySpotsModal
+      :is-open="isMySpotsOpen"
+      :spots="mySpots"
+      :is-loading="isMySpotsLoading"
+      @close="isMySpotsOpen = false"
+      @view-spot="handleViewSpotOnMap"
+      @delete-spot="handleDeletePrivateSpot"
+      @add-spot-click="isAddSpotModeActive = true"
+      @suggest-public="handleSuggestExistingSpotForPublic"
+      @view-checkins="(spot: TurpostItem) => handleViewCheckins(spot, 'private')"
+    />
+
+    <!-- Innkommende forslag til turposter (kun admin) -->
+    <SpotSuggestionsModal
+      v-if="isAdmin"
+      :is-open="isSpotSuggestionsOpen"
+      @close="isSpotSuggestionsOpen = false; loadSpotSuggestions()"
+      @view-spot="handleViewSpotOnMap"
     />
 
     <!-- Modal for GPS-sporlogg (last ned GPX eller slett) -->
@@ -611,13 +766,18 @@ onUnmounted(() => {
       @open-live-track-modal="isTrackModalOpen = true"
     />
 
-    <!-- Admin: Legg til ny turpost -->
+    <!-- Admin / Bruker: Legg til ny turpost -->
     <AdminAddTurpostModal
-      v-if="adminModeActive"
+      v-if="adminModeActive || isAddSpotModeActive"
       :is-open="!!adminClickCoords"
       :lat="adminClickCoords?.lat ?? 0"
       :lng="adminClickCoords?.lng ?? 0"
-      @close="adminClickCoords = null"
+      :is-admin="adminModeActive"
+      :user-id="user?.userId"
+      :user-name="user?.userName"
+      :user-email="user?.email"
+      @close="adminClickCoords = null; isAddSpotModeActive = false"
+      @spot-saved="handleSpotSaved"
     />
   </main>
 </template>
@@ -633,5 +793,41 @@ onUnmounted(() => {
   height: 100%;
   overflow: hidden;
   background-color: #0f172a;
+}
+
+.add-spot-banner {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  background: #0f172a;
+  border: 2px solid #a855f7;
+  border-radius: 30px;
+  padding: 8px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.btn-cancel-add-spot {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-cancel-add-spot:hover {
+  background: #ef4444;
+  color: #ffffff;
 }
 </style>

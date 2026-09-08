@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type GoogleUser, type CheckinResult } from '@/composables/useAuth'
+import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import {
   type GeoLocationState,
   calculateDistanceMeters,
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const { submitCheckin } = useAuth()
+const { submitPrivateCheckin } = usePrivateTurposter()
 
 const description = ref('')
 const selectedFile = ref<File | null>(null)
@@ -299,12 +301,27 @@ const handleSubmit = async () => {
   try {
     const fileToUpload = selectedFile.value
 
-    const result = await submitCheckin({
-      turpostId: props.turpost.id,
-      turpostName: props.turpost.name,
-      description: description.value.trim(),
-      imageFile: fileToUpload
-    })
+    let result: CheckinResult
+    if (props.turpost.isPrivate) {
+      if (!props.user) {
+        throw new Error('Du må være innlogget for å sjekke inn på en privat turpost.')
+      }
+      result = await submitPrivateCheckin({
+        userId: props.user.userId,
+        userName: props.user.userName,
+        userEmail: props.user.email,
+        post: props.turpost,
+        description: description.value.trim(),
+        imageFile: fileToUpload
+      })
+    } else {
+      result = await submitCheckin({
+        turpostId: props.turpost.id,
+        turpostName: props.turpost.name,
+        description: description.value.trim(),
+        imageFile: fileToUpload
+      })
+    }
 
     isSuccess.value = true
     emit('submitted', result)
@@ -559,9 +576,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.3);
   padding: 16px;
   box-sizing: border-box;
 }

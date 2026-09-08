@@ -13,7 +13,9 @@ import {
   ShieldCheck,
   RotateCw,
   ChevronDown,
-  Route
+  Route,
+  Star,
+  ClipboardList
 } from 'lucide-vue-next'
 import type { GoogleUser, FirebaseCheckinItem } from '@/composables/useAuth'
 
@@ -25,6 +27,8 @@ const props = defineProps<{
   isAdmin?: boolean
   isAdminModeActive?: boolean
   savedTracksCount?: number
+  mySpotsCount?: number
+  spotSuggestionsCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -33,6 +37,8 @@ const emit = defineEmits<{
   (e: 'refresh'): void
   (e: 'toggle-admin-mode'): void
   (e: 'open-saved-tracks'): void
+  (e: 'open-my-spots'): void
+  (e: 'open-spot-suggestions'): void
 }>()
 
 const isRefreshing = ref(false)
@@ -359,6 +365,47 @@ onUnmounted(() => {
             <span class="tracks-banner-arrow">Åpne sporliste →</span>
           </button>
 
+          <!-- Snarvei til Mine turposter -->
+          <button
+            class="profile-tracks-banner profile-spots-banner"
+            @click="emit('open-my-spots'); emit('close')"
+            title="Se og administrer dine egne turposter"
+          >
+            <div class="profile-tracks-left">
+              <div class="tracks-banner-icon spots-icon">
+                <Star :size="18" />
+              </div>
+              <div class="tracks-banner-texts">
+                <span class="tracks-banner-title">Mine turposter</span>
+                <span class="tracks-banner-sub">
+                  {{ mySpotsCount || 0 }} {{ (mySpotsCount || 0) === 1 ? 'privat turpost' : 'private turposter' }}
+                </span>
+              </div>
+            </div>
+            <span class="tracks-banner-arrow">Åpne turposter →</span>
+          </button>
+
+          <!-- For admin: Innkommende forslag til turposter -->
+          <button
+            v-if="props.isAdmin"
+            class="profile-tracks-banner profile-suggestions-banner"
+            @click="emit('open-spot-suggestions'); emit('close')"
+            title="Se innkommende forslag til nye turposter fra brukere"
+          >
+            <div class="profile-tracks-left">
+              <div class="tracks-banner-icon suggestions-icon">
+                <ClipboardList :size="18" />
+              </div>
+              <div class="tracks-banner-texts">
+                <span class="tracks-banner-title">Innkommende forslag til turposter</span>
+                <span class="tracks-banner-sub">
+                  {{ spotSuggestionsCount ? spotSuggestionsCount + ' venter på vurdering' : 'Vurder og legg inn nye turposter i mountains.csv' }}
+                </span>
+              </div>
+            </div>
+            <span class="tracks-banner-arrow">Vis forslag →</span>
+          </button>
+
           <!-- Seksjonstitel -->
           <div class="section-divider">
             <span class="section-title">Mine besøkte turposter (nyeste øverst)</span>
@@ -482,9 +529,7 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: rgba(10, 15, 29, 0.75);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -819,6 +864,34 @@ onUnmounted(() => {
   background: linear-gradient(135deg, rgba(249, 115, 22, 0.22), rgba(15, 23, 42, 0.9));
   border-color: #f97316;
   transform: translateY(-1px);
+}
+
+/* Snarvei-banner for Mine turposter */
+.profile-spots-banner {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(15, 23, 42, 0.8));
+  border-color: rgba(168, 85, 247, 0.35);
+}
+.profile-spots-banner:hover {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(15, 23, 42, 0.9));
+  border-color: #a855f7;
+}
+.tracks-banner-icon.spots-icon {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+}
+
+/* Snarvei-banner for Innkommende forslag */
+.profile-suggestions-banner {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.8));
+  border-color: rgba(245, 158, 11, 0.35);
+}
+.profile-suggestions-banner:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(15, 23, 42, 0.9));
+  border-color: #f59e0b;
+}
+.tracks-banner-icon.suggestions-icon {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
 }
 
 .profile-tracks-left {

@@ -60,6 +60,9 @@ async function buildData() {
   }
   fs.mkdirSync(turposterDir, { recursive: true })
 
+  // Kopier mountains.csv til public/data slik at admin kan slå opp linjenummer
+  fs.copyFileSync(csvPath, path.join(outDir, 'mountains.csv'))
+
   await ensureGeoJson()
 
   const fileStream = fs.createReadStream(csvPath, { encoding: 'utf-8' })

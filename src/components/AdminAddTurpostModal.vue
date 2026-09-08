@@ -12,7 +12,9 @@
       >
         <!-- Header -->
         <div class="admin-modal-header" @pointerdown="startDrag" title="Klikk og dra for å flytte">
-          <h2 id="admin-modal-title">🛠️ Legg til ny turpost</h2>
+          <h2 id="admin-modal-title">
+            {{ isAdmin ? '🛠️ Legg til ny turpost' : '📍 Legg til egen turpost' }}
+          </h2>
           <button class="admin-modal-close" @click="$emit('close')" aria-label="Lukk">✕</button>
         </div>
 
@@ -69,7 +71,7 @@
                 id="turpost-name"
                 v-model="turpostName"
                 type="text"
-                placeholder="F.eks. Storefjellet"
+                placeholder="F.eks. Stovefjellet"
                 class="admin-input"
                 @input="onInputChange"
               />
@@ -87,7 +89,9 @@
                 @input="onInputChange"
               />
             </div>
-            <div class="admin-form-row">
+
+            <!-- Turpost-ID (kun for admin) -->
+            <div v-if="isAdmin" class="admin-form-row">
               <label for="turpost-id">Turpost-ID</label>
               <div class="admin-id-row">
                 <input
@@ -101,11 +105,56 @@
               </div>
               <span class="admin-hint">24-tegns hex, identisk format som eksisterende IDer</span>
             </div>
+
+            <!-- Forslag til offentlig turpost (for vanlige innloggede brukere) -->
+            <div v-if="!isAdmin && userId" class="admin-checkbox-row">
+              <label class="custom-checkbox">
+                <input v-model="suggestForPublic" type="checkbox" />
+                <span class="checkbox-box"></span>
+                <span class="checkbox-text">Foreslå som offentlig turpost for godkjenning hos admin</span>
+              </label>
+            </div>
           </div>
         </div>
 
-        <!-- Resultat / CSV-snipp -->
-        <div v-if="csvLine" class="admin-result-section">
+        <!-- Lagre-seksjon for innlogget bruker (både vanlige brukere og admin) -->
+        <div v-if="userId && isFormValid" class="admin-save-section">
+          <div v-if="saveSuccessMessage" class="save-feedback success">
+            {{ saveSuccessMessage }}
+          </div>
+          <div v-if="saveErrorMessage" class="save-feedback error">
+            {{ saveErrorMessage }}
+          </div>
+
+          <div class="save-actions">
+            <button
+              class="btn-save-spot"
+              :disabled="isSavingSpot"
+              @click="handleSaveSpot"
+            >
+              <span v-if="isSavingSpot">⏳ Lagrer...</span>
+              <span v-else-if="!isAdmin && suggestForPublic">💾 Lagre og send inn forslag</span>
+              <span v-else>💾 Lagre i Mine turposter</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Resultat / CSV-snipp (KUN for admin) -->
+        <div v-if="isAdmin && csvLine" class="admin-result-section">
+          <!-- Anbefalt plassering i mountains.csv -->
+          <div v-if="csvPlacement" class="admin-placement-box">
+            <div class="placement-title">📍 Anbefalt plassering i <code>data/mountains.csv</code>:</div>
+            <div class="placement-detail">
+              Sett inn på <strong>linje {{ csvPlacement.lineNumber }}</strong>
+              <span v-if="csvPlacement.prevName">
+                (etter <em>«{{ csvPlacement.prevName }}»</em> på linje {{ csvPlacement.prevLineNumber }})
+              </span>
+              <span v-if="csvPlacement.nextName">
+                og før <em>«{{ csvPlacement.nextName }}»</em> på linje {{ csvPlacement.nextLineNumber }}
+              </span>
+            </div>
+          </div>
+
           <div class="admin-result-label">
             📋 Lim inn denne linjen i <code>data/mountains.csv</code>:
           </div>
@@ -117,12 +166,15 @@
           </button>
         </div>
 
-        <!-- Veiledning -->
-        <div class="admin-guide">
-          <div class="admin-guide-title">📖 Hva du må gjøre videre:</div>
+        <!-- Veiledning (KUN for admin) -->
+        <div v-if="isAdmin" class="admin-guide">
+          <div class="admin-guide-title">📖 Hva du må gjøre videre som admin:</div>
           <ol class="admin-guide-list">
             <li>Kopier CSV-linjen ovenfor</li>
-            <li>Lim den inn i <code>data/mountains.csv</code> (alfabetisk etter navn innen kommunen)</li>
+            <li>
+              Lim den inn i <code>data/mountains.csv</code>
+              <span v-if="csvPlacement">på linje {{ csvPlacement.lineNumber }}</span>
+            </li>
             <li>Kjør: <code>npm run build</code></li>
             <li>Kjør: <code>npm run deploy</code></li>
           </ol>
@@ -138,25 +190,41 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { useGeoDetect, type GeoResult } from '@/composables/useGeoDetect'
+import { usePrivateTurposter, type CsvPlacementResult } from '@/composables/usePrivateTurposter'
+import type { TurpostItem } from '@/composables/useTurposter'
 
 const props = defineProps<{
   isOpen: boolean
   lat: number
   lng: number
+  isAdmin?: boolean
+  userId?: string
+  userName?: string
+  userEmail?: string
 }>()
 
-const emit = defineEmits<{ (e: 'close'): void }>()
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'spot-saved', spot: TurpostItem): void
+}>()
 
 const { detectKommune } = useGeoDetect()
+const { saveMySpot, calculateCsvPlacement } = usePrivateTurposter()
 
-const geoResult  = ref<GeoResult | null>(null)
+const geoResult = ref<GeoResult | null>(null)
 const isDetecting = ref(false)
 const isOutsideNorway = ref(false)
 const customKommune = ref('Utlandet')
 const turpostName = ref('')
-const turpostAlt  = ref<number | null>(null)
-const turpostId   = ref('')
-const copied      = ref(false)
+const turpostAlt = ref<number | null>(null)
+const turpostId = ref('')
+const copied = ref(false)
+const suggestForPublic = ref(true)
+
+const isSavingSpot = ref(false)
+const saveSuccessMessage = ref<string | null>(null)
+const saveErrorMessage = ref<string | null>(null)
+const csvPlacement = ref<CsvPlacementResult | null>(null)
 
 function generateId(): string {
   const bytes = new Uint8Array(12)
@@ -169,8 +237,41 @@ function regenId() {
   onInputChange()
 }
 
+const isFormValid = computed(() => {
+  return (
+    geoResult.value !== null &&
+    turpostName.value.trim().length > 0 &&
+    turpostAlt.value !== null &&
+    !isNaN(turpostAlt.value) &&
+    turpostId.value.trim().length > 0
+  )
+})
+
+async function updateCsvPlacementHint() {
+  if (!props.isAdmin || !turpostName.value.trim()) {
+    csvPlacement.value = null
+    return
+  }
+  try {
+    const res = await calculateCsvPlacement(turpostName.value.trim())
+    csvPlacement.value = res
+  } catch {
+    csvPlacement.value = null
+  }
+}
+
+let placementTimeout: any = null
 function onInputChange() {
   copied.value = false
+  saveSuccessMessage.value = null
+  saveErrorMessage.value = null
+
+  if (props.isAdmin) {
+    clearTimeout(placementTimeout)
+    placementTimeout = setTimeout(() => {
+      updateCsvPlacementHint()
+    }, 250)
+  }
 }
 
 function onKommuneChange() {
@@ -181,21 +282,15 @@ function onKommuneChange() {
 }
 
 const csvLine = computed(() => {
-  if (
-    !geoResult.value ||
-    !turpostName.value.trim() ||
-    turpostAlt.value === null ||
-    isNaN(turpostAlt.value) ||
-    !turpostId.value.trim()
-  ) return ''
+  if (!isFormValid.value || !geoResult.value) return ''
 
-  const id       = turpostId.value.trim()
-  const name     = turpostName.value.trim()
-  const latStr   = props.lat.toFixed(6)
-  const lngStr   = props.lng.toFixed(6)
-  const alt      = Math.round(turpostAlt.value)
-  const fylke    = geoResult.value.fylke
-  const kommune  = geoResult.value.kommune
+  const id = turpostId.value.trim()
+  const name = turpostName.value.trim()
+  const latStr = props.lat.toFixed(6)
+  const lngStr = props.lng.toFixed(6)
+  const alt = Math.round(turpostAlt.value!)
+  const fylke = geoResult.value.fylke
+  const kommune = geoResult.value.kommune
 
   return `${id};${name};${latStr};${lngStr};${alt};${fylke};${kommune}`
 })
@@ -207,7 +302,6 @@ async function copyToClipboard() {
     copied.value = true
     setTimeout(() => { copied.value = false }, 3000)
   } catch {
-    // Fallback
     const ta = document.createElement('textarea')
     ta.value = csvLine.value
     document.body.appendChild(ta)
@@ -219,18 +313,71 @@ async function copyToClipboard() {
   }
 }
 
+async function handleSaveSpot() {
+  if (!props.userId || !isFormValid.value || !geoResult.value) return
+
+  isSavingSpot.value = true
+  saveSuccessMessage.value = null
+  saveErrorMessage.value = null
+
+  const spot: TurpostItem = {
+    id: turpostId.value.trim(),
+    name: turpostName.value.trim(),
+    lat: Number(props.lat.toFixed(6)),
+    lng: Number(props.lng.toFixed(6)),
+    alt: Math.round(turpostAlt.value!),
+    fylke: geoResult.value.fylke,
+    kommune: geoResult.value.kommune,
+    isPrivate: true,
+    ownerId: props.userId,
+    ownerName: props.userName || '',
+    suggestedForPublic: props.isAdmin ? false : suggestForPublic.value,
+    status: props.isAdmin ? 'private' : (suggestForPublic.value ? 'pending' : 'private'),
+    csvLine: csvLine.value,
+    csvLineHint: csvPlacement.value ? `Linje ${csvPlacement.value.lineNumber} i mountains.csv` : ''
+  }
+
+  try {
+    await saveMySpot(
+      props.userId,
+      spot,
+      !props.isAdmin && suggestForPublic.value,
+      { name: props.userName, email: props.userEmail }
+    )
+
+    saveSuccessMessage.value = !props.isAdmin && suggestForPublic.value
+      ? '✅ Turposten er lagret i dine turposter og sendt inn som forslag til admin!'
+      : '✅ Turposten er lagret i dine turposter!'
+
+    emit('spot-saved', spot)
+
+    setTimeout(() => {
+      if (props.isOpen) {
+        emit('close')
+      }
+    }, 1600)
+  } catch (err: any) {
+    saveErrorMessage.value = err.message || 'Kunne ikke lagre turposten.'
+  } finally {
+    isSavingSpot.value = false
+  }
+}
+
 // Kjør geo-deteksjon når modalen åpnes eller koordinater endres
 watch(
   () => [props.isOpen, props.lat, props.lng] as [boolean, number, number],
   async ([open, lat, lng]) => {
     if (!open) return
     turpostName.value = ''
-    turpostAlt.value  = null
-    turpostId.value   = generateId()
-    geoResult.value   = null
-    copied.value      = false
+    turpostAlt.value = null
+    turpostId.value = generateId()
+    geoResult.value = null
+    copied.value = false
     isOutsideNorway.value = false
     customKommune.value = 'Utlandet'
+    saveSuccessMessage.value = null
+    saveErrorMessage.value = null
+    csvPlacement.value = null
 
     isDetecting.value = true
     try {
@@ -255,101 +402,74 @@ watch(
     } finally {
       isDetecting.value = false
     }
-  },
-  { immediate: true }
+  }
 )
 
-// Dra/flytte-logikk for modalen
+// ---------------------------------------------------------------------------
+// Dra-funksjonalitet (Pointer Events)
+// ---------------------------------------------------------------------------
 const modalRef = ref<HTMLElement | null>(null)
-const dragPosition = ref({ x: 0, y: 0 })
 const isDragging = ref(false)
-let dragStart = { x: 0, y: 0 }
-let initialPosition = { x: 0, y: 0 }
+const dragPos = ref({ x: 0, y: 0 })
+const dragStart = ref({ x: 0, y: 0, initialX: 0, initialY: 0 })
 
 const modalStyle = computed(() => {
-  if (dragPosition.value.x === 0 && dragPosition.value.y === 0) {
-    return {}
-  }
+  if (dragPos.value.x === 0 && dragPos.value.y === 0) return {}
   return {
-    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`
+    transform: `translate(${dragPos.value.x}px, ${dragPos.value.y}px)`
   }
 })
 
-const startDrag = (e: PointerEvent) => {
-  if (e.button !== 0) return
-
-  const target = e.target as HTMLElement | null
-  if (target?.closest('button') || target?.closest('a') || target?.closest('input') || target?.closest('textarea')) {
-    return
-  }
-
+function startDrag(e: PointerEvent) {
+  if ((e.target as HTMLElement).closest('.admin-modal-close')) return
   isDragging.value = true
-  dragStart = { x: e.clientX, y: e.clientY }
-  initialPosition = { ...dragPosition.value }
-
-  window.addEventListener('pointermove', onDragMove)
-  window.addEventListener('pointerup', onDragEnd)
-  window.addEventListener('pointercancel', onDragEnd)
-}
-
-const onDragMove = (e: PointerEvent) => {
-  if (!isDragging.value) return
-
-  const deltaX = e.clientX - dragStart.x
-  const deltaY = e.clientY - dragStart.y
-
-  let newX = initialPosition.x + deltaX
-  let newY = initialPosition.y + deltaY
-
-  if (modalRef.value) {
-    const rect = modalRef.value.getBoundingClientRect()
-    const currentLeft = rect.left - initialPosition.x
-    const currentTop = rect.top - initialPosition.y
-
-    const minX = -currentLeft + 10
-    const maxX = window.innerWidth - (currentLeft + 80)
-    const minY = -currentTop + 10
-    const maxY = window.innerHeight - (currentTop + 40)
-
-    newX = Math.max(minX, Math.min(maxX, newX))
-    newY = Math.max(minY, Math.min(maxY, newY))
+  dragStart.value = {
+    x: e.clientX,
+    y: e.clientY,
+    initialX: dragPos.value.x,
+    initialY: dragPos.value.y
   }
-
-  dragPosition.value = { x: newX, y: newY }
+  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
 }
 
-const onDragEnd = () => {
+function onDragMove(e: PointerEvent) {
+  if (!isDragging.value) return
+  const dx = e.clientX - dragStart.value.x
+  const dy = e.clientY - dragStart.value.y
+  dragPos.value = {
+    x: dragStart.value.initialX + dx,
+    y: dragStart.value.initialY + dy
+  }
+}
+
+function onDragEnd(e: PointerEvent) {
+  if (!isDragging.value) return
   isDragging.value = false
-  window.removeEventListener('pointermove', onDragMove)
-  window.removeEventListener('pointerup', onDragEnd)
-  window.removeEventListener('pointercancel', onDragEnd)
+  try {
+    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+  } catch {}
 }
 
 watch(
   () => props.isOpen,
   (open) => {
     if (open) {
-      dragPosition.value = { x: 0, y: 0 }
+      dragPos.value = { x: 0, y: 0 }
     }
   }
 )
 
-// Lukk med Esc
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && props.isOpen) {
-    emit('close')
-  }
-}
-
 onMounted(() => {
-  window.addEventListener('keydown', onKeydown)
+  window.addEventListener('pointermove', onDragMove)
+  window.addEventListener('pointerup', onDragEnd)
+  window.addEventListener('pointercancel', onDragEnd)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('pointermove', onDragMove)
   window.removeEventListener('pointerup', onDragEnd)
   window.removeEventListener('pointercancel', onDragEnd)
+  clearTimeout(placementTimeout)
 })
 </script>
 
@@ -484,11 +604,6 @@ onUnmounted(() => {
   gap: 12px;
 }
 
-.admin-geo-miss {
-  color: #f59e0b;
-  font-size: 0.88rem;
-}
-
 .admin-form {
   display: flex;
   flex-direction: column;
@@ -548,12 +663,133 @@ onUnmounted(() => {
   color: #4b5563;
 }
 
-.admin-result-section {
+.admin-checkbox-row {
+  margin-top: 6px;
+}
+
+.custom-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.custom-checkbox input {
+  display: none;
+}
+
+.checkbox-box {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 2px solid #64748b;
+  background: #1e293b;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.custom-checkbox input:checked + .checkbox-box {
+  background: #10b981;
+  border-color: #10b981;
+}
+
+.custom-checkbox input:checked + .checkbox-box::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.checkbox-text {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+}
+
+.admin-save-section {
   padding: 16px 24px;
   border-bottom: 1px solid #2d3748;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.save-feedback {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.save-feedback.success {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid #10b981;
+  color: #a7f3d0;
+}
+
+.save-feedback.error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
+}
+
+.btn-save-spot {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 10px 22px;
+  transition: transform 0.15s, opacity 0.2s;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-save-spot:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.btn-save-spot:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-placement-box {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid #d97706;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  color: #fef3c7;
+  line-height: 1.4;
+}
+
+.placement-title {
+  font-weight: 600;
+  color: #fde68a;
+  margin-bottom: 4px;
+}
+
+.placement-detail {
+  color: #fef08a;
+}
+
+.placement-detail strong {
+  color: #ffffff;
+}
+
+.admin-result-section {
+  padding: 16px 24px;
+  border-bottom: 1px solid #2d3748;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .admin-result-label {

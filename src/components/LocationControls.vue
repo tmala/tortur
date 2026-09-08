@@ -23,6 +23,7 @@ import {
   X,
   FolderHeart,
   RefreshCw,
+  Star,
 } from 'lucide-vue-next'
 import AuthPanel from './AuthPanel.vue'
 import type { GeoLocationState } from '@/composables/useGeolocation'
@@ -52,6 +53,9 @@ const props = defineProps<{
   isSavedTracksOpen?: boolean
   /** true når en ny versjon er tilgjengelig via Service Worker */
   needsUpdate?: boolean
+  mySpotsCount?: number
+  isMySpotsOpen?: boolean
+  isAddSpotModeActive?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -60,6 +64,8 @@ const emit = defineEmits<{
   (e: 'clear-track'): void
   (e: 'open-track-modal'): void
   (e: 'open-saved-tracks'): void
+  (e: 'open-my-spots'): void
+  (e: 'toggle-add-spot-mode'): void
   (e: 'change-layer', layer: string): void
   (e: 'clear-error'): void
   (e: 'toggle-turposter'): void
@@ -364,6 +370,22 @@ const handleInstallClick = async () => {
               <FolderHeart :size="18" />
               <span v-if="savedTracksCount && savedTracksCount > 0" class="btn-badge-count">
                 {{ savedTracksCount }}
+              </span>
+            </button>
+
+            <!-- Mine turposter (kun synlig for innloggede brukere) -->
+            <button
+              v-if="isLoggedIn"
+              class="btn-my-spots"
+              :class="{ active: isMySpotsOpen || isAddSpotModeActive }"
+              @click="emit('open-my-spots')"
+              title="Mine turposter (egne registrerte turmål)"
+              aria-label="Mine turposter"
+            >
+              <Star :size="16" class="star-icon" />
+              <span class="btn-my-spots-text">Mine turposter</span>
+              <span v-if="mySpotsCount && mySpotsCount > 0" class="btn-badge-count">
+                {{ mySpotsCount }}
               </span>
             </button>
 
@@ -681,9 +703,7 @@ const handleInstallClick = async () => {
   align-items: center;
   gap: 10px;
   padding: 6px 12px 6px 8px;
-  background: rgba(15, 23, 42, 0.94);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #0f172a;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
@@ -837,9 +857,7 @@ const handleInstallClick = async () => {
 /* Menyen med Turposter osv. plassert RETT UNDER */
 .brand-menu-dropdown {
   padding: 6px 8px;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #0f172a;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
@@ -930,6 +948,39 @@ const handleInstallClick = async () => {
   font-size: 11px;
 }
 
+.btn-my-spots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #f3e8ff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-my-spots:hover {
+  background: rgba(168, 85, 247, 0.28);
+  border-color: #c084fc;
+  color: #ffffff;
+}
+
+.btn-my-spots.active {
+  background: linear-gradient(135deg, #a855f7, #7c3aed);
+  border-color: #d8b4fe;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.45);
+}
+
+.star-icon {
+  color: #fbbf24;
+}
+
 .icon-btn {
   background: #1e293b;
   border: 1px solid #334155;
@@ -1011,9 +1062,7 @@ const handleInstallClick = async () => {
   overflow-y: auto;
   padding: 14px;
   z-index: 20;
-  background: rgba(15, 23, 42, 0.96);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #0f172a;
   border: 1px solid #38bdf8;
   border-radius: 14px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
@@ -1190,9 +1239,7 @@ const handleInstallClick = async () => {
   overflow-y: auto;
   padding: 10px 12px;
   z-index: 20;
-  background: rgba(15, 23, 42, 0.96);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #0f172a;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);

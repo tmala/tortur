@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
-import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Image as ImageIcon } from 'lucide-vue-next'
+import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Image as ImageIcon, Trash2 } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
+import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import {
   type GeoLocationState,
   calculateDistanceMeters,
@@ -13,20 +14,27 @@ import {
 const props = defineProps<{
   isOpen: boolean
   turpost: TurpostItem | null
+  matchingPrivateSpot?: TurpostItem | null
   isLoggedIn: boolean
   hasVisited: boolean
   currentUserId?: string
   userLocation?: GeoLocationState | null
+  initialTab?: 'public' | 'private'
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'open-checkin', post: TurpostItem): void
+  (e: 'private-checkin-deleted'): void
+  (e: 'delete-private-spot', spotId: string): void
 }>()
 
 const { fetchTurpostCheckins } = useAuth()
+const { fetchPrivateCheckinsForSpot, deletePrivateCheckin } = usePrivateTurposter()
 
 const checkins = ref<FirebaseCheckinItem[]>([])
+const privateCheckins = ref<FirebaseCheckinItem[]>([])
+const activeTab = ref<'public' | 'private'>('public')
 const isLoading = ref(false)
 const selectedImage = ref<string | null>(null)
 
@@ -47,13 +55,26 @@ const formatDate = (isoString: string) => {
   }
 }
 
-// Sorter etter nyeste først
-const sortedCheckins = computed(() => {
+// Sorter felles innsjekkinger etter nyeste først
+const sortedPublicCheckins = computed(() => {
   return [...checkins.value].sort((a, b) => {
     const timeA = new Date(a.timestamp || 0).getTime()
     const timeB = new Date(b.timestamp || 0).getTime()
     return timeB - timeA
   })
+})
+
+// Sorter private innsjekkinger etter nyeste først
+const sortedPrivateCheckins = computed(() => {
+  return [...privateCheckins.value].sort((a, b) => {
+    const timeA = new Date(a.timestamp || 0).getTime()
+    const timeB = new Date(b.timestamp || 0).getTime()
+    return timeB - timeA
+  })
+})
+
+const displayedCheckins = computed(() => {
+  return activeTab.value === 'private' ? sortedPrivateCheckins.value : sortedPublicCheckins.value
 })
 
 // Avstand til turposten
@@ -75,14 +96,80 @@ const loadCheckins = async () => {
   if (!props.turpost) return
   isLoading.value = true
   checkins.value = []
+  privateCheckins.value = []
+
+  if (props.turpost.isPrivate) {
+    activeTab.value = 'private'
+  } else if (props.initialTab) {
+    activeTab.value = props.initialTab
+  } else {
+    activeTab.value = 'public'
+  }
 
   try {
-    const data = await fetchTurpostCheckins(props.turpost.id)
-    checkins.value = data
+    const promises: Promise<any>[] = []
+    if (!props.turpost.isPrivate) {
+      promises.push(fetchTurpostCheckins(props.turpost.id).then((data) => (checkins.value = data)))
+    }
+    if (props.currentUserId && props.currentUserId !== 'guest') {
+      const privateSpotIds = new Set<string>()
+      if (props.turpost.isPrivate) {
+        privateSpotIds.add(String(props.turpost.id))
+      } else {
+        if (props.matchingPrivateSpot) {
+          privateSpotIds.add(String(props.matchingPrivateSpot.id))
+        }
+        privateSpotIds.add(String(props.turpost.id))
+      }
+
+      for (const sId of privateSpotIds) {
+        promises.push(
+          fetchPrivateCheckinsForSpot(props.currentUserId, sId).then((data) => {
+            data.forEach((item) => {
+              if (!privateCheckins.value.some((c) => c.id === item.id)) {
+                privateCheckins.value.push(item)
+              }
+            })
+          })
+        )
+      }
+    }
+    await Promise.all(promises)
+
+    // Hvis brukeren åpner en turpost der det kun er private innsjekkinger og ingen fane ble spesifisert:
+    if (!props.initialTab && checkins.value.length === 0 && privateCheckins.value.length > 0) {
+      activeTab.value = 'private'
+    }
   } catch (err) {
     console.error('[TurpostCheckinsModal] Feil ved lasting:', err)
   } finally {
     isLoading.value = false
+  }
+}
+
+async function handleDeletePrivateCheckin(checkinId: string) {
+  if (!props.currentUserId || !props.turpost) return
+  if (!confirm('Er du sikker på at du vil slette denne private innsjekkingen?')) return
+
+  try {
+    const primaryId = props.matchingPrivateSpot ? String(props.matchingPrivateSpot.id) : String(props.turpost.id)
+    await deletePrivateCheckin(props.currentUserId, primaryId, checkinId)
+    if (primaryId !== String(props.turpost.id)) {
+      await deletePrivateCheckin(props.currentUserId, String(props.turpost.id), checkinId).catch(() => {})
+    }
+    privateCheckins.value = privateCheckins.value.filter((c) => c.id !== checkinId)
+    emit('private-checkin-deleted')
+  } catch (err) {
+    alert('Kunne ikke slette innsjekkingen.')
+  }
+}
+
+function handleDeletePrivateTurpost() {
+  const target = props.matchingPrivateSpot || (props.turpost?.isPrivate ? props.turpost : null)
+  if (!target) return
+  if (confirm(`Vil du slette din private turpost «${target.name}» og alle dens private innsjekkinger?`)) {
+    emit('delete-private-spot', String(target.id))
+    emit('close')
   }
 }
 
@@ -254,6 +341,26 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <!-- Fanevelger hvis det finnes private innsjekkinger eller hvis det er et privat punkt / matchende privat spot -->
+          <div v-if="(privateCheckins.length > 0 || matchingPrivateSpot) && !turpost?.isPrivate" class="checkins-tab-bar">
+            <button
+              type="button"
+              class="checkin-tab-btn"
+              :class="{ active: activeTab === 'public' }"
+              @click="activeTab = 'public'"
+            >
+              🌐 Felles ({{ sortedPublicCheckins.length }})
+            </button>
+            <button
+              type="button"
+              class="checkin-tab-btn tab-private"
+              :class="{ active: activeTab === 'private' }"
+              @click="activeTab = 'private'"
+            >
+              ⭐ Mine private ({{ sortedPrivateCheckins.length }})
+            </button>
+          </div>
+
           <!-- Innsjekkingsliste -->
           <div class="checkins-content scrollable">
             <div v-if="isLoading" class="loading-state">
@@ -261,10 +368,11 @@ onUnmounted(() => {
               <span>Henter innsjekkinger...</span>
             </div>
 
-            <div v-else-if="sortedCheckins.length === 0" class="empty-state">
+            <div v-else-if="displayedCheckins.length === 0" class="empty-state">
               <div class="empty-icon">🏔️</div>
-              <h4>Ingen innsjekkinger enda</h4>
-              <p>Vær den aller første til å sjekke inn på {{ turpost?.name }}!</p>
+              <h4>{{ activeTab === 'private' ? 'Ingen private innsjekkinger' : 'Ingen innsjekkinger enda' }}</h4>
+              <p v-if="activeTab === 'private'">Du har ingen private innsjekkinger registrert på dette punktet.</p>
+              <p v-else>Vær den aller første til å sjekke inn på {{ turpost?.name }}!</p>
               <button
                 v-if="isLoggedIn && turpost"
                 type="button"
@@ -276,18 +384,39 @@ onUnmounted(() => {
               >
                 📍 {{ isWithinRange ? 'Sjekk inn nå' : 'For langt unna (maks 100m)' }}
               </button>
+              <button
+                v-if="activeTab === 'private' && (matchingPrivateSpot || turpost?.isPrivate)"
+                type="button"
+                class="btn-delete-entire-spot"
+                @click="handleDeletePrivateTurpost"
+              >
+                <Trash2 :size="14" />
+                <span>Slett denne private turposten</span>
+              </button>
             </div>
 
             <div v-else class="checkins-list">
               <div class="list-header">
-                <span class="count-pill">{{ sortedCheckins.length }} innsjekking{{ sortedCheckins.length === 1 ? '' : 'er' }}</span>
+                <span class="count-pill">
+                  {{ displayedCheckins.length }} {{ activeTab === 'private' ? 'privat innsjekking' : 'innsjekking' }}{{ displayedCheckins.length === 1 ? '' : 'er' }}
+                </span>
+                <button
+                  v-if="activeTab === 'private' && (matchingPrivateSpot || turpost?.isPrivate)"
+                  type="button"
+                  class="btn-delete-entire-spot-header"
+                  @click="handleDeletePrivateTurpost"
+                  title="Slett denne private turposten"
+                >
+                  <Trash2 :size="13" />
+                  <span>Slett turpost</span>
+                </button>
               </div>
 
               <div
-                v-for="item in sortedCheckins"
+                v-for="item in displayedCheckins"
                 :key="item.id"
                 class="checkin-item"
-                :class="{ 'is-own': item.userId === currentUserId }"
+                :class="{ 'is-own': item.userId === currentUserId, 'is-private-item': activeTab === 'private' }"
               >
                 <div class="item-header">
                   <div class="user-meta">
@@ -304,6 +433,7 @@ onUnmounted(() => {
                       <span class="name">
                         {{ item.userName || 'Turgåer' }}
                         <span v-if="item.userId === currentUserId" class="own-tag">Deg</span>
+                        <span v-if="activeTab === 'private'" class="private-tag">Privat</span>
                       </span>
                       <span class="date">
                         <Calendar :size="12" />
@@ -311,6 +441,18 @@ onUnmounted(() => {
                       </span>
                     </div>
                   </div>
+
+                  <!-- Slett-knapp for private innsjekkinger -->
+                  <button
+                    v-if="activeTab === 'private'"
+                    type="button"
+                    class="btn-delete-checkin"
+                    @click.stop="handleDeletePrivateCheckin(item.id)"
+                    title="Slett denne private innsjekkingen"
+                  >
+                    <Trash2 :size="13" />
+                    <span>Slett</span>
+                  </button>
                 </div>
 
                 <!-- Beskrivelse -->
@@ -350,9 +492,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.3);
   padding: 16px;
   box-sizing: border-box;
 }
@@ -563,6 +703,49 @@ onUnmounted(() => {
   transform: none;
 }
 
+/* Tab Bar */
+.checkins-tab-bar {
+  display: flex;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 6px 12px;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.checkin-tab-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.checkin-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
+}
+
+.checkin-tab-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}
+
+.checkin-tab-btn.tab-private.active {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #f59e0b;
+}
+
 /* Content */
 .checkins-content {
   flex: 1;
@@ -644,13 +827,57 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.08);
   color: #94a3b8;
   border-color: rgba(255, 255, 255, 0.12);
-  cursor: not-allowed;
-  transform: none;
+}
+
+.btn-delete-entire-spot {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #fca5a5;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-delete-entire-spot:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #ffffff;
 }
 
 /* Checkins List */
 .list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.btn-delete-entire-spot-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-delete-entire-spot-header:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #fca5a5;
 }
 
 .count-pill {
@@ -737,6 +964,42 @@ onUnmounted(() => {
   color: #ffffff;
   padding: 1px 5px;
   border-radius: 4px;
+}
+
+.private-tag {
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.checkin-item.is-private-item {
+  border-color: rgba(245, 158, 11, 0.25);
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.btn-delete-checkin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-delete-checkin:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #fca5a5;
 }
 
 .user-details .date {

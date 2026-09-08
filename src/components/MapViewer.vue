@@ -26,6 +26,8 @@ const props = defineProps<{
   visitedTurpostIds?: Set<string>
   isAdmin?: boolean
   trackPoints?: TrackPoint[]
+  privateTurposter?: TurpostItem[]
+  isAddSpotActive?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -35,10 +37,11 @@ const emit = defineEmits<{
   (e: 'bounds-change', bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }, zoom: number): void
   (e: 'select-turpost', post: TurpostItem): void
   (e: 'checkin-turpost', post: TurpostItem): void
-  (e: 'view-checkins', post: TurpostItem): void
+  (e: 'view-checkins', post: TurpostItem, initialTab?: 'public' | 'private'): void
   (e: 'select-kommune-by-name', name: string): void
   (e: 'clear-turposter'): void
   (e: 'admin-map-click', coords: { lat: number; lng: number }): void
+  (e: 'delete-private-spot', spotId: string): void
 }>()
 
 const mapContainer = ref<HTMLElement | null>(null)
@@ -48,6 +51,7 @@ let accuracyCircle: L.Circle | null = null
 let currentTileLayer: L.TileLayer | null = null
 let currentOverlayLayer: L.TileLayer | null = null
 let turpostsLayerGroup: L.LayerGroup | null = null
+let privateTurpostsLayerGroup: L.LayerGroup | null = null
 let vesselsLayerGroup: L.LayerGroup | null = null
 let geoJsonLayer: L.GeoJSON | null = null
 let geoJsonData: any = null
@@ -141,6 +145,22 @@ const createTurpostIcon = (isVisited: boolean = false) => {
       <div class="turpost-pin-marker ${isVisited ? 'is-visited' : 'is-unvisited'}">
         <div class="turpost-pin-icon">
           <span>${isVisited ? '✓' : '⛰️'}</span>
+        </div>
+      </div>
+    `,
+    iconSize: [32, 38],
+    iconAnchor: [16, 36],
+    popupAnchor: [0, -32]
+  })
+}
+
+const createPrivateTurpostIcon = (isVisited: boolean = false) => {
+  return L.divIcon({
+    className: 'custom-turpost-pin',
+    html: `
+      <div class="turpost-pin-marker is-private ${isVisited ? 'is-visited' : 'is-unvisited'}">
+        <div class="turpost-pin-icon">
+          <span>${isVisited ? '★' : '⭐'}</span>
         </div>
       </div>
     `,
@@ -253,9 +273,19 @@ const updateTurpostMarkers = (posts: TurpostItem[], shouldFitBounds = false) => 
 
     const isVisited = props.visitedTurpostIds?.has(String(post.id)) ?? false
 
+    // Sjekk om innlogget bruker har en privat turpost på samme sted (samme ID eller innen 15m)
+    const matchingPrivateSpot = props.privateTurposter?.find((priv) => {
+      if (String(priv.id) === String(post.id)) return true
+      const dist = calculateDistanceMeters(priv.lat, priv.lng, post.lat, post.lng)
+      return dist < 15
+    })
+    const isPrivateVisited = matchingPrivateSpot
+      ? (props.visitedTurpostIds?.has(String(matchingPrivateSpot.id)) ?? false)
+      : false
+
     const marker = L.marker(latLng, {
       icon: createTurpostIcon(isVisited),
-      title: post.name,
+      title: matchingPrivateSpot ? `${post.name} (Offentlig + Min private)` : post.name,
       zIndexOffset: isVisited ? 550 : 500
     })
 
@@ -276,6 +306,83 @@ const updateTurpostMarkers = (posts: TurpostItem[], shouldFitBounds = false) => 
         } else {
           distanceBadgeHtml = `<div class="popup-range-badge no-location">⚠️ Posisjon mangler – kreves for innsjekk (maks 100m)</div>`
         }
+      }
+
+      if (matchingPrivateSpot) {
+        return `
+          <div class="turpost-popup">
+            <div class="popup-tabs">
+              <button type="button" class="popup-tab-btn active" id="tab-btn-pub-${post.id}">
+                🌐 Offentlig
+              </button>
+              <button type="button" class="popup-tab-btn tab-btn-priv" id="tab-btn-priv-${post.id}">
+                ⭐ Min private
+              </button>
+            </div>
+
+            <div id="popup-panel-pub-${post.id}" class="popup-tab-panel">
+              <h4>${post.name}</h4>
+              ${post.alt ? `<div class="popup-badge">⛰️ ${post.alt} moh.</div>` : ''}
+              ${props.isLoggedIn ? `
+                <div class="popup-status-badge ${isVisited ? 'visited' : 'not-visited'}">
+                  ${isVisited ? '✓ Besøkt (offentlig)' : 'Ikke besøkt (offentlig)'}
+                </div>
+              ` : ''}
+              <div class="popup-info">
+                Posisjon: ${post.lat.toFixed(5)}°, ${post.lng.toFixed(5)}°
+              </div>
+              ${distanceBadgeHtml}
+              ${props.isLoggedIn ? `
+                <div class="turpost-popup-actions">
+                  <button type="button" class="btn-popup-view" id="view-checkins-btn-${post.id}">
+                    👁️ Vis innsjekkinger
+                  </button>
+                  ${isWithinRange ? `
+                    <button type="button" class="btn-popup-checkin" id="checkin-btn-${post.id}">
+                      📍 Sjekk inn her
+                    </button>
+                  ` : `
+                    <button type="button" class="btn-popup-checkin btn-popup-checkin-disabled" id="checkin-btn-${post.id}" disabled title="Du må være innen 100m fra turposten for å sjekke inn">
+                      📍 Sjekk inn (${distance !== null ? formatDistance(distance) : 'mangler posisjon'})
+                    </button>
+                  `}
+                </div>
+              ` : `
+                <div class="popup-checkin-hint">Logg inn for å se innsjekkinger og sjekke inn</div>
+              `}
+            </div>
+
+            <div id="popup-panel-priv-${post.id}" class="popup-tab-panel" style="display: none;">
+              <div class="popup-private-tag">⭐ Min private turpost</div>
+              <h4>${matchingPrivateSpot.name}</h4>
+              ${matchingPrivateSpot.alt ? `<div class="popup-badge">⛰️ ${matchingPrivateSpot.alt} moh.</div>` : ''}
+              <div class="popup-status-badge ${isPrivateVisited ? 'visited' : 'not-visited'}">
+                ${isPrivateVisited ? '✓ Besøkt (privat)' : 'Ikke besøkt (privat)'}
+              </div>
+              <div class="popup-info">
+                Posisjon: ${matchingPrivateSpot.lat.toFixed(5)}°, ${matchingPrivateSpot.lng.toFixed(5)}°
+              </div>
+              ${distanceBadgeHtml}
+              <div class="turpost-popup-actions">
+                <button type="button" class="btn-popup-view" id="view-priv-checkins-btn-${post.id}">
+                  👁️ Vis private innsjekkinger
+                </button>
+                ${isWithinRange ? `
+                  <button type="button" class="btn-popup-checkin" id="checkin-priv-btn-${post.id}">
+                    📍 Sjekk inn (privat)
+                  </button>
+                ` : `
+                  <button type="button" class="btn-popup-checkin btn-popup-checkin-disabled" disabled>
+                    📍 Sjekk inn (${distance !== null ? formatDistance(distance) : 'mangler posisjon'})
+                  </button>
+                `}
+                <button type="button" class="btn-popup-delete-spot" id="delete-priv-spot-btn-${post.id}">
+                  🗑️ Slett privat turpost
+                </button>
+              </div>
+            </div>
+          </div>
+        `
       }
 
       return `
@@ -318,11 +425,69 @@ const updateTurpostMarkers = (posts: TurpostItem[], shouldFitBounds = false) => 
       marker.setPopupContent(getPopupHtml())
 
       if (props.isLoggedIn) {
+        if (matchingPrivateSpot) {
+          const tabPub = document.getElementById(`tab-btn-pub-${post.id}`)
+          const tabPriv = document.getElementById(`tab-btn-priv-${post.id}`)
+          const panelPub = document.getElementById(`popup-panel-pub-${post.id}`)
+          const panelPriv = document.getElementById(`popup-panel-priv-${post.id}`)
+
+          if (tabPub && tabPriv && panelPub && panelPriv) {
+            tabPub.onclick = (e) => {
+              e.stopPropagation()
+              tabPub.classList.add('active')
+              tabPriv.classList.remove('active')
+              panelPub.style.display = 'block'
+              panelPriv.style.display = 'none'
+            }
+            tabPriv.onclick = (e) => {
+              e.stopPropagation()
+              tabPriv.classList.add('active')
+              tabPub.classList.remove('active')
+              panelPriv.style.display = 'block'
+              panelPub.style.display = 'none'
+            }
+          }
+
+          const viewPrivBtn = document.getElementById(`view-priv-checkins-btn-${post.id}`)
+          if (viewPrivBtn) {
+            viewPrivBtn.onclick = (e) => {
+              e.stopPropagation()
+              emit('view-checkins', post, 'private')
+            }
+          }
+
+          const distance = props.userLocation
+            ? calculateDistanceMeters(props.userLocation.lat, props.userLocation.lng, post.lat, post.lng)
+            : null
+          const isWithinRange = distance !== null && distance <= MAX_CHECKIN_DISTANCE_METERS
+
+          if (isWithinRange) {
+            const checkinPrivBtn = document.getElementById(`checkin-priv-btn-${post.id}`)
+            if (checkinPrivBtn) {
+              checkinPrivBtn.onclick = (e) => {
+                e.stopPropagation()
+                emit('checkin-turpost', matchingPrivateSpot)
+              }
+            }
+          }
+
+          const deletePrivBtn = document.getElementById(`delete-priv-spot-btn-${post.id}`)
+          if (deletePrivBtn) {
+            deletePrivBtn.onclick = (e) => {
+              e.stopPropagation()
+              if (confirm(`Vil du slette din private turpost «${matchingPrivateSpot.name}»?`)) {
+                emit('delete-private-spot', String(matchingPrivateSpot.id))
+                if (map) map.closePopup()
+              }
+            }
+          }
+        }
+
         const viewBtn = document.getElementById(`view-checkins-btn-${post.id}`)
         if (viewBtn) {
           viewBtn.onclick = (e) => {
             e.stopPropagation()
-            emit('view-checkins', post)
+            emit('view-checkins', post, 'public')
           }
         }
 
@@ -358,6 +523,138 @@ const updateTurpostMarkers = (posts: TurpostItem[], shouldFitBounds = false) => 
       animate: true
     })
   }
+}
+
+const updatePrivateTurpostMarkers = (posts: TurpostItem[]) => {
+  if (!map || !privateTurpostsLayerGroup) return
+  privateTurpostsLayerGroup.clearLayers()
+  if (!posts || posts.length === 0) return
+
+  const publicPosts = props.turposter || []
+
+  // Ikke tegn privat markør dersom punktet allerede eksisterer som en offentlig turpost i kartet:
+  // "Når en privat turpost legges inn som offentlig turpost vil jo det eksistere to turposter på samme punkt i kartet. Da skal kun den offentlige vises..."
+  const visiblePrivatePosts = posts.filter((priv) => {
+    return !publicPosts.some((pub) => {
+      if (String(pub.id) === String(priv.id)) return true
+      const dist = calculateDistanceMeters(pub.lat, pub.lng, priv.lat, priv.lng)
+      return dist < 15
+    })
+  })
+
+  visiblePrivatePosts.forEach((post) => {
+    const latLng: L.LatLngTuple = [post.lat, post.lng]
+    const isVisited = props.visitedTurpostIds?.has(String(post.id)) ?? false
+
+    const marker = L.marker(latLng, {
+      icon: createPrivateTurpostIcon(isVisited),
+      title: `⭐ ${post.name} (Privat)`,
+      zIndexOffset: isVisited ? 560 : 520
+    })
+
+    const getPopupHtml = () => {
+      const distance = props.userLocation
+        ? calculateDistanceMeters(props.userLocation.lat, props.userLocation.lng, post.lat, post.lng)
+        : null
+      const isWithinRange = distance !== null && distance <= MAX_CHECKIN_DISTANCE_METERS
+
+      let distanceBadgeHtml = ''
+      if (props.isLoggedIn) {
+        if (distance !== null) {
+          if (isWithinRange) {
+            distanceBadgeHtml = `<div class="popup-range-badge in-range">📍 Innen rekkevidde (${Math.round(distance)} m)</div>`
+          } else {
+            distanceBadgeHtml = `<div class="popup-range-badge out-of-range">⚠️ For langt unna (${formatDistance(distance)}) – må være innen 100m</div>`
+          }
+        } else {
+          distanceBadgeHtml = `<div class="popup-range-badge no-location">⚠️ Posisjon mangler – kreves for innsjekk (maks 100m)</div>`
+        }
+      }
+
+      return `
+        <div class="turpost-popup">
+          <div class="popup-private-tag">⭐ Min private turpost</div>
+          <h4>${post.name}</h4>
+          ${post.alt ? `<div class="popup-badge">⛰️ ${post.alt} moh.</div>` : ''}
+          ${props.isLoggedIn ? `
+            <div class="popup-status-badge ${isVisited ? 'visited' : 'not-visited'}">
+              ${isVisited ? '✓ Besøkt' : 'Ikke besøkt'}
+            </div>
+          ` : ''}
+          <div class="popup-info">
+            Posisjon: ${post.lat.toFixed(5)}°, ${post.lng.toFixed(5)}°
+          </div>
+          ${distanceBadgeHtml}
+          ${props.isLoggedIn ? `
+            <div class="turpost-popup-actions">
+              <button type="button" class="btn-popup-view" id="view-checkins-btn-${post.id}">
+                👁️ Vis innsjekkinger
+              </button>
+              ${isWithinRange ? `
+                <button type="button" class="btn-popup-checkin" id="checkin-btn-${post.id}">
+                  📍 Sjekk inn her
+                </button>
+              ` : `
+                <button type="button" class="btn-popup-checkin btn-popup-checkin-disabled" id="checkin-btn-${post.id}" disabled title="Du må være innen 100m fra turposten for å sjekke inn">
+                  📍 Sjekk inn (${distance !== null ? formatDistance(distance) : 'mangler posisjon'})
+                </button>
+              `}
+              <button type="button" class="btn-popup-delete-spot" id="delete-spot-btn-${post.id}">
+                🗑️ Slett denne turposten
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `
+    }
+
+    marker.bindPopup(getPopupHtml())
+    marker.on('popupopen', () => {
+      marker.setPopupContent(getPopupHtml())
+
+      if (props.isLoggedIn) {
+        const viewBtn = document.getElementById(`view-checkins-btn-${post.id}`)
+        if (viewBtn) {
+          viewBtn.onclick = (e) => {
+            e.stopPropagation()
+            emit('view-checkins', post)
+          }
+        }
+
+        const distance = props.userLocation
+          ? calculateDistanceMeters(props.userLocation.lat, props.userLocation.lng, post.lat, post.lng)
+          : null
+        const isWithinRange = distance !== null && distance <= MAX_CHECKIN_DISTANCE_METERS
+
+        if (isWithinRange) {
+          const checkinBtn = document.getElementById(`checkin-btn-${post.id}`)
+          if (checkinBtn) {
+            checkinBtn.onclick = (e) => {
+              e.stopPropagation()
+              emit('checkin-turpost', post)
+            }
+          }
+        }
+
+        const deleteBtn = document.getElementById(`delete-spot-btn-${post.id}`)
+        if (deleteBtn) {
+          deleteBtn.onclick = (e) => {
+            e.stopPropagation()
+            if (confirm(`Vil du slette din private turpost «${post.name}»?`)) {
+              emit('delete-private-spot', String(post.id))
+              if (map) map.closePopup()
+            }
+          }
+        }
+      }
+    })
+    marker.on('click', () => {
+      emit('select-turpost', post)
+    })
+
+    marker.addTo(privateTurpostsLayerGroup!)
+    markerMap.set(String(post.id), marker)
+  })
 }
 
 // Kommunegrenser GeoJSON håndtering
@@ -729,6 +1026,7 @@ watch(
 
     // Tilpass kun kartutsnittet hvis det faktisk kom et nytt utvalg av turposter
     updateTurpostMarkers(newPosts || [], hasChanged)
+    updatePrivateTurpostMarkers(props.privateTurposter || [])
   }
 )
 
@@ -736,6 +1034,16 @@ watch(
   () => [props.isLoggedIn, props.visitedTurpostIds],
   () => {
     // Rør aldri kartutsnittet når innloggingsstatus eller besøksliste oppdateres (f.eks. ved åpning av profil)
+    updateTurpostMarkers(props.turposter || [], false)
+    updatePrivateTurpostMarkers(props.privateTurposter || [])
+  },
+  { deep: true }
+)
+
+watch(
+  () => props.privateTurposter,
+  (newPrivateSpots) => {
+    updatePrivateTurpostMarkers(newPrivateSpots || [])
     updateTurpostMarkers(props.turposter || [], false)
   },
   { deep: true }
@@ -782,6 +1090,7 @@ onMounted(() => {
   switchLayer(props.activeLayer || 'norgeskart')
 
   turpostsLayerGroup = L.layerGroup().addTo(map)
+  privateTurpostsLayerGroup = L.layerGroup().addTo(map)
   vesselsLayerGroup = L.layerGroup().addTo(map)
 
   if (props.userLocation) {
@@ -791,6 +1100,10 @@ onMounted(() => {
   if (props.turposter && props.turposter.length > 0) {
     lastTurpostSignature = props.turposter.map(p => p.id).join(',')
     updateTurpostMarkers(props.turposter, true)
+  }
+
+  if (props.privateTurposter && props.privateTurposter.length > 0) {
+    updatePrivateTurpostMarkers(props.privateTurposter)
   }
 
   if (props.vessels && props.vessels.length > 0) {
@@ -831,9 +1144,9 @@ onMounted(() => {
   map.on('moveend', updateMapState)
   map.on('zoomend', updateMapState)
 
-  // Admin-modus: klikk i kartet oppretter ny turpost
+  // Klikk i kartet for admin-modus eller "Legg til egen turpost"-modus
   map.on('click', (e: L.LeafletMouseEvent) => {
-    if (props.isAdmin) {
+    if (props.isAdmin || props.isAddSpotActive) {
       emit('admin-map-click', { lat: e.latlng.lat, lng: e.latlng.lng })
     }
   })
