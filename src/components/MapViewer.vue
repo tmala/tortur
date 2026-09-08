@@ -805,7 +805,7 @@ const centerOnUser = (animate = true, zoomLevel?: number) => {
   if (!map || !props.userLocation) return
   isAutoCenter.value = true
 
-  const targetZoom = zoomLevel ?? Math.max(map.getZoom(), 16)
+  const targetZoom = zoomLevel ?? Math.max(map.getZoom(), 15)
   const targetLatLng: L.LatLngExpression = [props.userLocation.lat, props.userLocation.lng]
 
   if (animate) {
@@ -972,6 +972,9 @@ defineExpose({
   zoomToTrack,
   showSpotSuggestion,
   clearSpotSuggestion,
+  resetAutoCenter: () => {
+    isAutoCenter.value = false
+  },
   getMapInstance: () => map
 })
 
@@ -1098,8 +1101,9 @@ watch(
     const hasChanged = signature !== lastTurpostSignature
     lastTurpostSignature = signature
 
-    // Tilpass kun kartutsnittet hvis det faktisk kom et nytt utvalg av turposter
-    updateTurpostMarkers(newPosts || [], hasChanged)
+    // Tilpass kun kartutsnittet med fitBounds hvis det faktisk kom et nytt utvalg av turposter og vi ikke er i auto-sentrert modus på brukeren
+    const shouldFit = hasChanged && !isAutoCenter.value
+    updateTurpostMarkers(newPosts || [], shouldFit)
     updatePrivateTurpostMarkers(props.privateTurposter || [])
   }
 )

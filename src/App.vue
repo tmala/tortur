@@ -11,7 +11,7 @@ import MySpotsModal from './components/MySpotsModal.vue'
 import SpotSuggestionsModal from './components/SpotSuggestionsModal.vue'
 import GpsTrackModal from './components/GpsTrackModal.vue'
 import SavedTracksPanel from './components/SavedTracksPanel.vue'
-import { useGeolocation, calculateDistanceMeters } from './composables/useGeolocation'
+import { useGeolocation, calculateDistanceMeters, type GeoLocationState } from './composables/useGeolocation'
 import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from './composables/useTurposter'
 import { usePrivateTurposter, type SpotSuggestion } from './composables/usePrivateTurposter'
 import { useAis } from './composables/useAis'
@@ -416,6 +416,9 @@ const handleSelectFylke = (fylke: FylkeInfo | null) => {
 }
 
 const handleSelectKommune = (kommune: KommuneInfo | null) => {
+  if (mapViewerRef.value) {
+    mapViewerRef.value.resetAutoCenter()
+  }
   selectKommune(kommune)
   if (selectedFylke.value?.slug === 'utlandet' && (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')) {
     activeLayer.value = 'standard'
@@ -424,6 +427,9 @@ const handleSelectKommune = (kommune: KommuneInfo | null) => {
 
 // Når brukeren velger "Vis turposter" i popupen på kartet
 const handleSelectKommuneByName = async (kommuneName: string) => {
+  if (mapViewerRef.value) {
+    mapViewerRef.value.resetAutoCenter()
+  }
   const result = await selectKommuneByName(kommuneName)
   if (result) {
     isTurposterOpen.value = true
@@ -472,20 +478,13 @@ const handleLocate = async () => {
 
 // Håndter "Vis turposter i min kommune"
 const isLoadingLocalTurposter = ref(false)
+const hasLoadedDefaultTurposter = ref(false)
 
-const handleShowLocalTurposter = async () => {
+const loadLocalTurposterForLocation = async (loc: GeoLocationState, showFeedback = false) => {
   if (isLoadingLocalTurposter.value) return
   isLoadingLocalTurposter.value = true
   try {
-    let loc = coords.value
-    if (!loc) {
-      loc = await getCurrentPosition()
-    }
-    if (!loc) {
-      geoError.value = 'Kunne ikke hente din posisjon for å finne kommunen din.'
-      return
-    }
-
+    await checkAndApplyAbroadLayer(loc.lat, loc.lng)
     const geoResult = await detectKommune(loc.lat, loc.lng)
     if (!geoResult || !geoResult.kommune) {
       // Posisjon er i utlandet – bytt automatisk til OpenStreetMap dersom Norgeskart er aktivt
@@ -496,29 +495,40 @@ const handleShowLocalTurposter = async () => {
       const utlandResult = await selectKommuneByName('Utlandet')
       if (utlandResult) {
         isTurposterOpen.value = false
-        if (mapViewerRef.value) {
-          mapViewerRef.value.centerOnUser(true, 13)
-        }
+        mapViewerRef.value?.centerOnUser?.(true, 15)
         return
       }
-      turError.value = 'Du er i utlandet, og det er ikke registrert noen turposter her ennå.'
+      if (showFeedback) {
+        turError.value =
+          'Posisjonen din ser ut til å være i utlandet (eller usikker via butikk-/hotell-WiFi). Velg kommune manuelt fra menyen.'
+      }
       return
     }
 
     const result = await selectKommuneByName(geoResult.kommune)
     if (result) {
       isTurposterOpen.value = false
-      if (mapViewerRef.value) {
-        mapViewerRef.value.centerOnUser(true, 13)
-      }
-    } else {
-      turError.value = `Fant ingen registrerte turposter for ${geoResult.kommune}.`
+      mapViewerRef.value?.centerOnUser?.(true, 15)
+    } else if (showFeedback) {
+      turError.value = `Fant ingen registrerte turposter for ${geoResult.kommune}. Velg kommune manuelt fra menyen.`
     }
   } catch (err: any) {
     console.warn('Kunne ikke finne lokal kommune:', err)
   } finally {
     isLoadingLocalTurposter.value = false
   }
+}
+
+const handleShowLocalTurposter = async () => {
+  let loc = coords.value
+  if (!loc) {
+    loc = await getCurrentPosition()
+  }
+  if (!loc) {
+    geoError.value = 'Kunne ikke hente din posisjon for å finne kommunen din.'
+    return
+  }
+  await loadLocalTurposterForLocation(loc, true)
 }
 
 // Håndter live sporing / sporlogg ("Følg meg")
@@ -565,21 +575,31 @@ const handleCoordinatesChange = (coordsData: { lat: number; lng: number; zoom: n
   centerCoords.value = coordsData
 }
 
-// Last hierarki og forsøk automatisk å hente brukerens geolokasjon ved oppstart
+// Last hierarki og forsøk automatisk å hente brukerens geolokasjon og lokale turposter ved oppstart
 onMounted(async () => {
   loadHierarchy()
   try {
     const loc = await getCurrentPosition({ timeout: 5000, enableHighAccuracy: true })
     if (loc) {
-      await checkAndApplyAbroadLayer(loc.lat, loc.lng)
-      if (mapViewerRef.value) {
-        mapViewerRef.value.centerOnUser(true, 15)
-      }
+      hasLoadedDefaultTurposter.value = true
+      await loadLocalTurposterForLocation(loc, false)
     }
   } catch {
-    // Hvis brukeren ikke gir tilgang, forblir kartet elegant på Bergen
+    // Hvis brukeren ikke gir tilgang eller posisjon feiler/timer ut ved oppstart, ikke vis feilbanner
+    geoError.value = null
   }
 })
+
+// Dersom posisjonen blir tilgjengelig litt etter oppstart (f.eks. bruker godkjenner i nettleser-dialog)
+watch(
+  coords,
+  (newCoords) => {
+    if (newCoords && !hasLoadedDefaultTurposter.value && !selectedKommune.value) {
+      hasLoadedDefaultTurposter.value = true
+      loadLocalTurposterForLocation(newCoords, false)
+    }
+  }
+)
 
 onUnmounted(() => {
   stopAisPoll()

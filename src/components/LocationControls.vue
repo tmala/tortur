@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   Navigation,
   Layers,
@@ -227,6 +227,26 @@ const selectLayer = (layerId: string) => {
   showLayerMenu.value = false
 }
 
+// Automatisk lukking av feilmelding etter 8 sekunder så den aldri blir stående i veien
+let errorTimeout: ReturnType<typeof setTimeout> | null = null
+
+watch(
+  () => props.error,
+  (newVal) => {
+    if (errorTimeout) {
+      clearTimeout(errorTimeout)
+      errorTimeout = null
+    }
+    if (newVal) {
+      errorTimeout = setTimeout(() => {
+        emit('clear-error')
+        errorTimeout = null
+      }, 8000)
+    }
+  },
+  { immediate: true },
+)
+
 // Event listeners for install, click outside og escape
 onMounted(() => {
   window.addEventListener('click', handleClickOutside)
@@ -244,6 +264,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (errorTimeout) {
+    clearTimeout(errorTimeout)
+    errorTimeout = null
+  }
   window.removeEventListener('click', handleClickOutside)
   window.removeEventListener('keydown', handleKeyDown)
 })
@@ -624,24 +648,24 @@ const handleInstallClick = async () => {
       </transition>
     </div>
 
-    <!-- Feilmelding / Varsel -->
-    <transition name="bounce">
-      <div v-if="error" class="error-banner glass-panel">
-        <div class="error-content">
-          <AlertTriangle :size="20" class="error-icon" />
-          <div class="error-text">
-            <span>{{ error }}</span>
+    <!-- Bunnkontrollpanel (Statuskapsel og varsler – trygt forankret i bunn) -->
+    <div class="bottom-bar">
+      <!-- Feilmelding / Varsel – plassert i bunnområdet slik at den ALDRI dekker over hovedmenyen øverst -->
+      <transition name="bounce">
+        <div v-if="error" class="error-banner glass-panel">
+          <div class="error-content">
+            <AlertTriangle :size="20" class="error-icon" />
+            <div class="error-text">
+              <span>{{ error }}</span>
+            </div>
+          </div>
+          <div class="error-actions">
+            <button class="btn-retry" @click="emit('locate')">Prøv igjen</button>
+            <button class="btn-dismiss" @click="emit('clear-error')">Lukk</button>
           </div>
         </div>
-        <div class="error-actions">
-          <button class="btn-retry" @click="emit('locate')">Prøv igjen</button>
-          <button class="btn-dismiss" @click="emit('clear-error')">Lukk</button>
-        </div>
-      </div>
-    </transition>
+      </transition>
 
-    <!-- Bunnkontrollpanel (Statuskapsel) -->
-    <div class="bottom-bar">
       <!-- Statuskapsel (Koordinater & Nøyaktighet) -->
       <div class="status-pill glass-panel">
         <div v-if="userLocation" class="loc-data">
@@ -675,7 +699,7 @@ const handleInstallClick = async () => {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 16px;
   box-sizing: border-box;
 }
@@ -1350,12 +1374,12 @@ const handleInstallClick = async () => {
   font-size: 12px;
 }
 
-/* Feilbanner - 100% ugjennomsiktig for optimal lesbarhet */
+/* Feilbanner - trygt plassert i bunnområdet slik at hovedmenyen aldri tildekkes */
 .error-banner {
   align-self: center;
   max-width: 480px;
   width: 100%;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 2px solid #ef4444 !important;
   background: #1e1b2e !important;
   border-radius: 14px;
@@ -1364,9 +1388,9 @@ const handleInstallClick = async () => {
     0 0 0 1px rgba(239, 68, 68, 0.3);
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 10px;
+  gap: 10px;
   z-index: 100;
+  pointer-events: auto;
 }
 
 .error-content {
@@ -1430,11 +1454,13 @@ const handleInstallClick = async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
+  margin-top: auto;
   margin-bottom: env(safe-area-inset-bottom, 0px);
+  pointer-events: none;
 }
 
 /* Statuskapsel */
