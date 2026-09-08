@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type GoogleUser, type CheckinResult } from '@/composables/useAuth'
@@ -31,7 +31,21 @@ const isSubmitting = ref(false)
 const errorMessage = ref<string | null>(null)
 const isSuccess = ref(false)
 
-const fileInputRef = ref<HTMLInputElement | null>(null)
+const cameraInputRef = ref<HTMLInputElement | null>(null)
+const galleryInputRef = ref<HTMLInputElement | null>(null)
+const videoRef = ref<HTMLVideoElement | null>(null)
+const isWebcamActive = ref(false)
+const webcamStream = ref<MediaStream | null>(null)
+const isProcessingImage = ref(false)
+
+// Sjekk om enheten er mobil eller nettbrett (for å åpne native kamera vs webkamera)
+const isMobileDevice = computed(() => {
+  if (typeof navigator === 'undefined') return false
+  return (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (Boolean(navigator.maxTouchPoints && navigator.maxTouchPoints > 2) && /Macintosh/i.test(navigator.userAgent))
+  )
+})
 
 // Avstandsberegning til turposten
 const distance = computed(() => {
@@ -57,15 +71,105 @@ watch(
       clearFile()
       errorMessage.value = null
       isSuccess.value = false
+    } else {
+      stopWebcam()
     }
   }
 )
 
-const handleFileChange = (e: Event) => {
+const handleTakePhoto = () => {
+  errorMessage.value = null
+  if (isMobileDevice.value) {
+    cameraInputRef.value?.click()
+  } else {
+    startWebcam()
+  }
+}
+
+async function startWebcam() {
+  errorMessage.value = null
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    errorMessage.value = 'Webkamera støttes ikke i denne nettleseren. Vennligst velg en bildefil i stedet.'
+    return
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    })
+    webcamStream.value = stream
+    isWebcamActive.value = true
+    await nextTick()
+    if (videoRef.value) {
+      videoRef.value.srcObject = stream
+      await videoRef.value.play().catch(() => {})
+    }
+  } catch (err: any) {
+    stopWebcam()
+    console.warn('Feil ved åpning av webkamera:', err)
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      errorMessage.value = 'Ingen tilgang til webkamera. Vennligst tillat kamera i nettleseren, eller velg en bildefil.'
+    } else {
+      errorMessage.value = 'Kunne ikke starte webkamera. Velg en bildefil i stedet.'
+    }
+  }
+}
+
+function stopWebcam() {
+  if (webcamStream.value) {
+    webcamStream.value.getTracks().forEach((track) => track.stop())
+    webcamStream.value = null
+  }
+  if (videoRef.value) {
+    videoRef.value.srcObject = null
+  }
+  isWebcamActive.value = false
+}
+
+async function captureWebcamPhoto() {
+  if (!videoRef.value) return
+  const video = videoRef.value
+  const width = video.videoWidth || 1280
+  const height = video.videoHeight || 720
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    stopWebcam()
+    return
+  }
+
+  ctx.drawImage(video, 0, 0, width, height)
+  stopWebcam()
+
+  canvas.toBlob(
+    async (blob) => {
+      canvas.width = 0
+      canvas.height = 0
+      if (blob) {
+        const file = new File([blob], `webkamera_${Date.now()}.jpg`, { type: 'image/jpeg' })
+        await processAndSetImage(file)
+      }
+    },
+    'image/jpeg',
+    0.85
+  )
+}
+
+const handleFileInputChange = (e: Event) => {
   const target = e.target as HTMLInputElement
   const file = target.files?.[0]
   if (!file) return
+  processAndSetImage(file)
+}
 
+async function processAndSetImage(file: File) {
   // Valider at det er et bilde
   if (!file.type.startsWith('image/')) {
     errorMessage.value = 'Vennligst velg en gyldig bildefil (JPEG, PNG, WebP).'
@@ -79,36 +183,59 @@ const handleFileChange = (e: Event) => {
   }
 
   errorMessage.value = null
-  selectedFile.value = file
-  previewUrl.value = URL.createObjectURL(file)
+  isProcessingImage.value = true
+
+  try {
+    const compressed = await compressImage(file)
+    if (previewUrl.value) {
+      URL.revokeObjectURL(previewUrl.value)
+    }
+    selectedFile.value = compressed
+    previewUrl.value = URL.createObjectURL(compressed)
+  } catch (err: any) {
+    console.warn('Bildeoptimalisering feilet, bruker original:', err)
+    if (previewUrl.value) {
+      URL.revokeObjectURL(previewUrl.value)
+    }
+    selectedFile.value = file
+    previewUrl.value = URL.createObjectURL(file)
+  } finally {
+    isProcessingImage.value = false
+  }
 }
 
 const clearFile = () => {
+  stopWebcam()
   if (previewUrl.value) {
     URL.revokeObjectURL(previewUrl.value)
   }
   selectedFile.value = null
   previewUrl.value = null
-  if (fileInputRef.value) {
-    fileInputRef.value.value = ''
+  if (galleryInputRef.value) {
+    galleryInputRef.value.value = ''
+  }
+  if (cameraInputRef.value) {
+    cameraInputRef.value.value = ''
   }
 }
 
-// Komprimer bildet dersom det er veldig stort før opplasting
-async function compressImageIfNeeded(file: File): Promise<File> {
-  // Hvis under 1.5MB og vanlig format, behold originalen
-  if (file.size <= 1.5 * 1024 * 1024) {
-    return file
-  }
-
+// Komprimerer og nedskalerer bildet umiddelbart ved valg for å unngå minneproblemer på mobil/Android
+async function compressImage(file: File): Promise<File> {
   return new Promise((resolve) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
+
     img.onload = () => {
       URL.revokeObjectURL(url)
-      const maxDim = 1920
+      const maxDim = 1280
       let width = img.width
       let height = img.height
+
+      // Hvis bildet allerede er lite i både dimensjoner og filstørrelse (under 400KB), behold original
+      if (width <= maxDim && height <= maxDim && file.size <= 400 * 1024 && file.type === 'image/jpeg') {
+        resolve(file)
+        return
+      }
 
       if (width > maxDim || height > maxDim) {
         if (width > height) {
@@ -130,28 +257,36 @@ async function compressImageIfNeeded(file: File): Promise<File> {
       }
 
       ctx.drawImage(img, 0, 0, width, height)
+      img.src = ''
+
       canvas.toBlob(
         (blob) => {
+          canvas.width = 0
+          canvas.height = 0
+
           if (blob) {
-            resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }))
+            const cleanName = file.name.replace(/\.[^.]+$/, '') || 'innsjekk'
+            resolve(new File([blob], `${cleanName}.jpg`, { type: 'image/jpeg' }))
           } else {
             resolve(file)
           }
         },
         'image/jpeg',
-        0.85
+        0.82
       )
     }
+
     img.onerror = () => {
       URL.revokeObjectURL(url)
       resolve(file)
     }
+
     img.src = url
   })
 }
 
 const handleSubmit = async () => {
-  if (!props.turpost || !props.user || isSubmitting.value) return
+  if (!props.turpost || !props.user || isSubmitting.value || isProcessingImage.value) return
 
   if (!isWithinRange.value) {
     errorMessage.value = `Du må være innen 100 meter fra turposten for å sjekke inn (${distance.value !== null ? 'nåværende avstand: ' + formatDistance(distance.value) : 'posisjon ikke tilgjengelig'}).`
@@ -162,10 +297,7 @@ const handleSubmit = async () => {
   errorMessage.value = null
 
   try {
-    let fileToUpload = selectedFile.value
-    if (fileToUpload) {
-      fileToUpload = await compressImageIfNeeded(fileToUpload)
-    }
+    const fileToUpload = selectedFile.value
 
     const result = await submitCheckin({
       turpostId: props.turpost.id,
@@ -192,6 +324,7 @@ const handleSubmit = async () => {
 
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Escape' && props.isOpen && !isSubmitting.value) {
+    stopWebcam()
     emit('close')
   }
 }
@@ -202,6 +335,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  stopWebcam()
   if (previewUrl.value) {
     URL.revokeObjectURL(previewUrl.value)
   }
@@ -311,22 +445,75 @@ onUnmounted(() => {
                 </button>
               </div>
 
-              <!-- Last opp knapp / boks -->
-              <div v-else class="upload-box" @click="fileInputRef?.click()">
-                <Camera :size="24" class="camera-icon" />
-                <div class="upload-text">
-                  <strong>Ta bilde eller velg fil</strong>
-                  <span>JPG, PNG eller WebP</span>
+              <!-- Behandler bilde spinner -->
+              <div v-else-if="isProcessingImage" class="image-processing-box">
+                <Loader2 class="spinner processing-spinner" :size="22" />
+                <span>Optimaliserer bilde...</span>
+              </div>
+
+              <!-- Webkamera live visning (PC/Mac) -->
+              <div v-else-if="isWebcamActive" class="webcam-container">
+                <video ref="videoRef" class="webcam-video" autoplay playsinline muted></video>
+                <div class="webcam-controls">
+                  <button type="button" class="btn-webcam-cancel" @click="stopWebcam">
+                    <X :size="16" />
+                    <span>Avbryt</span>
+                  </button>
+                  <button type="button" class="btn-webcam-snap" @click="captureWebcamPhoto">
+                    <Camera :size="18" />
+                    <span>Knips bilde</span>
+                  </button>
                 </div>
               </div>
 
+              <!-- Valg mellom å ta nytt bilde eller velge eksisterende bilde -->
+              <div v-else class="photo-choice-grid">
+                <button
+                  type="button"
+                  class="photo-choice-btn"
+                  :disabled="isSubmitting"
+                  @click="handleTakePhoto"
+                >
+                  <div class="photo-choice-icon camera">
+                    <Camera :size="20" />
+                  </div>
+                  <div class="photo-choice-text">
+                    <strong>Ta bilde</strong>
+                    <span>{{ isMobileDevice ? 'Bruk kamera' : 'Webkamera' }}</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  class="photo-choice-btn"
+                  :disabled="isSubmitting"
+                  @click="galleryInputRef?.click()"
+                >
+                  <div class="photo-choice-icon gallery">
+                    <ImageIcon :size="20" />
+                  </div>
+                  <div class="photo-choice-text">
+                    <strong>Velg bilde</strong>
+                    <span>{{ isMobileDevice ? 'Fra galleri' : 'Fra filer' }}</span>
+                  </div>
+                </button>
+              </div>
+
+              <!-- Skjulte fil-innganger (én med capture for direkte kamera på mobil, én uten for galleri/filer) -->
               <input
-                ref="fileInputRef"
+                ref="cameraInputRef"
                 type="file"
                 accept="image/*"
                 capture="environment"
                 class="hidden-file-input"
-                @change="handleFileChange"
+                @change="handleFileInputChange"
+              />
+              <input
+                ref="galleryInputRef"
+                type="file"
+                accept="image/*"
+                class="hidden-file-input"
+                @change="handleFileInputChange"
               />
             </div>
 
@@ -588,40 +775,164 @@ onUnmounted(() => {
   display: none;
 }
 
-.upload-box {
+.photo-choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.photo-choice-btn {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 2px dashed rgba(255, 255, 255, 0.15);
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   cursor: pointer;
+  text-align: left;
   transition: all 0.2s ease;
-}
-
-.upload-box:hover {
-  background: rgba(56, 189, 248, 0.05);
-  border-color: #38bdf8;
-}
-
-.camera-icon {
-  color: #38bdf8;
-}
-
-.upload-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.upload-text strong {
-  font-size: 13px;
   color: #f8fafc;
 }
 
-.upload-text span {
+.photo-choice-btn:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+}
+
+.photo-choice-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.photo-choice-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.photo-choice-icon.camera {
+  background: rgba(14, 165, 233, 0.18);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.35);
+}
+
+.photo-choice-icon.gallery {
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.photo-choice-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.photo-choice-text strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.photo-choice-text span {
   font-size: 11px;
   color: #94a3b8;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+/* Image processing */
+.image-processing-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px 16px;
+  background: rgba(56, 189, 248, 0.05);
+  border: 1px dashed rgba(56, 189, 248, 0.4);
+  border-radius: 12px;
+  color: #38bdf8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.processing-spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Webcam (PC/Mac) */
+.webcam-container {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000000;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.webcam-video {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  background: #000000;
+  display: block;
+}
+
+.webcam-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-webcam-cancel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #cbd5e1;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-webcam-cancel:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.btn-webcam-snap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+  border: 1px solid #38bdf8;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 10px rgba(2, 132, 199, 0.4);
+}
+
+.btn-webcam-snap:hover {
+  background: linear-gradient(135deg, #0369a1, #1d4ed8);
+  transform: translateY(-1px);
 }
 
 /* Image preview */
