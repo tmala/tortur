@@ -43,6 +43,8 @@ export interface FirebaseCheckinItem {
   timestamp: string
   description: string
   imageUrl: string
+  isPrivate?: boolean
+  spotId?: string
 }
 
 const STORAGE_KEY_USER   = 'tortur_user'
@@ -291,6 +293,144 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
 }
 
 // =============================================================================
+// Slett offentlig innsjekk via Apps Script og direkte i Firebase
+// =============================================================================
+async function deletePublicCheckin(params: {
+  turpostId: string | number
+  checkinId: string
+  timestamp?: string
+}): Promise<void> {
+  if (!user.value) {
+    throw new Error('Du må være innlogget for å slette en innsjekking.')
+  }
+
+  // 1. Send forespørsel til Google Apps Script for sletting i Regneark og Drive
+  if (APPSCRIPT_URL) {
+    const payload = {
+      action: 'delete_checkin',
+      idToken: currentIdToken.value || undefined,
+      userId: user.value.userId,
+      turpostId: String(params.turpostId),
+      checkinId: params.checkinId,
+      timestamp: params.timestamp
+    }
+
+    try {
+      const response = await fetch(APPSCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+        const text = await response.text()
+        const data = JSON.parse(text)
+        if (!data.success) {
+          console.warn('[useAuth] Apps Script delete_checkin returnerte feil:', data.error)
+        }
+      }
+    } catch (err) {
+      console.warn('[useAuth] Feil ved sletting via Apps Script:', err)
+    }
+  }
+
+  // 2. Synkroniser direkte sletting til Firebase RTDB for umiddelbar respons
+  const fbConfig = await getFirebaseConfig()
+  if (fbConfig && params.checkinId) {
+    try {
+      const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(params.checkinId)}.json`
+      const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(params.checkinId)}.json`
+      await Promise.all([
+        fetch(turpostUrl, { method: 'DELETE' }),
+        fetch(userUrl, { method: 'DELETE' })
+      ])
+    } catch (err) {
+      console.warn('[useAuth] Feil ved direkte sletting i Firebase:', err)
+    }
+  }
+}
+
+// =============================================================================
+// Oppdater eller fjern bilde på en offentlig innsjekking
+// =============================================================================
+async function updatePublicCheckinImage(params: {
+  turpostId: string | number
+  checkinId: string
+  timestamp?: string
+  imageFile?: File | null
+}): Promise<string> {
+  if (!user.value) {
+    throw new Error('Du må være innlogget for å oppdatere bilde.')
+  }
+
+  let newImageUrl = ''
+
+  if (APPSCRIPT_URL) {
+    let imagePayload: { base64: string; mimeType: string; fileName: string } | null = null
+    if (params.imageFile) {
+      const base64 = await fileToBase64(params.imageFile)
+      imagePayload = {
+        base64,
+        mimeType: params.imageFile.type || 'image/jpeg',
+        fileName: params.imageFile.name || `innsjekk_${Date.now()}.jpg`
+      }
+    }
+
+    const payload = {
+      action: 'update_checkin_image',
+      idToken: currentIdToken.value || undefined,
+      userId: user.value.userId,
+      turpostId: String(params.turpostId),
+      checkinId: params.checkinId,
+      timestamp: params.timestamp,
+      image: imagePayload
+    }
+
+    const response = await fetch(APPSCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      throw new Error(`Tjeneren svarte med feilstatus ${response.status}`)
+    }
+
+    const text = await response.text()
+    let data: any
+    try {
+      data = JSON.parse(text)
+    } catch {
+      throw new Error('Ugyldig svar fra tjeneren (ikke JSON).')
+    }
+
+    if (!data.success) {
+      throw new Error(data.error || 'Oppdatering av bilde feilet.')
+    }
+
+    newImageUrl = data.imageUrl || ''
+  }
+
+  // Synkroniser direkte til Firebase RTDB for å sikre oppdatering
+  const fbConfig = await getFirebaseConfig()
+  if (fbConfig && params.checkinId) {
+    try {
+      const patchBody = JSON.stringify({ imageUrl: newImageUrl })
+      const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(params.checkinId)}.json`
+      const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(params.checkinId)}.json`
+      await Promise.all([
+        fetch(turpostUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody }),
+        fetch(userUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody })
+      ])
+    } catch (err) {
+      console.warn('[useAuth] Feil ved direkte oppdatering i Firebase:', err)
+    }
+  }
+
+  return newImageUrl
+}
+
+// =============================================================================
 // Hent fersk SystemKonfigurasjon fra Apps Script hvis den mangler eller er utdatert
 // =============================================================================
 async function refreshSystemConfig(): Promise<SystemConfig> {
@@ -423,6 +563,8 @@ export function useAuth() {
     login,
     logout,
     submitCheckin,
+    deletePublicCheckin,
+    updatePublicCheckinImage,
     fetchTurpostCheckins,
     fetchMyCheckins,
     getFirebaseConfig

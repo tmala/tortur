@@ -1,5 +1,5 @@
 // =============================================================================
-// TorTur – Google Apps Script Backend v7
+// TorTur – Google Apps Script Backend v9
 // =============================================================================
 // Instruksjoner:
 //  1. Gå til Google Regneark → Extensions → Apps Script
@@ -15,7 +15,7 @@
 // Forventet struktur i Google Regneark:
 //   Fane "Brukere":            UserID | UserName | Email | AvatarUrl | LastLogin | IsAdmin
 //   Fane "SystemKonfigurasjon": Key    | Value
-//   Fane "TurpostInnsjekk":    UserID | TurpostID | TimeStamp | Beskrivelse | BildeURL
+//   Fane "TurpostInnsjekk":    UserID | TurpostID | TimeStamp | Beskrivelse | BildeURL | CheckinID
 //
 // Nøkler i SystemKonfigurasjon som appen bruker:
 //   AIS_CLIENT_ID          – BarentsWatch Client ID
@@ -48,6 +48,7 @@ var COL_INNSJEKK_TURPOST_ID = 2 // B – TurpostID
 var COL_INNSJEKK_TIMESTAMP = 3 // C – TimeStamp (UTC ISO-streng)
 var COL_INNSJEKK_DESC = 4 // D – Beskrivelse
 var COL_INNSJEKK_IMAGE_URL = 5 // E – BildeURL
+var COL_INNSJEKK_CHECKIN_ID = 6 // F – CheckinID
 
 // =============================================================================
 // authorizeMe – kjør denne funksjonen én gang for å autorisere scriptet
@@ -77,6 +78,10 @@ function doGet(e) {
 //   { "action": "login", "idToken": "<Google id_token>" }
 //   eller
 //   { "action": "checkin", "turpostId": "...", "description": "...", "image": { ... } }
+//   eller
+//   { "action": "delete_checkin", "turpostId": "...", "checkinId": "..." }
+//   eller
+//   { "action": "update_checkin_image", "turpostId": "...", "checkinId": "...", "image": { ... } }
 // =============================================================================
 function doPost(e) {
   try {
@@ -89,6 +94,14 @@ function doPost(e) {
 
     if (action === 'checkin') {
       return handleCheckin(body)
+    }
+
+    if (action === 'delete_checkin') {
+      return handleDeleteCheckin(body)
+    }
+
+    if (action === 'update_checkin_image') {
+      return handleUpdateCheckinImage(body)
     }
 
     if (action === 'getconfig' || action === 'config') {
@@ -272,55 +285,12 @@ function handleCheckin(body) {
   // 3. Handter bildeopplasting til Google Drive
   var imageUrl = ''
   if (body.image && body.image.base64) {
-    try {
-      var systemConfig = getSystemConfig(ss)
-      var baseFolder
-
-      // Sjekk om egen folder ID er oppgitt i SystemKonfigurasjon
-      if (systemConfig.INNSJEKK_FOLDER_ID && systemConfig.INNSJEKK_FOLDER_ID.trim() !== '') {
-        baseFolder = DriveApp.getFolderById(systemConfig.INNSJEKK_FOLDER_ID.trim())
-      } else {
-        // Finn overordnet mappe for regnearket
-        var ssFile = DriveApp.getFileById(SPREADSHEET_ID)
-        var parents = ssFile.getParents()
-        baseFolder = parents.hasNext() ? parents.next() : DriveApp.getRootFolder()
-      }
-
-      // Finn eller opprett underkatalog for turposten (turpostId)
-      var subfolderName = String(turpostId)
-      var folderIterator = baseFolder.getFoldersByName(subfolderName)
-      var targetFolder = folderIterator.hasNext()
-        ? folderIterator.next()
-        : baseFolder.createFolder(subfolderName)
-
-      // Gjor undermappen tilgjengelig med lenke
-      targetFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
-
-      // Dekod base64-bilde
-      var base64Data = body.image.base64
-      if (base64Data.indexOf(',') > -1) {
-        base64Data = base64Data.split(',')[1]
-      }
-
-      var mimeType = body.image.mimeType || 'image/jpeg'
-      var ext =
-        mimeType.indexOf('png') > -1 ? '.png' : mimeType.indexOf('webp') > -1 ? '.webp' : '.jpg'
-      var fileName = body.image.fileName || 'innsjekk_' + Date.now() + ext
-
-      var decodedBytes = Utilities.base64Decode(base64Data)
-      var blob = Utilities.newBlob(decodedBytes, mimeType, fileName)
-      var driveFile = targetFolder.createFile(blob)
-
-      // Gi filen offentlig leserettighet
-      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
-
-      // Generer direkte bilde-URL (lh3.googleusercontent.com/d/ gir direkte bildevisning)
-      imageUrl = 'https://lh3.googleusercontent.com/d/' + driveFile.getId()
-    } catch (driveErr) {
-      Logger.log('Feil ved bildeopplasting til Drive: ' + driveErr.message)
-      imageUrl = 'Feil ved bildeopplasting: ' + driveErr.message
-    }
+    imageUrl = uploadCheckinImage(ss, turpostId, body.image)
   }
+
+  var checkinId = 'c_' + new Date().getTime()
+  var timestamp = new Date().toISOString()
+  var description = (body.description || '').toString().trim()
 
   // 4. Finn eller opprett innsjekkingsfanen
   var innsjekkSheet = ss.getSheetByName(SHEET_INNSJEKK)
@@ -332,23 +302,23 @@ function handleCheckin(body) {
     headers[COL_INNSJEKK_TIMESTAMP - 1] = 'TimeStamp'
     headers[COL_INNSJEKK_DESC - 1] = 'Beskrivelse'
     headers[COL_INNSJEKK_IMAGE_URL - 1] = 'BildeURL'
+    headers[COL_INNSJEKK_CHECKIN_ID - 1] = 'CheckinID'
     innsjekkSheet.appendRow(headers)
 
-    var headerRange = innsjekkSheet.getRange(1, 1, 1, 5)
+    var headerRange = innsjekkSheet.getRange(1, 1, 1, 6)
     headerRange.setFontWeight('bold')
     headerRange.setBackground('#0284c7')
     headerRange.setFontColor('#ffffff')
   }
 
   // 5. Legg til innsjekkingsrad i regnearket
-  var timestamp = new Date().toISOString()
-  var description = (body.description || '').toString().trim()
   var rowData = []
   rowData[COL_INNSJEKK_USER_ID - 1] = userId
   rowData[COL_INNSJEKK_TURPOST_ID - 1] = turpostId
   rowData[COL_INNSJEKK_TIMESTAMP - 1] = timestamp
   rowData[COL_INNSJEKK_DESC - 1] = description
   rowData[COL_INNSJEKK_IMAGE_URL - 1] = imageUrl
+  rowData[COL_INNSJEKK_CHECKIN_ID - 1] = checkinId
   innsjekkSheet.appendRow(rowData)
 
   // 6. Synkroniser til Firebase Realtime Database hvis konfigurert
@@ -361,7 +331,6 @@ function handleCheckin(body) {
       .replace(/^\/|\/$/g, '')
 
     if (firebaseUrl && secretPrefix) {
-      var checkinId = 'c_' + new Date().getTime()
       var turpostName = (body.turpostName || '').toString().trim()
       var firebasePayload = {
         id: checkinId,
@@ -413,6 +382,7 @@ function handleCheckin(body) {
   return jsonResponse({
     success: true,
     checkin: {
+      id: checkinId,
       userId: userId,
       userName: userName,
       userAvatar: userAvatar,
@@ -423,6 +393,363 @@ function handleCheckin(body) {
     },
     systemConfig: getSystemConfig(ss),
   })
+}
+
+// =============================================================================
+// handleDeleteCheckin
+// Sletter en innsjekking fra Google Regneark og tilhørende Google Drive-bilde,
+// og synkroniserer sletting til Firebase RTDB.
+// Kun eieren av innsjekkingen (UserID) har tillatelse til å slette den.
+// =============================================================================
+function handleDeleteCheckin(body) {
+  var turpostId = body.turpostId
+  var checkinId = body.checkinId
+  var timestamp = body.timestamp
+  var userId = body.userId
+
+  // Autentisering / verifisering
+  if (body.idToken) {
+    var googleUser = validateGoogleToken(body.idToken)
+    if (googleUser) {
+      userId = googleUser.sub || userId
+    }
+  }
+
+  if (!userId) {
+    return jsonResponse({
+      success: false,
+      error: 'Ugyldig eller manglende brukeridentifikator for sletting.',
+    })
+  }
+
+  if (!turpostId && !checkinId) {
+    return jsonResponse({
+      success: false,
+      error: 'Mangler turpostId eller checkinId for sletting.',
+    })
+  }
+
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
+  var innsjekkSheet = ss.getSheetByName(SHEET_INNSJEKK)
+  var deletedImageCount = 0
+  var deletedFromSheet = false
+
+  if (innsjekkSheet) {
+    var data = innsjekkSheet.getDataRange().getValues()
+    // Let fra bunnen for sikker rad-sletting
+    for (var i = data.length - 1; i >= 1; i--) {
+      var rowUserId = (data[i][COL_INNSJEKK_USER_ID - 1] || '').toString().trim()
+      var rowTurpostId = (data[i][COL_INNSJEKK_TURPOST_ID - 1] || '').toString().trim()
+      var rowTimestamp = (data[i][COL_INNSJEKK_TIMESTAMP - 1] || '').toString().trim()
+      var rowImageUrl = (data[i][COL_INNSJEKK_IMAGE_URL - 1] || '').toString().trim()
+      var rowCheckinId =
+        data[i].length >= COL_INNSJEKK_CHECKIN_ID
+          ? (data[i][COL_INNSJEKK_CHECKIN_ID - 1] || '').toString().trim()
+          : ''
+
+      // Krev at raden tilhører innlogget bruker!
+      if (rowUserId !== userId) {
+        continue
+      }
+
+      var isMatch = false
+      if (checkinId && rowCheckinId && rowCheckinId === checkinId) {
+        isMatch = true
+      } else if (turpostId && String(turpostId) === rowTurpostId) {
+        if (checkinId && rowCheckinId && rowCheckinId === checkinId) {
+          isMatch = true
+        } else if (timestamp && rowTimestamp === timestamp) {
+          isMatch = true
+        } else if (!rowCheckinId && !checkinId && timestamp && rowTimestamp === timestamp) {
+          isMatch = true
+        }
+      }
+
+      if (isMatch) {
+        // Slett tilhørende Drive-bilde hvis det finnes
+        var fileId = extractDriveFileId(rowImageUrl)
+        if (fileId) {
+          deleteDriveFile(fileId)
+          deletedImageCount++
+        }
+        innsjekkSheet.deleteRow(i + 1)
+        deletedFromSheet = true
+        break
+      }
+    }
+  }
+
+  // Synkroniser sletting til Firebase Realtime Database hvis konfigurert
+  try {
+    var sysConfig = getSystemConfig(ss)
+    var firebaseUrl = (sysConfig.FIREBASE_DB_URL || '').toString().trim().replace(/\/$/, '')
+    var secretPrefix = (sysConfig.FIREBASE_SECRET_PREFIX || '')
+      .toString()
+      .trim()
+      .replace(/^\/|\/$/g, '')
+
+    if (firebaseUrl && secretPrefix && checkinId) {
+      var fetchOptions = {
+        method: 'delete',
+        muteHttpExceptions: true,
+      }
+
+      if (turpostId) {
+        var turpostUrl =
+          firebaseUrl +
+          '/' +
+          secretPrefix +
+          '/turposter/' +
+          encodeURIComponent(turpostId) +
+          '/' +
+          encodeURIComponent(checkinId) +
+          '.json'
+        UrlFetchApp.fetch(turpostUrl, fetchOptions)
+      }
+
+      var brukerUrl =
+        firebaseUrl +
+        '/' +
+        secretPrefix +
+        '/brukere/' +
+        encodeURIComponent(userId) +
+        '/' +
+        encodeURIComponent(checkinId) +
+        '.json'
+      UrlFetchApp.fetch(brukerUrl, fetchOptions)
+    }
+  } catch (fbErr) {
+    Logger.log('Feil ved sletting i Firebase: ' + fbErr.message)
+  }
+
+  return jsonResponse({
+    success: true,
+    checkinId: checkinId,
+    deletedFromSheet: deletedFromSheet,
+    deletedImages: deletedImageCount,
+  })
+}
+
+// =============================================================================
+// handleUpdateCheckinImage
+// Oppdaterer eller fjerner turbildet for en innsjekking i Google Regneark og Firebase,
+// samt sletter gammelt bilde fra Google Drive og laster opp eventuelt nytt bilde.
+// Kun eieren av innsjekkingen (UserID) har tillatelse til å oppdatere den.
+// =============================================================================
+function handleUpdateCheckinImage(body) {
+  var turpostId = body.turpostId
+  var checkinId = body.checkinId
+  var timestamp = body.timestamp
+  var userId = body.userId
+
+  // Autentisering / verifisering
+  if (body.idToken) {
+    var googleUser = validateGoogleToken(body.idToken)
+    if (googleUser) {
+      userId = googleUser.sub || userId
+    }
+  }
+
+  if (!userId) {
+    return jsonResponse({
+      success: false,
+      error: 'Ugyldig eller manglende brukeridentifikator for bildeoppdatering.',
+    })
+  }
+
+  if (!turpostId && !checkinId) {
+    return jsonResponse({
+      success: false,
+      error: 'Mangler turpostId eller checkinId for bildeoppdatering.',
+    })
+  }
+
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
+  var innsjekkSheet = ss.getSheetByName(SHEET_INNSJEKK)
+  var updatedImageUrl = ''
+  var foundRowIndex = -1
+  var oldImageUrl = ''
+
+  if (innsjekkSheet) {
+    var data = innsjekkSheet.getDataRange().getValues()
+    for (var i = 1; i < data.length; i++) {
+      var rowUserId = (data[i][COL_INNSJEKK_USER_ID - 1] || '').toString().trim()
+      var rowTurpostId = (data[i][COL_INNSJEKK_TURPOST_ID - 1] || '').toString().trim()
+      var rowTimestamp = (data[i][COL_INNSJEKK_TIMESTAMP - 1] || '').toString().trim()
+      var rowCheckinId =
+        data[i].length >= COL_INNSJEKK_CHECKIN_ID
+          ? (data[i][COL_INNSJEKK_CHECKIN_ID - 1] || '').toString().trim()
+          : ''
+
+      if (rowUserId !== userId) {
+        continue
+      }
+
+      var isMatch = false
+      if (checkinId && rowCheckinId && rowCheckinId === checkinId) {
+        isMatch = true
+      } else if (turpostId && String(turpostId) === rowTurpostId) {
+        if (checkinId && rowCheckinId && rowCheckinId === checkinId) {
+          isMatch = true
+        } else if (timestamp && rowTimestamp === timestamp) {
+          isMatch = true
+        }
+      }
+
+      if (isMatch) {
+        foundRowIndex = i + 1
+        oldImageUrl = (data[i][COL_INNSJEKK_IMAGE_URL - 1] || '').toString().trim()
+        break
+      }
+    }
+  }
+
+  // 1. Slett gammelt bilde fra Google Drive hvis det finnes
+  if (oldImageUrl) {
+    var oldFileId = extractDriveFileId(oldImageUrl)
+    if (oldFileId) {
+      deleteDriveFile(oldFileId)
+    }
+  }
+
+  // 2. Hvis nytt bilde er oppgitt, last opp til Google Drive
+  if (body.image && body.image.base64) {
+    updatedImageUrl = uploadCheckinImage(ss, turpostId, body.image)
+  } else {
+    updatedImageUrl = ''
+  }
+
+  // 3. Oppdater rad i regnearket hvis funnet
+  if (foundRowIndex > 0 && innsjekkSheet) {
+    innsjekkSheet.getRange(foundRowIndex, COL_INNSJEKK_IMAGE_URL).setValue(updatedImageUrl)
+  }
+
+  // 4. Oppdater Firebase Realtime Database hvis konfigurert
+  try {
+    var sysConfig = getSystemConfig(ss)
+    var firebaseUrl = (sysConfig.FIREBASE_DB_URL || '').toString().trim().replace(/\/$/, '')
+    var secretPrefix = (sysConfig.FIREBASE_SECRET_PREFIX || '')
+      .toString()
+      .trim()
+      .replace(/^\/|\/$/g, '')
+
+    if (firebaseUrl && secretPrefix && checkinId) {
+      var fetchOptions = {
+        method: 'patch',
+        contentType: 'application/json',
+        payload: JSON.stringify({ imageUrl: updatedImageUrl }),
+        muteHttpExceptions: true,
+      }
+
+      if (turpostId) {
+        var turpostUrl =
+          firebaseUrl +
+          '/' +
+          secretPrefix +
+          '/turposter/' +
+          encodeURIComponent(turpostId) +
+          '/' +
+          encodeURIComponent(checkinId) +
+          '.json'
+        UrlFetchApp.fetch(turpostUrl, fetchOptions)
+      }
+
+      var brukerUrl =
+        firebaseUrl +
+        '/' +
+        secretPrefix +
+        '/brukere/' +
+        encodeURIComponent(userId) +
+        '/' +
+        encodeURIComponent(checkinId) +
+        '.json'
+      UrlFetchApp.fetch(brukerUrl, fetchOptions)
+    }
+  } catch (fbErr) {
+    Logger.log('Feil ved bildeoppdatering i Firebase: ' + fbErr.message)
+  }
+
+  return jsonResponse({
+    success: true,
+    checkinId: checkinId,
+    imageUrl: updatedImageUrl,
+  })
+}
+
+// =============================================================================
+// uploadCheckinImage
+// Hjelpefunksjon for å laste opp et bilde til riktig turpost-undermappe i Drive
+// =============================================================================
+function uploadCheckinImage(ss, turpostId, imageObj) {
+  try {
+    var systemConfig = getSystemConfig(ss)
+    var baseFolder
+
+    if (systemConfig.INNSJEKK_FOLDER_ID && systemConfig.INNSJEKK_FOLDER_ID.trim() !== '') {
+      baseFolder = DriveApp.getFolderById(systemConfig.INNSJEKK_FOLDER_ID.trim())
+    } else {
+      var ssFile = DriveApp.getFileById(SPREADSHEET_ID)
+      var parents = ssFile.getParents()
+      baseFolder = parents.hasNext() ? parents.next() : DriveApp.getRootFolder()
+    }
+
+    var subfolderName = String(turpostId || 'ukjent')
+    var folderIterator = baseFolder.getFoldersByName(subfolderName)
+    var targetFolder = folderIterator.hasNext()
+      ? folderIterator.next()
+      : baseFolder.createFolder(subfolderName)
+
+    targetFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+
+    var base64Data = imageObj.base64
+    if (base64Data.indexOf(',') > -1) {
+      base64Data = base64Data.split(',')[1]
+    }
+
+    var mimeType = imageObj.mimeType || 'image/jpeg'
+    var ext =
+      mimeType.indexOf('png') > -1 ? '.png' : mimeType.indexOf('webp') > -1 ? '.webp' : '.jpg'
+    var fileName = imageObj.fileName || 'innsjekk_' + Date.now() + ext
+
+    var decodedBytes = Utilities.base64Decode(base64Data)
+    var blob = Utilities.newBlob(decodedBytes, mimeType, fileName)
+    var driveFile = targetFolder.createFile(blob)
+
+    driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+    return 'https://lh3.googleusercontent.com/d/' + driveFile.getId()
+  } catch (driveErr) {
+    Logger.log('Feil ved bildeopplasting til Drive: ' + driveErr.message)
+    return ''
+  }
+}
+
+// =============================================================================
+// extractDriveFileId
+// Henter ut fil-ID fra en Google Drive / Google UserContent URL
+// =============================================================================
+function extractDriveFileId(url) {
+  if (!url || typeof url !== 'string') return null
+  var m = url.match(/\/d\/([a-zA-Z0-9_-]+)/)
+  if (m && m[1]) return m[1]
+  var m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+  if (m2 && m2[1]) return m2[1]
+  return null
+}
+
+// =============================================================================
+// deleteDriveFile
+// Sletter (legger i papirkurven) en fil i Google Drive
+// =============================================================================
+function deleteDriveFile(fileId) {
+  if (!fileId) return
+  try {
+    var file = DriveApp.getFileById(fileId)
+    if (file) {
+      file.setTrashed(true)
+    }
+  } catch (err) {
+    Logger.log('Kunne ikke slette Drive-fil (' + fileId + '): ' + err.message)
+  }
 }
 
 // =============================================================================

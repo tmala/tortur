@@ -264,7 +264,13 @@ export function usePrivateTurposter() {
       if (!res.ok) return []
       const data = await res.json()
       if (!data || typeof data !== 'object') return []
-      return Object.values(data).filter(item => item && typeof item === 'object' && (item as any).turpostId != null) as FirebaseCheckinItem[]
+      return Object.values(data)
+        .filter(item => item && typeof item === 'object' && (item as any).turpostId != null)
+        .map(item => ({
+          ...(item as FirebaseCheckinItem),
+          isPrivate: true,
+          spotId: spotId
+        }))
     } catch (err) {
       console.warn('[usePrivateTurposter] Kunne ikke hente innsjekkinger for spot:', err)
       return []
@@ -289,6 +295,42 @@ export function usePrivateTurposter() {
   }
 
   /**
+   * Oppdaterer eller fjerner turbildet for en privat innsjekking.
+   */
+  async function updatePrivateCheckinImage(
+    userId: string,
+    spotId: string,
+    checkinId: string,
+    imageFile?: File | null
+  ): Promise<string> {
+    if (!userId || userId === 'guest' || !spotId || !checkinId) {
+      throw new Error('Mangler parametre for oppdatering av privat turbilde.')
+    }
+    const config = await getFirebaseConfig()
+    if (!config) {
+      throw new Error('Firebase-konfigurasjon er ikke tilgjengelig.')
+    }
+
+    let photoUrl = ''
+    if (imageFile) {
+      photoUrl = await fileToDataUrl(imageFile)
+    }
+
+    const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}/${encodeURIComponent(checkinId)}.json`
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageUrl: photoUrl })
+    })
+
+    if (!res.ok) {
+      throw new Error(`Kunne ikke oppdatere bilde på privat innsjekking (status ${res.status})`)
+    }
+
+    return photoUrl
+  }
+
+  /**
    * Henter alle innsjekkinger på innlogget brukers private turposter.
    * Sti: /<prefix>/brukere/<userId>/my_spots_checkins.json
    */
@@ -307,11 +349,15 @@ export function usePrivateTurposter() {
 
       const checkins: FirebaseCheckinItem[] = []
       // Data kan være strukturert som { [spotId]: { [checkinId]: item } }
-      for (const spotVal of Object.values(data)) {
+      for (const [spotId, spotVal] of Object.entries(data)) {
         if (!spotVal || typeof spotVal !== 'object') continue
         for (const item of Object.values(spotVal as any)) {
           if (item && typeof item === 'object' && (item as any).turpostId != null) {
-            checkins.push(item as FirebaseCheckinItem)
+            checkins.push({
+              ...(item as FirebaseCheckinItem),
+              isPrivate: true,
+              spotId: spotId
+            })
           }
         }
       }
@@ -517,6 +563,7 @@ export function usePrivateTurposter() {
     fetchMyPrivateCheckins,
     fetchPrivateCheckinsForSpot,
     deletePrivateCheckin,
+    updatePrivateCheckinImage,
     submitPrivateCheckin,
     fetchSpotSuggestions,
     deleteSpotSuggestion,

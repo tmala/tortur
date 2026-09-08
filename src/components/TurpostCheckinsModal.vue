@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
-import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Image as ImageIcon, Trash2 } from 'lucide-vue-next'
+import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Image as ImageIcon, Trash2, Camera } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
@@ -27,10 +27,12 @@ const emit = defineEmits<{
   (e: 'open-checkin', post: TurpostItem): void
   (e: 'private-checkin-deleted'): void
   (e: 'delete-private-spot', spotId: string): void
+  (e: 'checkin-deleted', checkinId: string): void
+  (e: 'checkin-updated'): void
 }>()
 
-const { fetchTurpostCheckins } = useAuth()
-const { fetchPrivateCheckinsForSpot, deletePrivateCheckin } = usePrivateTurposter()
+const { fetchTurpostCheckins, deletePublicCheckin, updatePublicCheckinImage } = useAuth()
+const { fetchPrivateCheckinsForSpot, deletePrivateCheckin, updatePrivateCheckinImage } = usePrivateTurposter()
 
 const checkins = ref<FirebaseCheckinItem[]>([])
 const privateCheckins = ref<FirebaseCheckinItem[]>([])
@@ -147,20 +149,117 @@ const loadCheckins = async () => {
   }
 }
 
-async function handleDeletePrivateCheckin(checkinId: string) {
+const isActionLoading = ref<string | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const activeTargetCheckin = ref<FirebaseCheckinItem | null>(null)
+
+function triggerImagePicker(item: FirebaseCheckinItem) {
+  activeTargetCheckin.value = item
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+    fileInputRef.value.click()
+  }
+}
+
+async function handleImageFileSelected(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !activeTargetCheckin.value) return
+
+  const item = activeTargetCheckin.value
+  isActionLoading.value = item.id
+
+  try {
+    if (activeTab.value === 'private' || item.isPrivate) {
+      if (!props.currentUserId) return
+      const primaryId = props.matchingPrivateSpot ? String(props.matchingPrivateSpot.id) : String(props.turpost?.id)
+      const newUrl = await updatePrivateCheckinImage(props.currentUserId, item.spotId || primaryId, item.id, file)
+      item.imageUrl = newUrl
+    } else {
+      if (!props.turpost) return
+      const newUrl = await updatePublicCheckinImage({
+        turpostId: props.turpost.id,
+        checkinId: item.id,
+        timestamp: item.timestamp,
+        imageFile: file
+      })
+      item.imageUrl = newUrl
+    }
+    emit('checkin-updated')
+  } catch (err: any) {
+    alert(err?.message || 'Kunne ikke oppdatere bilde.')
+  } finally {
+    isActionLoading.value = null
+    activeTargetCheckin.value = null
+  }
+}
+
+async function handleRemoveImage(item: FirebaseCheckinItem) {
+  if (!confirm('Er du sikker på at du vil fjerne bildet fra denne innsjekkingen?')) return
+  isActionLoading.value = item.id
+
+  try {
+    if (activeTab.value === 'private' || item.isPrivate) {
+      if (!props.currentUserId) return
+      const primaryId = props.matchingPrivateSpot ? String(props.matchingPrivateSpot.id) : String(props.turpost?.id)
+      await updatePrivateCheckinImage(props.currentUserId, item.spotId || primaryId, item.id, null)
+      item.imageUrl = ''
+    } else {
+      if (!props.turpost) return
+      await updatePublicCheckinImage({
+        turpostId: props.turpost.id,
+        checkinId: item.id,
+        timestamp: item.timestamp,
+        imageFile: null
+      })
+      item.imageUrl = ''
+    }
+    emit('checkin-updated')
+  } catch (err: any) {
+    alert(err?.message || 'Kunne ikke fjerne bildet.')
+  } finally {
+    isActionLoading.value = null
+  }
+}
+
+async function handleDeletePublicCheckin(item: FirebaseCheckinItem) {
+  if (!props.turpost) return
+  if (!confirm('Er du sikker på at du vil slette denne innsjekkingen? Hvis den har et tilhørende bilde vil også bildet bli slettet.')) return
+
+  isActionLoading.value = item.id
+  try {
+    await deletePublicCheckin({
+      turpostId: props.turpost.id,
+      checkinId: item.id,
+      timestamp: item.timestamp
+    })
+    checkins.value = checkins.value.filter((c) => c.id !== item.id)
+    emit('checkin-deleted', item.id)
+  } catch (err: any) {
+    alert(err?.message || 'Kunne ikke slette innsjekkingen.')
+  } finally {
+    isActionLoading.value = null
+  }
+}
+
+async function handleDeletePrivateCheckin(item: FirebaseCheckinItem) {
   if (!props.currentUserId || !props.turpost) return
   if (!confirm('Er du sikker på at du vil slette denne private innsjekkingen?')) return
 
+  isActionLoading.value = item.id
   try {
     const primaryId = props.matchingPrivateSpot ? String(props.matchingPrivateSpot.id) : String(props.turpost.id)
-    await deletePrivateCheckin(props.currentUserId, primaryId, checkinId)
+    await deletePrivateCheckin(props.currentUserId, item.spotId || primaryId, item.id)
     if (primaryId !== String(props.turpost.id)) {
-      await deletePrivateCheckin(props.currentUserId, String(props.turpost.id), checkinId).catch(() => {})
+      await deletePrivateCheckin(props.currentUserId, String(props.turpost.id), item.id).catch(() => {})
     }
-    privateCheckins.value = privateCheckins.value.filter((c) => c.id !== checkinId)
+    privateCheckins.value = privateCheckins.value.filter((c) => c.id !== item.id)
     emit('private-checkin-deleted')
+    emit('checkin-deleted', item.id)
   } catch (err) {
     alert('Kunne ikke slette innsjekkingen.')
+  } finally {
+    isActionLoading.value = null
   }
 }
 
@@ -442,17 +541,43 @@ onUnmounted(() => {
                     </div>
                   </div>
 
-                  <!-- Slett-knapp for private innsjekkinger -->
-                  <button
-                    v-if="activeTab === 'private'"
-                    type="button"
-                    class="btn-delete-checkin"
-                    @click.stop="handleDeletePrivateCheckin(item.id)"
-                    title="Slett denne private innsjekkingen"
-                  >
-                    <Trash2 :size="13" />
-                    <span>Slett</span>
-                  </button>
+                  <!-- Handlinger for egne innsjekkinger (både felles og private) -->
+                  <div v-if="item.userId === currentUserId" class="checkin-item-actions">
+                    <button
+                      type="button"
+                      class="btn-item-action"
+                      :disabled="isActionLoading === item.id"
+                      @click.stop="triggerImagePicker(item)"
+                      :title="item.imageUrl ? 'Bytt ut bildet' : 'Legg til bilde'"
+                    >
+                      <Camera :size="12" />
+                      <span>{{ item.imageUrl ? 'Endre bilde' : 'Legg til bilde' }}</span>
+                    </button>
+
+                    <button
+                      v-if="item.imageUrl"
+                      type="button"
+                      class="btn-item-action danger-subtle"
+                      :disabled="isActionLoading === item.id"
+                      @click.stop="handleRemoveImage(item)"
+                      title="Fjern bilde fra innsjekkingen"
+                    >
+                      <X :size="12" />
+                      <span>Fjern bilde</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn-item-action danger"
+                      :disabled="isActionLoading === item.id"
+                      @click.stop="activeTab === 'private' ? handleDeletePrivateCheckin(item) : handleDeletePublicCheckin(item)"
+                      title="Slett denne innsjekkingen"
+                    >
+                      <Loader2 v-if="isActionLoading === item.id" class="spinner" :size="12" />
+                      <Trash2 v-else :size="12" />
+                      <span>Slett</span>
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Beskrivelse -->
@@ -469,6 +594,15 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+
+        <!-- Skjult filvelger for bildeendring -->
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept="image/*"
+          style="display: none"
+          @change="handleImageFileSelected"
+        />
 
         <!-- Bilde-lightbox -->
         <Transition name="fade">
@@ -1000,6 +1134,62 @@ onUnmounted(() => {
   background: rgba(239, 68, 68, 0.25);
   border-color: #ef4444;
   color: #fca5a5;
+}
+
+.checkin-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-item-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-item-action:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+.btn-item-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-item-action.danger-subtle {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.btn-item-action.danger-subtle:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.btn-item-action.danger {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.btn-item-action.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: #ef4444;
+  color: #fef2f2;
 }
 
 .user-details .date {

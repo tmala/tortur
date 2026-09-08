@@ -703,6 +703,8 @@ onUnmounted(() => {
       @open-checkin="(post: TurpostItem) => { activeViewCheckinsPost = null; activeCheckinPost = post }"
       @private-checkin-deleted="loadMyCheckins"
       @delete-private-spot="handleDeletePrivateSpot"
+      @checkin-deleted="loadMyCheckins"
+      @checkin-updated="loadMyCheckins"
     />
 
     <!-- Profilvisning med brukerens innsjekkede turposter og utlogging -->
@@ -721,6 +723,8 @@ onUnmounted(() => {
       @open-saved-tracks="isSavedTracksOpen = true"
       @open-my-spots="isMySpotsOpen = true"
       @open-spot-suggestions="isSpotSuggestionsOpen = true"
+      @checkin-deleted="loadMyCheckins"
+      @checkin-updated="loadMyCheckins"
     />
 
     <!-- Mine turposter modal -->

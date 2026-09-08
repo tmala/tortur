@@ -15,9 +15,13 @@ import {
   ChevronDown,
   Route,
   Star,
-  ClipboardList
+  ClipboardList,
+  Trash2,
+  Camera,
+  Loader2
 } from 'lucide-vue-next'
-import type { GoogleUser, FirebaseCheckinItem } from '@/composables/useAuth'
+import { useAuth, type GoogleUser, type FirebaseCheckinItem } from '@/composables/useAuth'
+import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 
 const props = defineProps<{
   isOpen: boolean
@@ -39,7 +43,105 @@ const emit = defineEmits<{
   (e: 'open-saved-tracks'): void
   (e: 'open-my-spots'): void
   (e: 'open-spot-suggestions'): void
+  (e: 'checkin-deleted', checkinId: string): void
+  (e: 'checkin-updated'): void
 }>()
+
+const { deletePublicCheckin, updatePublicCheckinImage } = useAuth()
+const { deletePrivateCheckin, updatePrivateCheckinImage } = usePrivateTurposter()
+
+const isActionLoading = ref<string | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const activeTargetCheckin = ref<FirebaseCheckinItem | null>(null)
+
+function triggerImagePicker(item: FirebaseCheckinItem) {
+  activeTargetCheckin.value = item
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+    fileInputRef.value.click()
+  }
+}
+
+async function handleImageFileSelected(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !activeTargetCheckin.value) return
+
+  const item = activeTargetCheckin.value
+  isActionLoading.value = item.id
+
+  try {
+    if (item.isPrivate) {
+      if (!props.user) return
+      const newUrl = await updatePrivateCheckinImage(props.user.userId, item.spotId || item.turpostId, item.id, file)
+      item.imageUrl = newUrl
+    } else {
+      const newUrl = await updatePublicCheckinImage({
+        turpostId: item.turpostId,
+        checkinId: item.id,
+        timestamp: item.timestamp,
+        imageFile: file
+      })
+      item.imageUrl = newUrl
+    }
+    emit('checkin-updated')
+  } catch (err: any) {
+    alert(err?.message || 'Kunne ikke oppdatere bildet.')
+  } finally {
+    isActionLoading.value = null
+    activeTargetCheckin.value = null
+  }
+}
+
+async function handleRemoveImage(item: FirebaseCheckinItem) {
+  if (!confirm('Er du sikker på at du vil fjerne bildet fra denne innsjekkingen?')) return
+  isActionLoading.value = item.id
+
+  try {
+    if (item.isPrivate) {
+      if (!props.user) return
+      await updatePrivateCheckinImage(props.user.userId, item.spotId || item.turpostId, item.id, null)
+      item.imageUrl = ''
+    } else {
+      await updatePublicCheckinImage({
+        turpostId: item.turpostId,
+        checkinId: item.id,
+        timestamp: item.timestamp,
+        imageFile: null
+      })
+      item.imageUrl = ''
+    }
+    emit('checkin-updated')
+  } catch (err: any) {
+    alert(err?.message || 'Kunne ikke fjerne bildet.')
+  } finally {
+    isActionLoading.value = null
+  }
+}
+
+async function handleDeleteCheckin(item: FirebaseCheckinItem) {
+  if (!confirm('Er du sikker på at du vil slette denne innsjekkingen? Hvis den har et tilhørende bilde vil også bildet bli slettet.')) return
+
+  isActionLoading.value = item.id
+  try {
+    if (item.isPrivate) {
+      if (props.user) {
+        await deletePrivateCheckin(props.user.userId, item.spotId || item.turpostId, item.id)
+      }
+    } else {
+      await deletePublicCheckin({
+        turpostId: item.turpostId,
+        checkinId: item.id,
+        timestamp: item.timestamp
+      })
+    }
+    emit('checkin-deleted', item.id)
+  } catch (err: any) {
+    alert(err?.message || 'Kunne ikke slette innsjekkingen.')
+  } finally {
+    isActionLoading.value = null
+  }
+}
 
 const isRefreshing = ref(false)
 
@@ -449,6 +551,7 @@ onUnmounted(() => {
                       <span class="turpost-heading">
                         {{ item.turpostName || ('Turpost ' + item.turpostId) }}
                       </span>
+                      <span v-if="item.isPrivate" class="private-badge-pill">Privat</span>
                     </div>
                     <div class="checkin-header-right">
                       <div class="checkin-date-badge">
@@ -497,12 +600,59 @@ onUnmounted(() => {
                     >
                       Ingen notat eller bilde registrert på denne turen.
                     </p>
+
+                    <!-- Handlingsknapper for innsjekkingen -->
+                    <div class="user-checkin-actions">
+                      <button
+                        type="button"
+                        class="btn-checkin-action"
+                        :disabled="isActionLoading === item.id"
+                        @click.stop="triggerImagePicker(item)"
+                        :title="item.imageUrl ? 'Bytt ut turbildet' : 'Legg til turbilde'"
+                      >
+                        <Camera :size="12" />
+                        <span>{{ item.imageUrl ? 'Endre bilde' : 'Legg til bilde' }}</span>
+                      </button>
+
+                      <button
+                        v-if="item.imageUrl"
+                        type="button"
+                        class="btn-checkin-action danger-subtle"
+                        :disabled="isActionLoading === item.id"
+                        @click.stop="handleRemoveImage(item)"
+                        title="Fjern bildet fra innsjekkingen"
+                      >
+                        <X :size="12" />
+                        <span>Fjern bilde</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        class="btn-checkin-action danger"
+                        :disabled="isActionLoading === item.id"
+                        @click.stop="handleDeleteCheckin(item)"
+                        title="Slett denne innsjekkingen"
+                      >
+                        <Loader2 v-if="isActionLoading === item.id" class="spinner" :size="12" />
+                        <Trash2 v-else :size="12" />
+                        <span>Slett</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- Skjult filvelger for bildeendring -->
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept="image/*"
+          style="display: none"
+          @change="handleImageFileSelected"
+        />
 
         <!-- Lightbox for fullskjermvisning av turbilder -->
         <transition name="lightbox-fade">
@@ -1111,6 +1261,76 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 700;
   color: #f8fafc;
+}
+
+.private-badge-pill {
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.user-checkin-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.btn-checkin-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-checkin-action:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+.btn-checkin-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-checkin-action.danger-subtle {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.btn-checkin-action.danger-subtle:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.btn-checkin-action.danger {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  margin-left: auto;
+}
+
+.btn-checkin-action.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: #ef4444;
+  color: #fef2f2;
 }
 
 .checkin-date-badge {
