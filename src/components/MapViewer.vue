@@ -55,6 +55,7 @@ let privateTurpostsLayerGroup: L.LayerGroup | null = null
 let vesselsLayerGroup: L.LayerGroup | null = null
 let geoJsonLayer: L.GeoJSON | null = null
 let geoJsonData: any = null
+let suggestionMarker: L.Marker | null = null
 const markerMap = new Map<string, L.Marker>()
 
 // Definisjoner av 100% gratis kartlag uten API-nøkkel
@@ -167,6 +168,23 @@ const createPrivateTurpostIcon = (isVisited: boolean = false) => {
     iconSize: [32, 38],
     iconAnchor: [16, 36],
     popupAnchor: [0, -32]
+  })
+}
+
+const createSuggestionTurpostIcon = () => {
+  return L.divIcon({
+    className: 'custom-turpost-pin suggestion-pin',
+    html: `
+      <div class="turpost-pin-marker is-suggestion">
+        <div class="suggestion-pulse"></div>
+        <div class="turpost-pin-icon">
+          <span>📋</span>
+        </div>
+      </div>
+    `,
+    iconSize: [36, 42],
+    iconAnchor: [18, 40],
+    popupAnchor: [0, -36]
   })
 }
 
@@ -890,11 +908,70 @@ const zoomToTrack = (points?: TrackPoint[]) => {
   }
 }
 
+const showSpotSuggestion = (spot: {
+  lat: number
+  lng: number
+  name: string
+  alt?: number | null
+  kommune?: string
+  fylke?: string
+  userName?: string
+  userEmail?: string
+}) => {
+  if (!map) return
+
+  const latLng: L.LatLngTuple = [spot.lat, spot.lng]
+
+  if (!suggestionMarker) {
+    suggestionMarker = L.marker(latLng, {
+      icon: createSuggestionTurpostIcon(),
+      title: `Forslag: ${spot.name}`,
+      zIndexOffset: 1200
+    }).addTo(map)
+  } else {
+    suggestionMarker.setLatLng(latLng)
+    suggestionMarker.setIcon(createSuggestionTurpostIcon())
+  }
+
+  const geoInfo = [spot.kommune, spot.fylke].filter(Boolean).join(', ')
+  const userText = spot.userName || spot.userEmail ? `<br/>Foreslått av: ${spot.userName || spot.userEmail}` : ''
+  const popupContent = `
+    <div class="turpost-popup">
+      <div class="popup-private-tag" style="background: rgba(249, 115, 22, 0.2); border-color: rgba(249, 115, 22, 0.5); color: #fdba74;">
+        📋 Innkommet forslag
+      </div>
+      <h4>${spot.name}</h4>
+      ${spot.alt ? `<div class="popup-badge">⛰️ ${spot.alt} moh.</div>` : ''}
+      <div class="popup-info">
+        ${geoInfo ? geoInfo + '<br/>' : ''}
+        Posisjon: ${spot.lat.toFixed(5)}°, ${spot.lng.toFixed(5)}°
+        ${userText}
+      </div>
+    </div>
+  `
+
+  suggestionMarker.bindPopup(popupContent).openPopup()
+
+  map.flyTo(latLng, Math.max(map.getZoom(), 15), {
+    duration: 1.0,
+    easeLinearity: 0.25
+  })
+}
+
+const clearSpotSuggestion = () => {
+  if (suggestionMarker && map) {
+    map.removeLayer(suggestionMarker)
+    suggestionMarker = null
+  }
+}
+
 defineExpose({
   centerOnUser,
   flyToPost,
   panToCoordinate,
   zoomToTrack,
+  showSpotSuggestion,
+  clearSpotSuggestion,
   getMapInstance: () => map
 })
 

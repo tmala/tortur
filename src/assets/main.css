@@ -161,6 +161,27 @@ body,
   border: 2px solid #ffffff;
 }
 
+/* Oransje pin for innkomne forslag til turposter (admin) */
+.turpost-pin-marker.is-suggestion .turpost-pin-icon {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  box-shadow: 0 4px 14px rgba(249, 115, 22, 0.65);
+  border: 2px solid #ffffff;
+}
+
+.suggestion-pin {
+  z-index: 1000 !important;
+}
+
+.suggestion-pulse {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(249, 115, 22, 0.4);
+  animation: radar-pulse 1.8s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+  pointer-events: none;
+}
+
 .popup-private-tag {
   display: inline-block;
   background: rgba(168, 85, 247, 0.2);

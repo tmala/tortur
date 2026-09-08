@@ -175,8 +175,19 @@ async function handleDeletePrivateSpot(spotId: string) {
 }
 
 function handleViewSpotOnMap(spot: TurpostItem | SpotSuggestion) {
+  if (!mapViewerRef.value) return
+  if ('suggestedAt' in spot || 'csvLine' in spot) {
+    mapViewerRef.value.showSpotSuggestion(spot as SpotSuggestion)
+  } else {
+    mapViewerRef.value.flyToPost(spot as TurpostItem)
+  }
+}
+
+function handleCloseSpotSuggestions() {
+  isSpotSuggestionsOpen.value = false
+  loadSpotSuggestions()
   if (mapViewerRef.value) {
-    mapViewerRef.value.panToCoordinate(spot.lat, spot.lng, 15)
+    mapViewerRef.value.clearSpotSuggestion()
   }
 }
 
@@ -744,7 +755,7 @@ onUnmounted(() => {
     <SpotSuggestionsModal
       v-if="isAdmin"
       :is-open="isSpotSuggestionsOpen"
-      @close="isSpotSuggestionsOpen = false; loadSpotSuggestions()"
+      @close="handleCloseSpotSuggestions"
       @view-spot="handleViewSpotOnMap"
     />
 

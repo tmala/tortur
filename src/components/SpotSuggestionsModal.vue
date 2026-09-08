@@ -1,9 +1,17 @@
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="modal-overlay" @click.self="emit('close')">
-      <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="suggestions-title">
+    <div v-if="isOpen" class="modal-overlay">
+      <div
+        ref="modalRef"
+        class="modal-card glass-panel"
+        :class="{ 'is-dragging': isDragging }"
+        :style="modalStyle"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="suggestions-title"
+      >
         <!-- Header -->
-        <div class="modal-header">
+        <div class="modal-header" @pointerdown="startDrag" title="Klikk og dra for å flytte dialogen">
           <div class="modal-title-row">
             <div class="modal-icon-badge">📋</div>
             <div>
@@ -74,8 +82,8 @@
               <div class="suggestion-actions">
                 <button
                   class="btn-view-map"
-                  @click="emit('view-spot', spot); emit('close')"
-                  title="Sentrer kartet på dette punktet"
+                  @click="emit('view-spot', spot)"
+                  title="Vis og sentrer kartet på dette punktet"
                 >
                   🗺️ Vis på kartet
                 </button>
@@ -105,7 +113,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   usePrivateTurposter,
   type SpotSuggestion,
@@ -127,6 +135,67 @@ const suggestions = ref<SpotSuggestion[]>([])
 const isLoading = ref(false)
 const copiedId = ref<string | null>(null)
 const placementMap = ref<Record<string, CsvPlacementResult>>({})
+
+// Dra/flytt-logikk for modalen
+const modalRef = ref<HTMLElement | null>(null)
+const isDragging = ref(false)
+const dragPos = ref({ x: 0, y: 0 })
+const dragStart = ref({ x: 0, y: 0, initialX: 0, initialY: 0 })
+
+const modalStyle = computed(() => {
+  if (dragPos.value.x === 0 && dragPos.value.y === 0) return {}
+  return {
+    transform: `translate3d(${dragPos.value.x}px, ${dragPos.value.y}px, 0)`
+  }
+})
+
+function startDrag(e: PointerEvent) {
+  const target = e.target as HTMLElement | null
+  if (target?.closest('button') || target?.closest('a') || target?.closest('code')) return
+  if (e.button !== 0) return
+  isDragging.value = true
+  dragStart.value = {
+    x: e.clientX,
+    y: e.clientY,
+    initialX: dragPos.value.x,
+    initialY: dragPos.value.y
+  }
+}
+
+function onDragMove(e: PointerEvent) {
+  if (!isDragging.value) return
+  const dx = e.clientX - dragStart.value.x
+  const dy = e.clientY - dragStart.value.y
+
+  let newX = dragStart.value.initialX + dx
+  let newY = dragStart.value.initialY + dy
+
+  if (modalRef.value) {
+    const rect = modalRef.value.getBoundingClientRect()
+    const currentLeft = rect.left - dragPos.value.x
+    const currentTop = rect.top - dragPos.value.y
+
+    const minX = -currentLeft + 10
+    const maxX = window.innerWidth - (currentLeft + 80)
+    const minY = -currentTop + 10
+    const maxY = window.innerHeight - (currentTop + 40)
+
+    newX = Math.max(minX, Math.min(maxX, newX))
+    newY = Math.max(minY, Math.min(maxY, newY))
+  }
+
+  dragPos.value = { x: newX, y: newY }
+}
+
+function onDragEnd() {
+  isDragging.value = false
+}
+
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && props.isOpen) {
+    emit('close')
+  }
+}
 
 function getPlacement(spotId: string): CsvPlacementResult | undefined {
   return placementMap.value[spotId]
@@ -155,6 +224,7 @@ watch(
   () => props.isOpen,
   (open) => {
     if (open) {
+      dragPos.value = { x: 0, y: 0 }
       loadSuggestions()
     }
   }
@@ -164,6 +234,17 @@ onMounted(() => {
   if (props.isOpen) {
     loadSuggestions()
   }
+  window.addEventListener('pointermove', onDragMove)
+  window.addEventListener('pointerup', onDragEnd)
+  window.addEventListener('pointercancel', onDragEnd)
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pointermove', onDragMove)
+  window.removeEventListener('pointerup', onDragEnd)
+  window.removeEventListener('pointercancel', onDragEnd)
+  window.removeEventListener('keydown', handleKeyDown)
 })
 
 async function copyCsv(spot: SpotSuggestion) {
@@ -218,17 +299,19 @@ function formatDate(isoStr?: string): string {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
   padding: 16px;
+  pointer-events: none;
 }
 
 .modal-card {
+  pointer-events: auto;
   background: rgba(30, 41, 59, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
   width: 100%;
   max-width: 680px;
@@ -236,8 +319,15 @@ function formatDate(isoStr?: string): string {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
   color: #f8fafc;
+  transition: box-shadow 0.2s ease;
+}
+
+.modal-card.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 35px 80px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.25);
 }
 
 .modal-header {
@@ -246,6 +336,15 @@ function formatDate(isoStr?: string): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.modal-header:active,
+.modal-card.is-dragging .modal-header {
+  cursor: grabbing;
 }
 
 .modal-title-row {
