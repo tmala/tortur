@@ -23,7 +23,6 @@ import {
   X,
   FolderHeart,
   RefreshCw,
-  Star,
 } from 'lucide-vue-next'
 import AuthPanel from './AuthPanel.vue'
 import type { GeoLocationState } from '@/composables/useGeolocation'
@@ -397,21 +396,7 @@ const handleInstallClick = async () => {
               </span>
             </button>
 
-            <!-- Mine turposter (kun synlig for innloggede brukere) -->
-            <button
-              v-if="isLoggedIn"
-              class="btn-my-spots"
-              :class="{ active: isMySpotsOpen || isAddSpotModeActive }"
-              @click="emit('open-my-spots')"
-              title="Mine turposter (egne registrerte turmål)"
-              aria-label="Mine turposter"
-            >
-              <Star :size="16" class="star-icon" />
-              <span class="btn-my-spots-text">Mine turposter</span>
-              <span v-if="mySpotsCount && mySpotsCount > 0" class="btn-badge-count">
-                {{ mySpotsCount }}
-              </span>
-            </button>
+
 
             <!-- AIS Båttrafikk-knapp – kun synlig for admin -->
             <button
@@ -972,38 +957,7 @@ const handleInstallClick = async () => {
   font-size: 11px;
 }
 
-.btn-my-spots {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(168, 85, 247, 0.15);
-  border: 1px solid rgba(168, 85, 247, 0.4);
-  color: #f3e8ff;
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
 
-.btn-my-spots:hover {
-  background: rgba(168, 85, 247, 0.28);
-  border-color: #c084fc;
-  color: #ffffff;
-}
-
-.btn-my-spots.active {
-  background: linear-gradient(135deg, #a855f7, #7c3aed);
-  border-color: #d8b4fe;
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.45);
-}
-
-.star-icon {
-  color: #fbbf24;
-}
 
 .icon-btn {
   background: #1e293b;

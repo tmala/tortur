@@ -403,19 +403,19 @@ onUnmounted(() => {
               </div>
             </button>
 
-            <!-- Snarvei til Mine turposter -->
+            <!-- Snarvei til Private turposter -->
             <button
               class="profile-shortcut-card profile-spots-card"
               @click="emit('open-my-spots'); emit('close')"
-              title="Se og administrer dine egne turposter"
+              title="Se og administrer dine private turposter"
             >
               <div class="shortcut-icon-wrap spots-icon">
                 <Star :size="17" />
               </div>
               <div class="shortcut-texts">
-                <span class="shortcut-title">Mine turposter</span>
+                <span class="shortcut-title">Private turposter</span>
                 <span class="shortcut-sub">
-                  {{ mySpotsCount || 0 }} {{ (mySpotsCount || 0) === 1 ? 'privat turpost' : 'private turposter' }}
+                  {{ mySpotsCount || 0 }} {{ (mySpotsCount || 0) === 1 ? 'turpost' : 'turposter' }}
                 </span>
               </div>
             </button>
