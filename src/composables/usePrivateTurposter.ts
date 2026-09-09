@@ -461,6 +461,19 @@ export function usePrivateTurposter() {
       throw new Error(`Kunne ikke lagre privat innsjekking (status ${res.status})`)
     }
 
+    // Apps Script synkroniserer automatisk alle innsjekkinger til offentlig turpost- og bruker-indeks.
+    // For private turposter skal innsjekkingen kun ligge under my_spots_checkins; rydd derfor opp de to nodene:
+    try {
+      const cleanupTurpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(params.post.id))}/${checkinId}.json`
+      const cleanupUserUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/${checkinId}.json`
+      await Promise.all([
+        fetch(cleanupTurpostUrl, { method: 'DELETE' }),
+        fetch(cleanupUserUrl, { method: 'DELETE' })
+      ])
+    } catch {
+      // Ignorer eventuelle nettverksfeil ved opprydding
+    }
+
     return {
       id: checkinId,
       userId: params.userId,

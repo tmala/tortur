@@ -205,7 +205,11 @@ const loadMyCheckins = async () => {
       fetchMyCheckins(),
       fetchMyPrivateCheckins(user.value.userId)
     ])
-    myCheckins.value = [...publicCheckins, ...privateCheckins]
+    const privateCheckinIds = new Set(privateCheckins.map(c => c.id))
+    const filteredPublic = publicCheckins.filter(
+      c => !privateCheckinIds.has(c.id) && !String(c.turpostId).startsWith('spot_')
+    )
+    myCheckins.value = [...filteredPublic, ...privateCheckins]
   } catch (err) {
     console.warn('[App] Kunne ikke laste brukerens innsjekkinger:', err)
   }

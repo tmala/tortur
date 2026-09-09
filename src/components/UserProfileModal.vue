@@ -4,7 +4,6 @@ import {
   X,
   LogOut,
   Mountain,
-  Calendar,
   Image as ImageIcon,
   CheckCircle2,
   Trophy,
@@ -142,9 +141,18 @@ const isExpanded = (id: string | number): boolean => {
 // Lightbox for bildevisning
 const lightboxImage = ref<string | null>(null)
 
-// Sortert kronologisk – nyeste innsjekking øverst
+// Sortert kronologisk – nyeste innsjekking øverst, deduplisert
 const sortedCheckins = computed(() => {
-  return [...props.checkins].sort((a, b) => {
+  const map = new Map<string, FirebaseCheckinItem>()
+  for (const c of props.checkins) {
+    const key = c.id || `${c.turpostId}_${c.timestamp}`
+    const existing = map.get(key)
+    // Hvis samme innsjekking finnes to ganger (f.eks. både offentlig synk og privat node), prioriter den private
+    if (!existing || (!existing.isPrivate && c.isPrivate)) {
+      map.set(key, c)
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => {
     const timeA = new Date(a.timestamp).getTime() || 0
     const timeB = new Date(b.timestamp).getTime() || 0
     return timeB - timeA
@@ -153,7 +161,7 @@ const sortedCheckins = computed(() => {
 
 // Unike turposter
 const uniqueTurpostIds = computed(() => {
-  return new Set(props.checkins.map(c => String(c.turpostId)))
+  return new Set(sortedCheckins.value.map(c => String(c.turpostId)))
 })
 
 const formatDate = (isoString?: string) => {
@@ -161,13 +169,12 @@ const formatDate = (isoString?: string) => {
   try {
     const d = new Date(isoString)
     if (isNaN(d.getTime())) return isoString
-    return new Intl.DateTimeFormat('no-NO', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(d)
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    const hours = String(d.getHours()).padStart(2, '0')
+    const minutes = String(d.getMinutes()).padStart(2, '0')
+    return `${day}.${month}.${year} ${hours}:${minutes}`
   } catch {
     return isoString
   }
@@ -473,14 +480,16 @@ onUnmounted(() => {
                   >
                     <div class="turpost-name-row">
                       <CheckCircle2 :size="16" class="check-icon" />
-                      <span class="turpost-heading">
+                      <span
+                        class="turpost-heading"
+                        :title="item.turpostName || ('Turpost ' + item.turpostId)"
+                      >
                         {{ item.turpostName || ('Turpost ' + item.turpostId) }}
                       </span>
                       <span v-if="item.isPrivate" class="private-badge-pill">Privat</span>
                     </div>
                     <div class="checkin-header-right">
                       <div class="checkin-date-badge">
-                        <Calendar :size="13" />
                         <span>{{ formatDate(item.timestamp) }}</span>
                       </div>
                       <ChevronDown
@@ -1161,15 +1170,16 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
   user-select: none;
+  min-width: 0;
 }
 
 .checkin-header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -1217,6 +1227,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  flex: 1;
 }
 
 .check-icon {
@@ -1228,6 +1240,10 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 700;
   color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .private-badge-pill {
@@ -1238,6 +1254,7 @@ onUnmounted(() => {
   border: 1px solid rgba(245, 158, 11, 0.4);
   padding: 1px 5px;
   border-radius: 4px;
+  flex-shrink: 0;
 }
 
 .user-checkin-actions {
@@ -1303,12 +1320,14 @@ onUnmounted(() => {
 .checkin-date-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
   font-size: 11px;
   color: #94a3b8;
   background: rgba(255, 255, 255, 0.04);
-  padding: 3px 8px;
+  padding: 3px 6px;
   border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .checkin-desc {

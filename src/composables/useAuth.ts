@@ -550,10 +550,22 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
     if (!res.ok) return []
     const data = await res.json()
     if (!data || typeof data !== 'object') return []
-    // Filtrer ut eventuelle undernoder som ikke er innsjekkinger (f.eks. 'tracks')
-    return (Object.values(data) as any[]).filter(
-      (item) => item && typeof item === 'object' && item.turpostId != null
-    ) as FirebaseCheckinItem[]
+    // Filtrer ut eventuelle undernoder som ikke er offentlige innsjekkinger (f.eks. 'tracks', 'my_spots', 'my_spots_checkins')
+    // og filtrer ut private innsjekkinger (turpostId som starter med 'spot_') som Apps Script automatisk synkroniserte hit
+    const checkins: FirebaseCheckinItem[] = []
+    for (const item of Object.values(data) as any[]) {
+      if (!item || typeof item !== 'object' || item.turpostId == null) continue
+      if (String(item.turpostId).startsWith('spot_')) {
+        // Rydd opp uønsket kopi som Apps Script la under brukerens rot og offentlig turpost-node
+        if (item.id) {
+          fetch(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(item.id)}.json`, { method: 'DELETE' }).catch(() => {})
+          fetch(`${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`, { method: 'DELETE' }).catch(() => {})
+        }
+        continue
+      }
+      checkins.push(item as FirebaseCheckinItem)
+    }
+    return checkins
   } catch (err) {
     console.warn('[useAuth] Kunne ikke hente bruker-innsjekkinger fra Firebase:', err)
     return []

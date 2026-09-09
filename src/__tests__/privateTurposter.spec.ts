@@ -166,5 +166,10 @@ describe('usePrivateTurposter', () => {
     const savedPayload = JSON.parse(putCall![1]?.body as string)
     expect(savedPayload.imageUrl).toBe('https://lh3.googleusercontent.com/d/mock_img')
     expect(savedPayload.turpostId).toBe('spot_123')
+
+    // Verifiser at Apps Script sine automatiske offentlige noder ryddes opp
+    const deleteTurpostCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('turposter/spot_123/mock_checkin_id.json'))
+    expect(deleteTurpostCall).toBeDefined()
+    expect(deleteTurpostCall![1]?.method).toBe('DELETE')
   })
 })

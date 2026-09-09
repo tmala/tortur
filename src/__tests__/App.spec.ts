@@ -677,6 +677,56 @@ describe('UserProfileModal', () => {
     logoutBtn.click()
     expect(wrapper.emitted('logout')).toBeTruthy()
   })
+
+  it('deduplicates duplicate checkins preferring the one marked as private', async () => {
+    const sampleUser = {
+      userId: '112985692350976832637',
+      userName: 'Tor Mala',
+      email: 'tormala@example.com'
+    }
+
+    const checkins = [
+      {
+        id: 'c_100',
+        userId: '112985692350976832637',
+        userName: 'Tor Mala',
+        userAvatar: '',
+        turpostId: 'spot_123',
+        turpostName: 'Malabu',
+        timestamp: '2026-09-10T00:16:00Z',
+        description: 'Fin tur',
+        imageUrl: '',
+        isPrivate: false
+      },
+      {
+        id: 'c_100',
+        userId: '112985692350976832637',
+        userName: 'Tor Mala',
+        userAvatar: '',
+        turpostId: 'spot_123',
+        turpostName: 'Malabu',
+        timestamp: '2026-09-10T00:16:00Z',
+        description: 'Fin tur',
+        imageUrl: '',
+        isPrivate: true
+      }
+    ]
+
+    mount(UserProfileModal, {
+      props: {
+        isOpen: true,
+        user: sampleUser as any,
+        checkins
+      }
+    })
+
+    const headings = document.body.querySelectorAll('.turpost-heading')
+    const malabuHeadings = Array.from(headings).filter(h => h.textContent?.includes('Malabu'))
+    expect(malabuHeadings).toHaveLength(1)
+
+    const badge = document.body.querySelector('.private-badge-pill')
+    expect(badge).not.toBeNull()
+  })
 })
 
 describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Guardamar del Segura)', () => {
