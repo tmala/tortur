@@ -534,11 +534,36 @@ onUnmounted(() => {
 
         <!-- Bilde-lightbox -->
         <Transition name="fade">
-          <div v-if="selectedImage" class="lightbox-overlay" @click.self="selectedImage = null">
-            <button class="btn-close-lightbox" @click="selectedImage = null" title="Lukk (Esc)">
+          <div
+            v-if="selectedImage"
+            class="lightbox-overlay"
+            @click="selectedImage = null"
+          >
+            <button
+              class="btn-close-lightbox"
+              @click.stop="selectedImage = null"
+              title="Lukk (Esc)"
+              aria-label="Lukk bildevisning"
+            >
               <X :size="24" />
             </button>
-            <img :src="selectedImage" alt="Forstørret turbilde" class="lightbox-img" />
+            <div class="lightbox-img-wrapper" @click="selectedImage = null">
+              <img
+                :src="selectedImage"
+                alt="Forstørret turbilde"
+                class="lightbox-img"
+                title="Trykk hvor som helst for å lukke"
+              />
+            </div>
+            <button
+              class="btn-close-lightbox-bottom"
+              @click.stop="selectedImage = null"
+              title="Lukk bilde"
+              aria-label="Lukk bildevisning"
+            >
+              <X :size="16" />
+              <span>Lukk</span>
+            </button>
           </div>
         </Transition>
       </div>
@@ -1182,40 +1207,114 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: 1400;
-  background: rgba(0, 0, 0, 0.92);
+  background: rgba(0, 0, 0, 0.94);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: calc(max(16px, env(safe-area-inset-top, 0px)) + 64px);
+  padding-bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 64px);
+  padding-left: calc(max(16px, env(safe-area-inset-left, 0px)));
+  padding-right: calc(max(16px, env(safe-area-inset-right, 0px)));
+  box-sizing: border-box;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.lightbox-img-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .lightbox-img {
   max-width: 95vw;
-  max-height: 90vh;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 150px);
   object-fit: contain;
-  border-radius: 10px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.85);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .btn-close-lightbox {
   position: absolute;
-  top: 20px;
-  right: 20px;
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  color: white;
-  width: 40px;
-  height: 40px;
+  top: calc(max(16px, env(safe-area-inset-top, 0px)) + 12px);
+  right: calc(max(16px, env(safe-area-inset-right, 0px)) + 12px);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.2s ease;
+  z-index: 20;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s ease;
+  touch-action: manipulation;
 }
 
 .btn-close-lightbox:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.05);
+}
+
+.btn-close-lightbox:active {
+  transform: scale(0.95);
+  background: rgba(56, 189, 248, 0.35);
+}
+
+.btn-close-lightbox-bottom {
+  position: absolute;
+  bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 9999px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 20;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+}
+
+.btn-close-lightbox-bottom:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.btn-close-lightbox-bottom:active {
+  transform: translateX(-50%) scale(0.96);
+  background: rgba(56, 189, 248, 0.35);
+}
+
+@media (max-height: 600px) {
+  .lightbox-overlay {
+    padding-top: calc(max(10px, env(safe-area-inset-top, 0px)) + 48px);
+    padding-bottom: calc(max(10px, env(safe-area-inset-bottom, 0px)) + 48px);
+  }
+  .lightbox-img {
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 100px);
+  }
 }
 
 /* Scrollbar */

@@ -582,12 +582,31 @@ onUnmounted(() => {
             class="lightbox-backdrop"
             @click="lightboxImage = null"
           >
-            <div class="lightbox-content" @click.stop>
-              <img :src="lightboxImage" alt="Turbilde fullskjerm" class="lightbox-img" />
-              <button class="btn-lightbox-close" @click="lightboxImage = null" title="Lukk (Esc)">
-                <X :size="22" />
-              </button>
+            <button
+              class="btn-lightbox-close"
+              @click.stop="lightboxImage = null"
+              title="Lukk (Esc)"
+              aria-label="Lukk bildevisning"
+            >
+              <X :size="24" />
+            </button>
+            <div class="lightbox-content" @click="lightboxImage = null">
+              <img
+                :src="lightboxImage"
+                alt="Turbilde fullskjerm"
+                class="lightbox-img"
+                title="Trykk hvor som helst for å lukke"
+              />
             </div>
+            <button
+              class="btn-lightbox-bottom-close"
+              @click.stop="lightboxImage = null"
+              title="Lukk bilde"
+              aria-label="Lukk bildevisning"
+            >
+              <X :size="16" />
+              <span>Lukk</span>
+            </button>
           </div>
         </transition>
       </div>
@@ -1325,41 +1344,114 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: 10001;
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.94);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding-top: calc(max(16px, env(safe-area-inset-top, 0px)) + 64px);
+  padding-bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 64px);
+  padding-left: calc(max(16px, env(safe-area-inset-left, 0px)));
+  padding-right: calc(max(16px, env(safe-area-inset-right, 0px)));
+  box-sizing: border-box;
+  touch-action: manipulation;
+  cursor: pointer;
 }
 
 .lightbox-content {
-  position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .lightbox-img {
-  max-width: 100%;
-  max-height: 85vh;
+  max-width: 95vw;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 150px);
   object-fit: contain;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.85);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .btn-lightbox-close {
   position: absolute;
-  top: -16px;
-  right: -16px;
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  top: calc(max(16px, env(safe-area-inset-top, 0px)) + 12px);
+  right: calc(max(16px, env(safe-area-inset-right, 0px)) + 12px);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   color: #ffffff;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  z-index: 20;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+}
+
+.btn-lightbox-close:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.05);
+}
+
+.btn-lightbox-close:active {
+  transform: scale(0.95);
+  background: rgba(56, 189, 248, 0.35);
+}
+
+.btn-lightbox-bottom-close {
+  position: absolute;
+  bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 9999px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 20;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+}
+
+.btn-lightbox-bottom-close:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.btn-lightbox-bottom-close:active {
+  transform: translateX(-50%) scale(0.96);
+  background: rgba(56, 189, 248, 0.35);
+}
+
+@media (max-height: 600px) {
+  .lightbox-backdrop {
+    padding-top: calc(max(10px, env(safe-area-inset-top, 0px)) + 48px);
+    padding-bottom: calc(max(10px, env(safe-area-inset-bottom, 0px)) + 48px);
+  }
+  .lightbox-img {
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 100px);
+  }
 }
 
 /* Animasjoner */
