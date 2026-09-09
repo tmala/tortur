@@ -8,7 +8,6 @@ import {
   Image as ImageIcon,
   CheckCircle2,
   Trophy,
-  Compass,
   Maximize2,
   ShieldCheck,
   RotateCw,
@@ -355,11 +354,11 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Statistikk-striper -->
+          <!-- Statistikk-striper (2 kolonner, kompakt) -->
           <div class="profile-stats-grid">
             <div class="stat-card">
               <div class="stat-icon-wrap trophy">
-                <Trophy :size="20" />
+                <Trophy :size="18" />
               </div>
               <div class="stat-content">
                 <span class="stat-number">{{ sortedCheckins.length }}</span>
@@ -369,87 +368,69 @@ onUnmounted(() => {
 
             <div class="stat-card">
               <div class="stat-icon-wrap mountain">
-                <Mountain :size="20" />
+                <Mountain :size="18" />
               </div>
               <div class="stat-content">
                 <span class="stat-number">{{ uniqueTurpostIds.size }}</span>
                 <span class="stat-label">Unike turposter</span>
               </div>
             </div>
-
-            <div class="stat-card">
-              <div class="stat-icon-wrap compass">
-                <Compass :size="20" />
-              </div>
-              <div class="stat-content">
-                <span class="stat-number" v-if="sortedCheckins.length > 0">
-                  {{ formatDate(sortedCheckins[0]?.timestamp).split(' kl.')[0] || 'Nylig' }}
-                </span>
-                <span class="stat-number" v-else>–</span>
-                <span class="stat-label">Siste tur</span>
-              </div>
-            </div>
           </div>
 
-          <!-- Snarvei til Mine GPS-spor -->
-          <button
-            class="profile-tracks-banner"
-            @click="emit('open-saved-tracks'); emit('close')"
-            title="Se og administrer dine lagrede GPS-spor"
-          >
-            <div class="profile-tracks-left">
-              <div class="tracks-banner-icon">
-                <Route :size="18" />
+          <!-- Snarveier side om side: Mine GPS-spor og Mine turposter -->
+          <div class="profile-shortcuts-grid">
+            <!-- Snarvei til Mine GPS-spor -->
+            <button
+              class="profile-shortcut-card profile-tracks-card"
+              @click="emit('open-saved-tracks'); emit('close')"
+              title="Se og administrer dine lagrede GPS-spor"
+            >
+              <div class="shortcut-icon-wrap tracks-icon">
+                <Route :size="17" />
               </div>
-              <div class="tracks-banner-texts">
-                <span class="tracks-banner-title">Mine GPS-spor</span>
-                <span class="tracks-banner-sub">
+              <div class="shortcut-texts">
+                <span class="shortcut-title">Mine GPS-spor</span>
+                <span class="shortcut-sub">
                   {{ savedTracksCount || 0 }} {{ (savedTracksCount || 0) === 1 ? 'spor lagret' : 'spor lagret' }}
                 </span>
               </div>
-            </div>
-            <span class="tracks-banner-arrow">Åpne sporliste →</span>
-          </button>
+            </button>
 
-          <!-- Snarvei til Mine turposter -->
-          <button
-            class="profile-tracks-banner profile-spots-banner"
-            @click="emit('open-my-spots'); emit('close')"
-            title="Se og administrer dine egne turposter"
-          >
-            <div class="profile-tracks-left">
-              <div class="tracks-banner-icon spots-icon">
-                <Star :size="18" />
+            <!-- Snarvei til Mine turposter -->
+            <button
+              class="profile-shortcut-card profile-spots-card"
+              @click="emit('open-my-spots'); emit('close')"
+              title="Se og administrer dine egne turposter"
+            >
+              <div class="shortcut-icon-wrap spots-icon">
+                <Star :size="17" />
               </div>
-              <div class="tracks-banner-texts">
-                <span class="tracks-banner-title">Mine turposter</span>
-                <span class="tracks-banner-sub">
+              <div class="shortcut-texts">
+                <span class="shortcut-title">Mine turposter</span>
+                <span class="shortcut-sub">
                   {{ mySpotsCount || 0 }} {{ (mySpotsCount || 0) === 1 ? 'privat turpost' : 'private turposter' }}
                 </span>
               </div>
-            </div>
-            <span class="tracks-banner-arrow">Åpne turposter →</span>
-          </button>
+            </button>
+          </div>
 
-          <!-- For admin: Innkommende forslag til turposter -->
+          <!-- For admin: Forslag turposter (kompakt) -->
           <button
             v-if="props.isAdmin"
-            class="profile-tracks-banner profile-suggestions-banner"
+            class="profile-suggestions-banner"
             @click="emit('open-spot-suggestions'); emit('close')"
-            title="Se innkommende forslag til nye turposter fra brukere"
+            title="Se forslag til turposter"
           >
-            <div class="profile-tracks-left">
-              <div class="tracks-banner-icon suggestions-icon">
-                <ClipboardList :size="18" />
+            <div class="profile-suggestions-left">
+              <div class="shortcut-icon-wrap suggestions-icon">
+                <ClipboardList :size="16" />
               </div>
-              <div class="tracks-banner-texts">
-                <span class="tracks-banner-title">Innkommende forslag til turposter</span>
-                <span class="tracks-banner-sub">
-                  {{ spotSuggestionsCount ? spotSuggestionsCount + ' venter på vurdering' : 'Vurder og legg inn nye turposter i mountains.csv' }}
-                </span>
-              </div>
+              <span class="suggestions-title">Forslag turposter</span>
+              <span v-if="spotSuggestionsCount" class="suggestions-count-badge">
+                {{ spotSuggestionsCount }}
+              </span>
             </div>
-            <span class="tracks-banner-arrow">Vis forslag →</span>
+            <span class="suggestions-arrow">Vis forslag →</span>
           </button>
 
           <!-- Seksjonstitel -->
@@ -868,9 +849,9 @@ onUnmounted(() => {
 /* Statistikk */
 .profile-stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 14px 20px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 8px 16px;
   background: rgba(15, 23, 42, 0.3);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -881,13 +862,13 @@ onUnmounted(() => {
   gap: 10px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: 12px;
 }
 
 .stat-icon-wrap {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -903,11 +884,6 @@ onUnmounted(() => {
 .stat-icon-wrap.mountain {
   background: rgba(16, 185, 129, 0.15);
   color: #34d399;
-}
-
-.stat-icon-wrap.compass {
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
 }
 
 .stat-content {
@@ -934,94 +910,145 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-/* Snarvei-banner for GPS-spor */
-.profile-tracks-banner {
+/* Snarveier (Mine GPS-spor og Mine turposter side om side) */
+.profile-shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 8px 16px 0 16px;
+}
+
+.profile-shortcut-card {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin: 12px 20px 4px 20px;
-  padding: 10px 14px;
-  background: linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(15, 23, 42, 0.8));
-  border: 1px solid rgba(249, 115, 22, 0.35);
+  gap: 8px;
+  padding: 8px 10px;
   border-radius: 12px;
   cursor: pointer;
   text-align: left;
   transition: all 0.15s ease;
-  width: calc(100% - 40px);
+  border: 1px solid transparent;
+  min-width: 0;
 }
 
-.profile-tracks-banner:hover {
+.profile-tracks-card {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(15, 23, 42, 0.8));
+  border-color: rgba(249, 115, 22, 0.35);
+}
+
+.profile-tracks-card:hover {
   background: linear-gradient(135deg, rgba(249, 115, 22, 0.22), rgba(15, 23, 42, 0.9));
   border-color: #f97316;
   transform: translateY(-1px);
 }
 
-/* Snarvei-banner for Mine turposter */
-.profile-spots-banner {
+.profile-spots-card {
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(15, 23, 42, 0.8));
   border-color: rgba(168, 85, 247, 0.35);
 }
-.profile-spots-banner:hover {
+
+.profile-spots-card:hover {
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(15, 23, 42, 0.9));
   border-color: #a855f7;
+  transform: translateY(-1px);
 }
-.tracks-banner-icon.spots-icon {
+
+.shortcut-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.shortcut-icon-wrap.tracks-icon {
+  background: rgba(249, 115, 22, 0.2);
+  color: #f97316;
+}
+
+.shortcut-icon-wrap.spots-icon {
   background: rgba(168, 85, 247, 0.2);
   color: #c084fc;
 }
 
-/* Snarvei-banner for Innkommende forslag */
-.profile-suggestions-banner {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.8));
-  border-color: rgba(245, 158, 11, 0.35);
-}
-.profile-suggestions-banner:hover {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(15, 23, 42, 0.9));
-  border-color: #f59e0b;
-}
-.tracks-banner-icon.suggestions-icon {
+.shortcut-icon-wrap.suggestions-icon {
   background: rgba(245, 158, 11, 0.2);
   color: #fbbf24;
 }
 
-.profile-tracks-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.tracks-banner-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: rgba(249, 115, 22, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #f97316;
-  flex-shrink: 0;
-}
-
-.tracks-banner-texts {
+.shortcut-texts {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.tracks-banner-title {
+.shortcut-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shortcut-sub {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Snarvei-banner for Forslag turposter (kompakt) */
+.profile-suggestions-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 6px 16px 0 16px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.8));
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  width: calc(100% - 32px);
+}
+
+.profile-suggestions-banner:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(15, 23, 42, 0.9));
+  border-color: #f59e0b;
+  transform: translateY(-1px);
+}
+
+.profile-suggestions-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.suggestions-title {
   font-size: 13px;
   font-weight: 700;
   color: #f8fafc;
 }
 
-.tracks-banner-sub {
-  font-size: 11px;
-  color: #94a3b8;
+.suggestions-count-badge {
+  background: #f59e0b;
+  color: #0f172a;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
 }
 
-.tracks-banner-arrow {
+.suggestions-arrow {
   font-size: 12px;
   font-weight: 600;
-  color: #f97316;
+  color: #f59e0b;
 }
 
 /* Seksjonslinje */
@@ -1029,7 +1056,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px 8px;
+  padding: 12px 16px 6px;
   font-size: 12px;
 }
 
@@ -1475,9 +1502,5 @@ onUnmounted(() => {
   opacity: 0;
 }
 
-@media (max-width: 600px) {
-  .profile-stats-grid {
-    grid-template-columns: 1fr;
-  }
-}
+
 </style>
