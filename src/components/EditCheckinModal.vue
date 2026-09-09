@@ -212,17 +212,77 @@ const handleRestoreOriginalImage = () => {
 }
 
 async function compressImage(file: File): Promise<File> {
+  const maxDim = 1024
+  const quality = 0.80
+
+  // Rask forhåndssjekk: hvis filen allerede er en liten JPEG, sjekk dimensjoner raskt
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file)
+      let { width, height } = bitmap
+
+      if (width <= maxDim && height <= maxDim && file.size <= 300 * 1024 && file.type === 'image/jpeg') {
+        bitmap.close()
+        return file
+      }
+
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width)
+          width = maxDim
+        } else {
+          width = Math.round((width * maxDim) / height)
+          height = maxDim
+        }
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        bitmap.close()
+        return file
+      }
+
+      ctx.drawImage(bitmap, 0, 0, width, height)
+      bitmap.close() // Frigjør GPU-/dekodingsminne umiddelbart!
+
+      return await new Promise<File>((resolve) => {
+        canvas.toBlob(
+          (blob) => {
+            canvas.width = 0
+            canvas.height = 0
+
+            if (blob) {
+              const cleanName = file.name.replace(/\.[^.]+$/, '') || 'innsjekk'
+              resolve(new File([blob], `${cleanName}.jpg`, { type: 'image/jpeg' }))
+            } else {
+              resolve(file)
+            }
+          },
+          'image/jpeg',
+          quality
+        )
+      })
+    } catch {
+      // Faller tilbake til new Image()
+    }
+  }
+
+  // Fallback for eldre nettlesere
   return new Promise((resolve) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
 
     img.onload = () => {
       URL.revokeObjectURL(url)
-      const maxDim = 1280
       let width = img.width
       let height = img.height
 
-      if (width <= maxDim && height <= maxDim && file.size <= 400 * 1024 && file.type === 'image/jpeg') {
+      if (width <= maxDim && height <= maxDim && file.size <= 300 * 1024 && file.type === 'image/jpeg') {
+        img.src = ''
+        img.onload = null
         resolve(file)
         return
       }
@@ -242,12 +302,15 @@ async function compressImage(file: File): Promise<File> {
       canvas.height = height
       const ctx = canvas.getContext('2d')
       if (!ctx) {
+        img.src = ''
+        img.onload = null
         resolve(file)
         return
       }
 
       ctx.drawImage(img, 0, 0, width, height)
       img.src = ''
+      img.onload = null
 
       canvas.toBlob(
         (blob) => {
@@ -262,12 +325,14 @@ async function compressImage(file: File): Promise<File> {
           }
         },
         'image/jpeg',
-        0.82
+        quality
       )
     }
 
     img.onerror = () => {
       URL.revokeObjectURL(url)
+      img.src = ''
+      img.onload = null
       resolve(file)
     }
 

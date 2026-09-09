@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { getFirebaseConfig, type FirebaseCheckinItem, type CheckinResult } from './useAuth'
+import { useAuth, getFirebaseConfig, type FirebaseCheckinItem, type CheckinResult } from './useAuth'
 import type { TurpostItem } from './useTurposter'
 
 export interface SpotSuggestion {
@@ -35,6 +35,7 @@ export function usePrivateTurposter() {
   const isSaving = ref(false)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  const { submitCheckin, updatePublicCheckin, deletePublicCheckin } = useAuth()
 
   /**
    * Henter alle private turposter for innlogget bruker fra Firebase RTDB:
@@ -286,6 +287,12 @@ export function usePrivateTurposter() {
     if (!config) return
 
     try {
+      await deletePublicCheckin({ turpostId: spotId, checkinId })
+    } catch (err) {
+      console.warn('[usePrivateTurposter] Kunne ikke slette fra Apps Script:', err)
+    }
+
+    try {
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}/${encodeURIComponent(checkinId)}.json`
       await fetch(url, { method: 'DELETE' })
     } catch (err) {
@@ -320,10 +327,17 @@ export function usePrivateTurposter() {
       patchData.description = params.description
     }
 
-    if (params.imageFile) {
-      patchData.imageUrl = await fileToDataUrl(params.imageFile)
-    } else if (params.removeImage) {
-      patchData.imageUrl = ''
+    if (params.imageFile || params.removeImage) {
+      const updateRes = await updatePublicCheckin({
+        turpostId: spotId,
+        checkinId,
+        description: params.description,
+        imageFile: params.imageFile,
+        removeImage: params.removeImage
+      })
+      if (updateRes.imageUrl !== undefined) {
+        patchData.imageUrl = updateRes.imageUrl
+      }
     }
 
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}/${encodeURIComponent(checkinId)}.json`
@@ -412,25 +426,28 @@ export function usePrivateTurposter() {
       throw new Error('Firebase-konfigurasjon er ikke tilgjengelig.')
     }
 
-    const checkinId = `checkin_${Date.now()}`
-    const nowIso = new Date().toISOString()
+    // Opprett innsjekk og lagre bildet i Google Drive via Apps Script
+    const appScriptResult = await submitCheckin({
+      turpostId: String(params.post.id),
+      turpostName: params.post.name,
+      description: params.description || '',
+      imageFile: params.imageFile || undefined
+    })
 
-    let photoUrl: string | undefined
-    if (params.imageFile) {
-      // Konverter bilde til data URL (eller kompakt format) for privat lagring
-      photoUrl = await fileToDataUrl(params.imageFile)
-    }
+    const checkinId = appScriptResult.id || `checkin_${Date.now()}`
+    const nowIso = appScriptResult.timestamp || new Date().toISOString()
+    const photoUrl = appScriptResult.imageUrl || ''
 
     const checkinItem: FirebaseCheckinItem = {
       id: checkinId,
       turpostId: String(params.post.id),
       turpostName: params.post.name,
       userId: params.userId,
-      userName: params.userName || 'Ukjent turgåer',
-      userAvatar: '',
+      userName: params.userName || appScriptResult.userName || 'Ukjent turgåer',
+      userAvatar: appScriptResult.userAvatar || '',
       timestamp: nowIso,
-      description: params.description || '',
-      imageUrl: photoUrl || ''
+      description: params.description || appScriptResult.description || '',
+      imageUrl: photoUrl
     }
 
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/my_spots_checkins/${encodeURIComponent(String(params.post.id))}/${checkinId}.json`
@@ -445,13 +462,14 @@ export function usePrivateTurposter() {
     }
 
     return {
+      id: checkinId,
       userId: params.userId,
       turpostId: String(params.post.id),
       turpostName: params.post.name,
       timestamp: nowIso,
       description: params.description || '',
-      imageUrl: photoUrl || '',
-      userName: params.userName
+      imageUrl: photoUrl,
+      userName: params.userName || appScriptResult.userName
     }
   }
 
@@ -598,11 +616,4 @@ export function usePrivateTurposter() {
   }
 }
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
+

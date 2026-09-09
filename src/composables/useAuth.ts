@@ -23,6 +23,7 @@ export interface CheckinParams {
 }
 
 export interface CheckinResult {
+  id?: string
   userId: string
   turpostId: string
   turpostName?: string
@@ -221,13 +222,15 @@ function logout(): void {
 // =============================================================================
 // Konverter bildefil til base64 data-URL
 // =============================================================================
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = err => reject(err)
-    reader.readAsDataURL(file)
-  })
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  const chunkSize = 32768 // 32 KB bolker for å unngå call stack- og minnebegrensninger
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  return 'data:' + (file.type || 'image/jpeg') + ';base64,' + btoa(binary)
 }
 
 // =============================================================================

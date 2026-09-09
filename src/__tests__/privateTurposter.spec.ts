@@ -2,6 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { usePrivateTurposter } from '../composables/usePrivateTurposter'
 
 vi.mock('../composables/useAuth', () => ({
+  useAuth: vi.fn().mockReturnValue({
+    submitCheckin: vi.fn().mockResolvedValue({
+      id: 'mock_checkin_id',
+      imageUrl: 'https://lh3.googleusercontent.com/d/mock_img',
+      timestamp: '2026-09-09T22:00:00.000Z',
+      userName: 'Test Bruker'
+    }),
+    updatePublicCheckin: vi.fn().mockResolvedValue({
+      imageUrl: 'https://lh3.googleusercontent.com/d/updated_img'
+    }),
+    deletePublicCheckin: vi.fn().mockResolvedValue({ success: true })
+  }),
   getFirebaseConfig: vi.fn().mockResolvedValue({
     dbUrl: 'https://test-db.firebaseio.com',
     prefix: 'test_prefix'
@@ -115,5 +127,44 @@ describe('usePrivateTurposter', () => {
 
     const deleteCheckinsCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('my_spots_checkins/spot_123.json'))
     expect(deleteCheckinsCall![1]?.method).toBe('DELETE')
+  })
+
+  it('submitPrivateCheckin uploads image via Apps Script and saves Google Drive URL to Firebase', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({})
+    } as any)
+
+    const { submitPrivateCheckin } = usePrivateTurposter()
+    const mockPost = {
+      id: 'spot_123',
+      name: 'Min Turpost',
+      lat: 60.1,
+      lng: 5.2,
+      alt: 200,
+      fylke: 'Vestland',
+      kommune: 'Bergen',
+      isPrivate: true
+    }
+
+    const mockFile = new File(['dummy content'], 'test.jpg', { type: 'image/jpeg' })
+
+    const result = await submitPrivateCheckin({
+      userId: 'user_abc',
+      userName: 'Test Bruker',
+      post: mockPost as any,
+      description: 'Flott tur!',
+      imageFile: mockFile
+    })
+
+    expect(result.imageUrl).toBe('https://lh3.googleusercontent.com/d/mock_img')
+    expect(result.id).toBe('mock_checkin_id')
+
+    const putCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('my_spots_checkins/spot_123/mock_checkin_id.json'))
+    expect(putCall).toBeDefined()
+    expect(putCall![1]?.method).toBe('PUT')
+    const savedPayload = JSON.parse(putCall![1]?.body as string)
+    expect(savedPayload.imageUrl).toBe('https://lh3.googleusercontent.com/d/mock_img')
+    expect(savedPayload.turpostId).toBe('spot_123')
   })
 })

@@ -178,6 +178,7 @@ describe('Checkin deletion and image updates', () => {
   it('updatePrivateCheckinImage patches imageUrl in user private checkins', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
+      text: async () => JSON.stringify({ success: true, imageUrl: '' }),
       json: async () => ({})
     } as any)
 
