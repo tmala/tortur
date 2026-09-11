@@ -209,6 +209,7 @@ function logout(): void {
   localStorage.removeItem(STORAGE_KEY_USER)
   localStorage.removeItem(STORAGE_KEY_CONFIG)
   sessionStorage.removeItem(STORAGE_KEY_TOKEN)
+  migratedUsersCache.clear()
 
   try {
     const google = (window as any).google
@@ -343,10 +344,12 @@ async function deletePublicCheckin(params: {
   if (fbConfig && params.checkinId) {
     try {
       const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(params.checkinId)}.json`
-      const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(params.checkinId)}.json`
+      const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(params.checkinId)}.json`
+      const legacyUserUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(params.checkinId)}.json`
       await Promise.all([
         fetch(turpostUrl, { method: 'DELETE' }),
-        fetch(userUrl, { method: 'DELETE' })
+        fetch(userUrl, { method: 'DELETE' }),
+        fetch(legacyUserUrl, { method: 'DELETE' }).catch(() => {})
       ])
     } catch (err) {
       console.warn('[useAuth] Feil ved direkte sletting i Firebase:', err)
@@ -440,7 +443,7 @@ async function updatePublicCheckin(params: {
       if (Object.keys(patchData).length > 0) {
         const patchBody = JSON.stringify(patchData)
         const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(params.checkinId)}.json`
-        const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(params.checkinId)}.json`
+        const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(params.checkinId)}.json`
         const promises = [
           fetch(turpostUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody }),
           fetch(userUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody })
@@ -537,6 +540,69 @@ async function fetchTurpostCheckins(turpostId: string | number): Promise<Firebas
   }
 }
 
+const RESERVED_USER_SUBKEYS = new Set([
+  'checkins',
+  'my_spots',
+  'my_spots_checkins',
+  'tracks',
+  'friends',
+  'friend_requests',
+  'settings'
+])
+
+export const migratedUsersCache = new Set<string>()
+
+export async function migrateUserCheckinsIfNeeded(userId: string, dbUrl: string, prefix: string): Promise<void> {
+  if (!userId || migratedUsersCache.has(userId)) return
+
+  const storageKey = `tortur_migrated_checkins_${userId}`
+  if (localStorage.getItem(storageKey) === 'true') {
+    migratedUsersCache.add(userId)
+    return
+  }
+
+  try {
+    const userRootUrl = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(userId)}.json`
+    const res = await fetch(userRootUrl)
+    if (!res.ok) return
+    const data = await res.json()
+    if (!data || typeof data !== 'object') {
+      localStorage.setItem(storageKey, 'true')
+      migratedUsersCache.add(userId)
+      return
+    }
+
+    const legacyCheckins: { key: string; checkin: FirebaseCheckinItem }[] = []
+    for (const [key, val] of Object.entries(data)) {
+      if (RESERVED_USER_SUBKEYS.has(key)) continue
+      if (val && typeof val === 'object' && (val as any).turpostId != null) {
+        legacyCheckins.push({ key, checkin: val as FirebaseCheckinItem })
+      }
+    }
+
+    if (legacyCheckins.length > 0) {
+      await Promise.all(
+        legacyCheckins.map(async ({ key, checkin }) => {
+          const checkinId = checkin.id || key
+          const newUrl = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(userId)}/checkins/${encodeURIComponent(checkinId)}.json`
+          await fetch(newUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(checkin)
+          })
+          const oldUrl = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(userId)}/${encodeURIComponent(key)}.json`
+          await fetch(oldUrl, { method: 'DELETE' }).catch(() => {})
+        })
+      )
+    }
+
+    localStorage.setItem(storageKey, 'true')
+    migratedUsersCache.add(userId)
+  } catch (err) {
+    console.warn('[useAuth] Feil under migrering av innsjekkinger:', err)
+  }
+}
+
 // =============================================================================
 // Hent innlogget brukers egne innsjekkinger fra Firebase ("Mine innsjekkinger")
 // =============================================================================
@@ -555,20 +621,23 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
   if (!dbUrl || !prefix) return []
 
   try {
-    const url = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(user.value.userId)}.json`
+    // 1. Automatisk migrering hvis det finnes eldre innsjekkinger direkte under bruker-ID
+    await migrateUserCheckinsIfNeeded(user.value.userId, dbUrl, prefix)
+
+    // 2. Hent innsjekkinger fra den nye underkatalogen /checkins/
+    const url = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins.json`
     const res = await fetch(url)
     if (!res.ok) return []
     const data = await res.json()
     if (!data || typeof data !== 'object') return []
-    // Filtrer ut eventuelle undernoder som ikke er offentlige innsjekkinger (f.eks. 'tracks', 'my_spots', 'my_spots_checkins')
-    // og filtrer ut private innsjekkinger (turpostId som starter med 'spot_') som Apps Script automatisk synkroniserte hit
+    // Filtrer ut eventuelle private innsjekkinger (turpostId som starter med 'spot_') som Apps Script automatisk synkroniserte hit
     const checkins: FirebaseCheckinItem[] = []
     for (const item of Object.values(data) as any[]) {
       if (!item || typeof item !== 'object' || item.turpostId == null) continue
       if (String(item.turpostId).startsWith('spot_')) {
-        // Rydd opp uønsket kopi som Apps Script la under brukerens rot og offentlig turpost-node
+        // Rydd opp uønsket kopi som Apps Script la under offentlig turpost- og checkins-node
         if (item.id) {
-          fetch(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(item.id)}.json`, { method: 'DELETE' }).catch(() => {})
+          fetch(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(item.id)}.json`, { method: 'DELETE' }).catch(() => {})
           fetch(`${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`, { method: 'DELETE' }).catch(() => {})
         }
         continue

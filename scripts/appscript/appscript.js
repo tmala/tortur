@@ -363,14 +363,14 @@ function handleCheckin(body) {
         '.json'
       UrlFetchApp.fetch(turpostUrl, fetchOptions)
 
-      // 6b. Bruker-indeks: /{secretPrefix}/brukere/{userId}/{checkinId}.json
+      // 6b. Bruker-indeks: /{secretPrefix}/brukere/{userId}/checkins/{checkinId}.json
       var brukerUrl =
         firebaseUrl +
         '/' +
         secretPrefix +
         '/brukere/' +
         encodeURIComponent(userId) +
-        '/' +
+        '/checkins/' +
         checkinId +
         '.json'
       UrlFetchApp.fetch(brukerUrl, fetchOptions)
@@ -513,10 +513,22 @@ function handleDeleteCheckin(body) {
         secretPrefix +
         '/brukere/' +
         encodeURIComponent(userId) +
-        '/' +
+        '/checkins/' +
         encodeURIComponent(checkinId) +
         '.json'
       UrlFetchApp.fetch(brukerUrl, fetchOptions)
+
+      // Rydd også opp fra gammel rot-sti hvis den finnes
+      var oldBrukerUrl =
+        firebaseUrl +
+        '/' +
+        secretPrefix +
+        '/brukere/' +
+        encodeURIComponent(userId) +
+        '/' +
+        encodeURIComponent(checkinId) +
+        '.json'
+      UrlFetchApp.fetch(oldBrukerUrl, fetchOptions)
     }
   } catch (fbErr) {
     Logger.log('Feil ved sletting i Firebase: ' + fbErr.message)
@@ -676,7 +688,7 @@ function handleUpdateCheckin(body) {
           secretPrefix +
           '/brukere/' +
           encodeURIComponent(userId) +
-          '/' +
+          '/checkins/' +
           encodeURIComponent(checkinId) +
           '.json'
         UrlFetchApp.fetch(brukerUrl, fetchOptions)

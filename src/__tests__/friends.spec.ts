@@ -261,9 +261,9 @@ describe('useFriends - Friends system and check-in visibility', () => {
     )
     expect(tpCall).toBeDefined()
 
-    // brukere/user_me/c_999.json PATCH
+    // brukere/user_me/checkins/c_999.json PATCH
     const userCall = fetchSpy.mock.calls.find(c =>
-      String(c[0]).includes('/brukere/user_me/c_999.json') && c[1]?.method === 'PATCH'
+      String(c[0]).includes('/brukere/user_me/checkins/c_999.json') && c[1]?.method === 'PATCH'
     )
     expect(userCall).toBeDefined()
   })

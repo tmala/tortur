@@ -520,7 +520,7 @@ export async function setCheckinVisibility(
         )
       }
       if (opts?.userId) {
-        const userUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(opts.userId)}/${encodeURIComponent(checkinId)}.json`
+        const userUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(opts.userId)}/checkins/${encodeURIComponent(checkinId)}.json`
         promises.push(
           fetch(userUrl, {
             method: 'PATCH',

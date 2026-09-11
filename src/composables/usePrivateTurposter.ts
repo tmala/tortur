@@ -486,10 +486,12 @@ export function usePrivateTurposter() {
     // For private turposter skal innsjekkingen kun ligge under my_spots_checkins; rydd derfor opp de to nodene:
     try {
       const cleanupTurpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(params.post.id))}/${checkinId}.json`
-      const cleanupUserUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/${checkinId}.json`
+      const cleanupUserUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/checkins/${checkinId}.json`
+      const cleanupLegacyUserUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/${checkinId}.json`
       await Promise.all([
         fetch(cleanupTurpostUrl, { method: 'DELETE' }),
-        fetch(cleanupUserUrl, { method: 'DELETE' })
+        fetch(cleanupUserUrl, { method: 'DELETE' }),
+        fetch(cleanupLegacyUserUrl, { method: 'DELETE' }).catch(() => {})
       ])
     } catch {
       // Ignorer eventuelle nettverksfeil ved opprydding

@@ -62,7 +62,7 @@ describe('Checkin deletion and image updates', () => {
     expect(fbTurpostDelete).toBeDefined()
 
     const fbUserDelete = fetchSpy.mock.calls.find(c =>
-      String(c[0]).includes('/brukere/test_user_sub/c_101.json') && c[1]?.method === 'DELETE'
+      String(c[0]).includes('/brukere/test_user_sub/checkins/c_101.json') && c[1]?.method === 'DELETE'
     )
     expect(fbUserDelete).toBeDefined()
   })
@@ -112,13 +112,18 @@ describe('Checkin deletion and image updates', () => {
     })
     expect(appsScriptCall).toBeDefined()
 
-    // Should call Firebase PATCH on turposter and brukere
+    // Should call Firebase PATCH on turposter and brukere checkins
     const fbTurpostPatch = fetchSpy.mock.calls.find(c =>
       String(c[0]).includes('/turposter/456/c_102.json') && c[1]?.method === 'PATCH'
     )
     expect(fbTurpostPatch).toBeDefined()
     const patchBody = JSON.parse(fbTurpostPatch![1]?.body as string)
     expect(patchBody.imageUrl).toBe('https://lh3.googleusercontent.com/d/file123')
+
+    const fbUserPatch = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/brukere/test_user_sub/checkins/c_102.json') && c[1]?.method === 'PATCH'
+    )
+    expect(fbUserPatch).toBeDefined()
   })
 
   it('updatePublicCheckin updates description and removes image', async () => {
@@ -173,6 +178,11 @@ describe('Checkin deletion and image updates', () => {
     const patchBody = JSON.parse(fbTurpostPatch![1]?.body as string)
     expect(patchBody.description).toBe('Fin tur til toppen!')
     expect(patchBody.imageUrl).toBe('')
+
+    const fbUserPatch = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/brukere/test_user_sub/checkins/c_103.json') && c[1]?.method === 'PATCH'
+    )
+    expect(fbUserPatch).toBeDefined()
   })
 
   it('updatePrivateCheckinImage patches imageUrl in user private checkins', async () => {
@@ -198,5 +208,115 @@ describe('Checkin deletion and image updates', () => {
     expect(patchCall).toBeDefined()
     const body = JSON.parse(patchCall![1]?.body as string)
     expect(body.imageUrl).toBe('')
+  })
+
+  it('migrerer automatisk eldre innsjekkinger fra bruker-rot til /checkins/ under fetchMyCheckins', async () => {
+    const fakeUserData: Record<string, any> = {
+      tracks: { 'track-1': { id: 'track-1' } },
+      my_spots: { 'spot-1': { id: 'spot-1' } },
+      settings: { defaultVisibility: 'all' },
+      // To eldre innsjekkinger som ligger direkte under bruker-ID:
+      'chk_old_1': {
+        id: 'chk_old_1',
+        turpostId: '1001',
+        turpostName: 'Ulriken',
+        timestamp: '2026-09-01T12:00:00Z',
+        userId: 'user_mig_1'
+      },
+      'chk_old_2': {
+        id: 'chk_old_2',
+        turpostId: '1002',
+        turpostName: 'Fløyen',
+        timestamp: '2026-09-02T14:00:00Z',
+        userId: 'user_mig_1'
+      }
+    }
+
+    const checkinsSubnode: Record<string, any> = {}
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any, opts: any) => {
+      const urlStr = String(url)
+
+      // 1. GET brukerrot under migrering
+      if (urlStr.endsWith('/brukere/user_mig_1.json') && (!opts || opts.method === 'GET' || !opts.method)) {
+        return {
+          ok: true,
+          json: async () => fakeUserData
+        } as any
+      }
+
+      // 2. PUT til /checkins/<id>.json
+      if (urlStr.includes('/brukere/user_mig_1/checkins/') && opts?.method === 'PUT') {
+        const body = JSON.parse(opts.body)
+        checkinsSubnode[body.id] = body
+        return { ok: true, json: async () => body } as any
+      }
+
+      // 3. DELETE fra gammel rot
+      if (urlStr.endsWith('/brukere/user_mig_1/chk_old_1.json') && opts?.method === 'DELETE') {
+        delete fakeUserData['chk_old_1']
+        return { ok: true, json: async () => null } as any
+      }
+      if (urlStr.endsWith('/brukere/user_mig_1/chk_old_2.json') && opts?.method === 'DELETE') {
+        delete fakeUserData['chk_old_2']
+        return { ok: true, json: async () => null } as any
+      }
+
+      // 4. GET /checkins.json
+      if (urlStr.endsWith('/brukere/user_mig_1/checkins.json')) {
+        return {
+          ok: true,
+          json: async () => checkinsSubnode
+        } as any
+      }
+
+      return { ok: true, json: async () => ({}) } as any
+    })
+
+    const { user, systemConfig, fetchMyCheckins } = useAuth()
+    user.value = {
+      userId: 'user_mig_1',
+      userName: 'Migrasjonsbruker',
+      email: 'mig@example.com',
+      avatarUrl: '',
+      lastLogin: new Date().toISOString()
+    }
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const checkins = await fetchMyCheckins()
+
+    // Verifiser at begge innsjekkinger ble returnert
+    expect(checkins.length).toBe(2)
+    expect(checkins.map(c => c.id).sort()).toEqual(['chk_old_1', 'chk_old_2'])
+
+    // Verifiser at PUT ble kalt til /checkins/ for begge to
+    const putChk1 = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/brukere/user_mig_1/checkins/chk_old_1.json') && c[1]?.method === 'PUT'
+    )
+    const putChk2 = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/brukere/user_mig_1/checkins/chk_old_2.json') && c[1]?.method === 'PUT'
+    )
+    expect(putChk1).toBeDefined()
+    expect(putChk2).toBeDefined()
+
+    // Verifiser at DELETE ble kalt for de gamle rot-nodene
+    const delOld1 = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/brukere/user_mig_1/chk_old_1.json') && c[1]?.method === 'DELETE'
+    )
+    const delOld2 = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/brukere/user_mig_1/chk_old_2.json') && c[1]?.method === 'DELETE'
+    )
+    expect(delOld1).toBeDefined()
+    expect(delOld2).toBeDefined()
+
+    // Verifiser at subnoder som tracks, my_spots, settings IKKE ble slettet
+    const delTracks = fetchSpy.mock.calls.find(c => String(c[0]).includes('/tracks') && c[1]?.method === 'DELETE')
+    expect(delTracks).toBeUndefined()
+
+    // Verifiser at localStorage-flagg ble satt
+    expect(localStorage.getItem('tortur_migrated_checkins_user_mig_1')).toBe('true')
   })
 })
