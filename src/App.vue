@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import MapViewer from './components/MapViewer.vue'
 import LocationControls from './components/LocationControls.vue'
 import TurposterPanel from './components/TurposterPanel.vue'
@@ -386,6 +386,7 @@ const {
   selectFylke,
   selectKommune,
   selectKommuneByName,
+  lookupTurpost,
   clearSelection
 } = useTurposter()
 
@@ -476,6 +477,56 @@ const handleFocusPost = (post: TurpostItem) => {
   }
   if (mapViewerRef.value) {
     mapViewerRef.value.flyToPost(post)
+  }
+}
+
+const handleViewCheckinOnMap = async (checkin: FirebaseCheckinItem) => {
+  isProfileOpen.value = false
+
+  if (mapViewerRef.value) {
+    mapViewerRef.value.resetAutoCenter()
+  }
+
+  // 1. Sjekk om det er en privat turpost / spot
+  const isPrivate = checkin.isPrivate || !!checkin.spotId || (checkin.turpostId && checkin.turpostId.startsWith('spot_'))
+  if (isPrivate) {
+    const spot = mySpots.value.find(
+      s => s.id === checkin.spotId || s.id === checkin.turpostId || (checkin.turpostName && s.name.toLowerCase() === checkin.turpostName.toLowerCase())
+    )
+    if (spot) {
+      await checkAndApplyAbroadLayer(spot.lat, spot.lng)
+      handleFocusPost(spot)
+      return
+    }
+  }
+
+  // 2. Sjekk om turposten allerede finnes i aktiv kommune (turposter.value)
+  const existingInActiveKommune = turposter.value.find(
+    p => (checkin.turpostId && p.id === checkin.turpostId) || 
+         (checkin.turpostName && p.name.toLowerCase() === checkin.turpostName.toLowerCase())
+  )
+  if (existingInActiveKommune) {
+    await checkAndApplyAbroadLayer(existingInActiveKommune.lat, existingInActiveKommune.lng)
+    handleFocusPost(existingInActiveKommune)
+    return
+  }
+
+  // 3. Slå opp i felles turpostdatabase (mountains.csv)
+  const found = await lookupTurpost(checkin.turpostId, checkin.turpostName)
+  if (found) {
+    await checkAndApplyAbroadLayer(found.lat, found.lng)
+    if (found.kommune) {
+      await selectKommuneByName(found.kommune)
+      await nextTick()
+      const inKommune = turposter.value.find(p => p.id === found.id)
+      setTimeout(() => {
+        handleFocusPost(inKommune || found)
+      }, 100)
+    } else {
+      handleFocusPost(found)
+    }
+  } else {
+    console.warn('Fant ikke koordinater for turposten:', checkin)
   }
 }
 
@@ -781,6 +832,7 @@ onUnmounted(() => {
       @open-friends="isFriendsOpen = true"
       @checkin-deleted="loadMyCheckins"
       @checkin-updated="loadMyCheckins"
+      @view-turpost-on-map="handleViewCheckinOnMap"
     />
 
     <!-- Venner og synlighetsinnstillinger -->

@@ -319,4 +319,38 @@ describe('Checkin deletion and image updates', () => {
     // Verifiser at localStorage-flagg ble satt
     expect(localStorage.getItem('tortur_migrated_checkins_user_mig_1')).toBe('true')
   })
+
+  it('lookupTurpost finner turpost fra CSV basert på ID eller navn', async () => {
+    const { lookupTurpost } = await import('../composables/useTurposter')
+
+    const mockCsv = `turpostId;turpostNavn;latitude;longitude;altitude;fylke;kommune
+post_101;Ekorn-stien;60.45;5.32;150;Vestland;Bergen
+post_102;Hafskorsundet;61.42;7.25;210;Vestland;Luster`
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+      if (typeof url === 'string' && url.includes('mountains.csv')) {
+        return {
+          ok: true,
+          text: async () => mockCsv
+        } as any
+      }
+      return { ok: false } as any
+    })
+
+    const byId = await lookupTurpost('post_101')
+    expect(byId).toBeDefined()
+    expect(byId?.name).toBe('Ekorn-stien')
+    expect(byId?.lat).toBe(60.45)
+    expect(byId?.lng).toBe(5.32)
+    expect(byId?.kommune).toBe('Bergen')
+
+    const byName = await lookupTurpost(undefined, 'hafskorsundet')
+    expect(byName).toBeDefined()
+    expect(byName?.id).toBe('post_102')
+    expect(byName?.kommune).toBe('Luster')
+
+    const nonExistent = await lookupTurpost('does_not_exist')
+    expect(nonExistent).toBeNull()
+  })
 })
+

@@ -18,7 +18,8 @@ import {
   Pencil,
   Users,
   Globe,
-  Lock
+  Lock,
+  Map as MapIcon
 } from 'lucide-vue-next'
 import { useAuth, type GoogleUser, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
@@ -49,6 +50,7 @@ const emit = defineEmits<{
   (e: 'open-friends'): void
   (e: 'checkin-deleted', checkinId: string): void
   (e: 'checkin-updated'): void
+  (e: 'view-turpost-on-map', checkin: FirebaseCheckinItem): void
 }>()
 
 const { deletePublicCheckin } = useAuth()
@@ -56,6 +58,11 @@ const { deletePrivateCheckin } = usePrivateTurposter()
 
 const isActionLoading = ref<string | null>(null)
 const editingCheckin = ref<FirebaseCheckinItem | null>(null)
+
+function handleViewOnMap(item: FirebaseCheckinItem) {
+  emit('view-turpost-on-map', item)
+  emit('close')
+}
 
 function handleCheckinEdited(updatedItem: FirebaseCheckinItem) {
   emit('checkin-updated')
@@ -590,6 +597,15 @@ onUnmounted(() => {
 
                     <!-- Handlingsknapper for innsjekkingen -->
                     <div class="user-checkin-actions">
+                      <button
+                        type="button"
+                        class="btn-checkin-action"
+                        @click.stop="handleViewOnMap(item)"
+                        title="Vis og flytt kartet til denne turposten"
+                      >
+                        <MapIcon :size="12" />
+                        <span>Vis på kart</span>
+                      </button>
                       <button
                         type="button"
                         class="btn-checkin-action"

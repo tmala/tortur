@@ -75,6 +75,66 @@ export function findKommuneInHierarchy(
   return null
 }
 
+let cachedMountainsList: TurpostItem[] | null = null
+
+/**
+ * Slår opp en turpost i mountains.csv basert på ID eller navn.
+ * Returnerer et TurpostItem med koordinater, fylke og kommune.
+ */
+export async function lookupTurpost(
+  turpostId?: string,
+  turpostName?: string
+): Promise<TurpostItem | null> {
+  if (!turpostId && !turpostName) return null
+
+  if (!cachedMountainsList) {
+    try {
+      const csvUrl = `${import.meta.env.BASE_URL}data/mountains.csv?v=${__APP_VERSION__}`
+      const res = await fetch(csvUrl)
+      if (res.ok) {
+        const text = await res.text()
+        const lines = text.split(/\r?\n/)
+        const list: TurpostItem[] = []
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i]?.trim()
+          if (!line) continue
+          const parts = line.split(';')
+          if (parts.length >= 4) {
+            const id = (parts[0] || '').trim()
+            const name = (parts[1] || '').trim()
+            const lat = parseFloat(parts[2] || '0')
+            const lng = parseFloat(parts[3] || '0')
+            const alt = parts[4] ? parseFloat(parts[4]) : null
+            const fylke = (parts[5] || '').trim()
+            const kommune = (parts[6] || '').trim()
+            if (id && !isNaN(lat) && !isNaN(lng)) {
+              list.push({ id, name, lat, lng, alt, fylke, kommune })
+            }
+          }
+        }
+        cachedMountainsList = list
+      }
+    } catch (e) {
+      console.warn('Kunne ikke laste mountains.csv for oppslag av turpost:', e)
+    }
+  }
+
+  if (!cachedMountainsList || cachedMountainsList.length === 0) return null
+
+  if (turpostId) {
+    const match = cachedMountainsList.find(p => p.id === turpostId)
+    if (match) return match
+  }
+
+  if (turpostName) {
+    const clean = turpostName.trim().toLowerCase()
+    const match = cachedMountainsList.find(p => p.name.toLowerCase() === clean)
+    if (match) return match
+  }
+
+  return null
+}
+
 export function useTurposter() {
   const hierarchy = ref<FylkeInfo[]>([])
   const selectedFylke = ref<FylkeInfo | null>(null)
@@ -192,6 +252,7 @@ export function useTurposter() {
     selectKommune,
     findKommuneByName,
     selectKommuneByName,
+    lookupTurpost,
     clearSelection
   }
 }
