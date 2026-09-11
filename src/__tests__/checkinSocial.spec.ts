@@ -189,4 +189,44 @@ describe('useCheckinSocial - Likes/Reaksjoner og Kommentarer', () => {
       })
     ).rejects.toThrow('Du har ikke rettigheter til å slette denne kommentaren.')
   })
+
+  it('CheckinSocialSection: felt for å skrive kommentar er skjult inntil Kommenter-knappen trykkes', async () => {
+    const { mount } = await import('@vue/test-utils')
+    const CheckinSocialSection = (await import('../components/CheckinSocialSection.vue')).default
+
+    const sampleCheckin = {
+      id: 'chk_200',
+      turpostId: 'tp_100',
+      userId: 'friend_user_2',
+      userName: 'Friend User',
+      userAvatar: '',
+      timestamp: '2026-09-11T12:00:00Z',
+      description: 'Fin tur!',
+      imageUrl: ''
+    }
+
+    const wrapper = mount(CheckinSocialSection, {
+      props: {
+        checkin: sampleCheckin,
+        currentUserId: 'test_user_1'
+      }
+    })
+
+    // 1. Initialt skal kommentarfeltet IKKE være synlig
+    expect(wrapper.find('.new-comment-box').exists()).toBe(false)
+
+    // 2. Finn og trykk på Kommenter-knappen
+    const commentBtn = wrapper.findAll('.btn-social-action').find(b => b.text().includes('Kommenter'))
+    expect(commentBtn).toBeDefined()
+    await commentBtn!.trigger('click')
+
+    // 3. Nå skal kommentarfeltet være synlig og knappen ha klassen is-active
+    expect(wrapper.find('.new-comment-box').exists()).toBe(true)
+    expect(commentBtn!.classes()).toContain('is-active')
+
+    // 4. Trykk på knappen igjen for å skjule
+    await commentBtn!.trigger('click')
+    expect(wrapper.find('.new-comment-box').exists()).toBe(false)
+    expect(commentBtn!.classes()).not.toContain('is-active')
+  })
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
-import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Image as ImageIcon, Trash2, Pencil, Globe, Users, Lock } from 'lucide-vue-next'
+import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Image as ImageIcon, Trash2, Pencil, Globe, Users, Lock, ChevronDown } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
@@ -43,6 +43,28 @@ const privateCheckins = ref<FirebaseCheckinItem[]>([])
 const activeTab = ref<'public' | 'private'>('public')
 const isLoading = ref(false)
 const selectedImage = ref<string | null>(null)
+
+// Sporer hvilke innsjekkinger som er manuelt ekspandert eller minimert.
+// Som standard er kun de 3 første (ferskeste) ekspandert.
+const expandedCheckinIds = ref<Set<string>>(new Set())
+const collapsedCheckinIds = ref<Set<string>>(new Set())
+
+function isCheckinExpanded(id: string, index?: number): boolean {
+  if (expandedCheckinIds.value.has(id)) return true
+  if (collapsedCheckinIds.value.has(id)) return false
+  return index !== undefined ? index < 3 : false
+}
+
+function toggleCheckinExpand(id: string, index?: number) {
+  const currentlyExpanded = isCheckinExpanded(id, index)
+  if (currentlyExpanded) {
+    expandedCheckinIds.value.delete(id)
+    collapsedCheckinIds.value.add(id)
+  } else {
+    collapsedCheckinIds.value.delete(id)
+    expandedCheckinIds.value.add(id)
+  }
+}
 
 // Formatere dato til norsk tekst
 const formatDate = (isoString: string) => {
@@ -326,10 +348,20 @@ watch(
     if (open && props.turpost) {
       selectedImage.value = null
       dragPosition.value = { x: 0, y: 0 }
+      expandedCheckinIds.value.clear()
+      collapsedCheckinIds.value.clear()
       loadCheckins()
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => activeTab.value,
+  () => {
+    expandedCheckinIds.value.clear()
+    collapsedCheckinIds.value.clear()
+  }
 )
 
 const handleKeyDown = (e: KeyboardEvent) => {
@@ -493,12 +525,20 @@ onUnmounted(() => {
               </div>
 
               <div
-                v-for="item in displayedCheckins"
+                v-for="(item, idx) in displayedCheckins"
                 :key="item.id"
                 class="checkin-item"
-                :class="{ 'is-own': item.userId === currentUserId, 'is-private-item': activeTab === 'private' }"
+                :class="{
+                  'is-own': item.userId === currentUserId,
+                  'is-private-item': activeTab === 'private',
+                  'is-collapsed': !isCheckinExpanded(item.id, idx)
+                }"
               >
-                <div class="item-header">
+                <div
+                  class="item-header"
+                  @click="toggleCheckinExpand(item.id, idx)"
+                  :title="isCheckinExpanded(item.id, idx) ? 'Klikk for å minimere' : 'Klikk for å ekspandere'"
+                >
                   <div class="user-meta">
                     <img
                       v-if="item.userAvatar"
@@ -533,39 +573,51 @@ onUnmounted(() => {
                     </div>
                   </div>
 
-                  <!-- Handlinger for egne innsjekkinger (både felles og private) -->
-                  <div v-if="item.userId === currentUserId" class="checkin-item-actions">
-                    <button
-                      type="button"
-                      class="btn-item-action"
-                      @click.stop="editingCheckin = item"
-                      title="Rediger eller slett denne innsjekkingen"
-                    >
-                      <Pencil :size="12" />
-                      <span>Edit</span>
-                    </button>
+                  <div class="item-header-right">
+                    <!-- Handlinger for egne innsjekkinger (både felles og private) -->
+                    <div v-if="item.userId === currentUserId" class="checkin-item-actions">
+                      <button
+                        type="button"
+                        class="btn-item-action"
+                        @click.stop="editingCheckin = item"
+                        title="Rediger eller slett denne innsjekkingen"
+                      >
+                        <Pencil :size="12" />
+                        <span>Edit</span>
+                      </button>
+                    </div>
+
+                    <!-- Chevron for ekspandér / minimer -->
+                    <ChevronDown
+                      :size="16"
+                      class="chevron-expand"
+                      :class="{ 'is-open': isCheckinExpanded(item.id, idx) }"
+                    />
                   </div>
                 </div>
 
-                <!-- Beskrivelse -->
-                <p v-if="item.description" class="item-desc">{{ item.description }}</p>
+                <!-- Ekspandert innhold (beskrivelse, bilde, reaksjoner og kommentarer) -->
+                <div v-if="isCheckinExpanded(item.id, idx)" class="item-expanded-content">
+                  <!-- Beskrivelse -->
+                  <p v-if="item.description" class="item-desc">{{ item.description }}</p>
 
-                <!-- Bilde -->
-                <div v-if="item.imageUrl" class="item-photo-wrap" @click="selectedImage = item.imageUrl">
-                  <img :src="item.imageUrl" alt="Bilde fra turposten" class="item-photo" loading="lazy" />
-                  <div class="photo-overlay">
-                    <span>🔍 Vis full størrelse</span>
+                  <!-- Bilde -->
+                  <div v-if="item.imageUrl" class="item-photo-wrap" @click="selectedImage = item.imageUrl">
+                    <img :src="item.imageUrl" alt="Bilde fra turposten" class="item-photo" loading="lazy" />
+                    <div class="photo-overlay">
+                      <span>🔍 Vis full størrelse</span>
+                    </div>
                   </div>
-                </div>
 
-                <!-- Reaksjoner og kommentarer -->
-                <CheckinSocialSection
-                  :checkin="item"
-                  :current-user-id="currentUserId"
-                  :is-private="activeTab === 'private'"
-                  :spot-id="matchingPrivateSpot ? String(matchingPrivateSpot.id) : (turpost?.isPrivate ? String(turpost.id) : undefined)"
-                  @updated="handleSocialUpdated"
-                />
+                  <!-- Reaksjoner og kommentarer -->
+                  <CheckinSocialSection
+                    :checkin="item"
+                    :current-user-id="currentUserId"
+                    :is-private="activeTab === 'private'"
+                    :spot-id="matchingPrivateSpot ? String(matchingPrivateSpot.id) : (turpost?.isPrivate ? String(turpost.id) : undefined)"
+                    @updated="handleSocialUpdated"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1054,6 +1106,42 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 8px;
+  transition: opacity 0.15s ease;
+}
+
+.item-header:hover {
+  opacity: 0.95;
+}
+
+.item-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.chevron-expand {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #94a3b8;
+}
+
+.chevron-expand.is-open {
+  transform: rotate(180deg);
+  color: #38bdf8;
+}
+
+.item-expanded-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.checkin-item.is-collapsed {
+  padding: 10px 14px;
+  gap: 0;
 }
 
 .user-meta {

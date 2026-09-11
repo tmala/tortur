@@ -654,16 +654,21 @@ describe('UserProfileModal', () => {
     expect(bodyText).toContain('Gavelen')
     expect(bodyText).toContain('Vardetangen')
 
-    // Sjekk at detaljer er skjult når listen er kollapset
-    expect(document.body.textContent).not.toContain('Nyeste tur!')
+    // De 3 ferskeste innsjekkingene skal som standard være ekspandert
+    expect(document.body.textContent).toContain('Nyeste tur!')
 
-    // Klikk for å ekspandere det første kortet
+    // Klikk for å kollapse det første kortet
     const firstCardHeader = document.body.querySelector('.checkin-card-header') as HTMLElement
     expect(firstCardHeader).not.toBeNull()
     firstCardHeader.click()
     await wrapper.vm.$nextTick()
 
-    // Nå skal notatet vises
+    // Nå skal notatet for første kort være skjult
+    expect(document.body.textContent).not.toContain('Nyeste tur!')
+
+    // Klikk igjen for å ekspandere kortet på nytt
+    firstCardHeader.click()
+    await wrapper.vm.$nextTick()
     expect(document.body.textContent).toContain('Nyeste tur!')
 
     // Vardetangen (nyeste) skal komme før Gavelen i DOM

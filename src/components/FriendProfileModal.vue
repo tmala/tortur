@@ -35,7 +35,10 @@ const { fetchFriendCheckins } = useFriends()
 const checkins = ref<FirebaseCheckinItem[]>([])
 const isLoading = ref(false)
 const searchQuery = ref('')
+// Sporer hvilke innsjekkinger som er manuelt ekspandert/kollapset i listen.
+// Som standard er kun de 3 første (ferskeste) ekspandert.
 const expandedCheckinIds = ref<Set<string>>(new Set())
+const collapsedCheckinIds = ref<Set<string>>(new Set())
 const lightboxImage = ref<string | null>(null)
 
 // Dragging
@@ -97,12 +100,8 @@ async function loadCheckins() {
   try {
     const data = await fetchFriendCheckins(props.friend.userId)
     checkins.value = data
-    // Ekspander den første innsjekkingen som standard
-    if (data.length > 0 && data[0]?.id) {
-      expandedCheckinIds.value = new Set([String(data[0].id)])
-    } else {
-      expandedCheckinIds.value = new Set()
-    }
+    expandedCheckinIds.value.clear()
+    collapsedCheckinIds.value.clear()
   } catch (err) {
     console.warn('Kunne ikke laste vennens innsjekkinger:', err)
     checkins.value = []
@@ -117,6 +116,8 @@ watch(
     if (newOpen && newFriendId) {
       dragPosition.value = { x: 0, y: 0 }
       searchQuery.value = ''
+      expandedCheckinIds.value.clear()
+      collapsedCheckinIds.value.clear()
       loadCheckins()
     }
   },
@@ -136,18 +137,21 @@ const filteredCheckins = computed(() => {
   )
 })
 
-function toggleExpand(id: string) {
-  const next = new Set(expandedCheckinIds.value)
-  if (next.has(id)) {
-    next.delete(id)
+function toggleExpand(id: string, index?: number) {
+  const currentlyExpanded = isExpanded(id, index)
+  if (currentlyExpanded) {
+    expandedCheckinIds.value.delete(id)
+    collapsedCheckinIds.value.add(id)
   } else {
-    next.add(id)
+    collapsedCheckinIds.value.delete(id)
+    expandedCheckinIds.value.add(id)
   }
-  expandedCheckinIds.value = next
 }
 
-function isExpanded(id: string): boolean {
-  return expandedCheckinIds.value.has(id)
+function isExpanded(id: string, index?: number): boolean {
+  if (expandedCheckinIds.value.has(id)) return true
+  if (collapsedCheckinIds.value.has(id)) return false
+  return index !== undefined ? index < 3 : false
 }
 
 function handleViewOnMap(item: FirebaseCheckinItem) {
@@ -292,16 +296,16 @@ onUnmounted(() => {
 
           <div v-else class="checkins-accordion">
             <div
-              v-for="item in filteredCheckins"
+              v-for="(item, idx) in filteredCheckins"
               :key="item.id"
               class="checkin-item"
-              :class="{ expanded: isExpanded(item.id) }"
+              :class="{ expanded: isExpanded(item.id, idx) }"
             >
               <!-- Overskriftsrad (klikkbar for ekspandering) -->
               <button
                 type="button"
                 class="checkin-header-btn"
-                @click="toggleExpand(item.id)"
+                @click="toggleExpand(item.id, idx)"
               >
                 <div class="checkin-title-left">
                   <span class="turpost-name">{{ item.turpostName || 'Navnløs turpost' }}</span>
@@ -329,13 +333,13 @@ onUnmounted(() => {
                   <ChevronDown
                     :size="16"
                     class="chevron-icon"
-                    :class="{ rotated: isExpanded(item.id) }"
+                    :class="{ rotated: isExpanded(item.id, idx) }"
                   />
                 </div>
               </button>
 
               <!-- Ekspandert innhold -->
-              <div v-if="isExpanded(item.id)" class="checkin-expanded-content">
+              <div v-if="isExpanded(item.id, idx)" class="checkin-expanded-content">
                 <!-- Beskrivelse / Turboknotat -->
                 <div v-if="item.description" class="checkin-desc-bubble">
                   <p>{{ item.description }}</p>

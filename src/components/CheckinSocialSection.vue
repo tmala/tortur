@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import {
   ThumbsUp,
   MessageSquare,
@@ -40,8 +40,21 @@ const isPostingComment = ref(false)
 const deletingCommentId = ref<string | null>(null)
 const showPicker = ref(false)
 const isCommentsExpanded = ref(true)
+const isCommentInputVisible = ref(false)
+const commentInputRef = ref<HTMLInputElement | null>(null)
 const pickerTimeout = ref<any>(null)
 const actionError = ref<string | null>(null)
+
+function handleToggleCommentInput() {
+  if (!props.currentUserId) return
+  isCommentInputVisible.value = !isCommentInputVisible.value
+  if (isCommentInputVisible.value) {
+    isCommentsExpanded.value = true
+    nextTick(() => {
+      commentInputRef.value?.focus()
+    })
+  }
+}
 
 // Reaksjoner
 const reactions = computed(() => getReactionsList(props.checkin))
@@ -171,6 +184,7 @@ async function handleSendComment() {
 
     commentText.value = ''
     isCommentsExpanded.value = true
+    isCommentInputVisible.value = false
 
     const newComments: Record<string, CheckinComment> = {
       ...(props.checkin.comments || {}),
@@ -318,9 +332,10 @@ onUnmounted(() => {
       <button
         type="button"
         class="btn-social-action"
+        :class="{ 'is-active': isCommentInputVisible }"
         :disabled="!currentUserId"
-        :title="!currentUserId ? 'Logg inn for å kommentere' : 'Skriv en kommentar'"
-        @click="isCommentsExpanded = true"
+        :title="!currentUserId ? 'Logg inn for å kommentere' : (isCommentInputVisible ? 'Skjul kommentarfelt' : 'Skriv en kommentar')"
+        @click="handleToggleCommentInput"
       >
         <MessageSquare :size="13" />
         <span>Kommenter</span>
@@ -328,9 +343,9 @@ onUnmounted(() => {
     </div>
 
     <!-- Kommentarseksjon -->
-    <div v-if="isCommentsExpanded" class="comments-section">
+    <div v-if="(isCommentsExpanded && comments.length > 0) || isCommentInputVisible" class="comments-section">
       <!-- Kommentarliste -->
-      <div v-if="comments.length > 0" class="comments-list">
+      <div v-if="isCommentsExpanded && comments.length > 0" class="comments-list">
         <div
           v-for="c in comments"
           :key="c.id"
@@ -373,8 +388,9 @@ onUnmounted(() => {
       </div>
 
       <!-- Ny kommentar inndatafelt -->
-      <div v-if="canWriteComment" class="new-comment-box">
+      <div v-if="isCommentInputVisible && canWriteComment" class="new-comment-box">
         <input
+          ref="commentInputRef"
           v-model="commentText"
           type="text"
           class="comment-input"
@@ -396,7 +412,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Informasjon hvis bruker ikke kan kommentere -->
-      <div v-else-if="currentUserId && !canWriteComment" class="comment-restricted-hint">
+      <div v-else-if="isCommentInputVisible && currentUserId && !canWriteComment" class="comment-restricted-hint">
         🔒 Kun venner av innsjekkingens eier kan kommentere.
       </div>
     </div>
@@ -554,7 +570,8 @@ onUnmounted(() => {
   border-color: rgba(255, 255, 255, 0.18);
 }
 
-.btn-social-action.is-reacted {
+.btn-social-action.is-reacted,
+.btn-social-action.is-active {
   background: rgba(56, 189, 248, 0.16);
   border-color: rgba(56, 189, 248, 0.4);
   color: #38bdf8;

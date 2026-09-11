@@ -144,20 +144,28 @@ const handleForceRefresh = async () => {
   }
 }
 
-// Sporer hvilke innsjekkinger som er ekspandert i listen
+// Sporer hvilke innsjekkinger som er manuelt ekspandert/kollapset i listen.
+// Som standard er de 3 første (ferskeste) ekspandert.
 const expandedCheckinIds = ref<Set<string>>(new Set())
+const collapsedCheckinIds = ref<Set<string>>(new Set())
 
-const toggleExpand = (id: string | number) => {
+const isExpanded = (id: string | number, index?: number): boolean => {
   const key = String(id)
-  if (expandedCheckinIds.value.has(key)) {
-    expandedCheckinIds.value.delete(key)
-  } else {
-    expandedCheckinIds.value.add(key)
-  }
+  if (expandedCheckinIds.value.has(key)) return true
+  if (collapsedCheckinIds.value.has(key)) return false
+  return index !== undefined ? index < 3 : false
 }
 
-const isExpanded = (id: string | number): boolean => {
-  return expandedCheckinIds.value.has(String(id))
+const toggleExpand = (id: string | number, index?: number) => {
+  const key = String(id)
+  const currentlyExpanded = isExpanded(key, index)
+  if (currentlyExpanded) {
+    expandedCheckinIds.value.delete(key)
+    collapsedCheckinIds.value.add(key)
+  } else {
+    collapsedCheckinIds.value.delete(key)
+    expandedCheckinIds.value.add(key)
+  }
 }
 
 // Lightbox for bildevisning
@@ -273,6 +281,8 @@ watch(
   (open) => {
     if (open) {
       dragPosition.value = { x: 0, y: 0 }
+      expandedCheckinIds.value.clear()
+      collapsedCheckinIds.value.clear()
     }
   }
 )
@@ -511,13 +521,13 @@ onUnmounted(() => {
                 v-for="(item, idx) in sortedCheckins"
                 :key="item.id || idx"
                 class="user-checkin-card"
-                :class="{ 'card-expanded': isExpanded(item.id || idx) }"
+                :class="{ 'card-expanded': isExpanded(item.id || idx, idx) }"
               >
                 <div class="checkin-card-main">
                   <!-- Klikkbart hode: Viser turpostnavn, dato og pil -->
                   <div
                     class="checkin-card-header"
-                    @click="toggleExpand(item.id || idx)"
+                    @click="toggleExpand(item.id || idx, idx)"
                     title="Klikk for å vise/skjule detaljer og bilde"
                   >
                     <div class="turpost-name-row">
@@ -564,14 +574,14 @@ onUnmounted(() => {
                       <ChevronDown
                         :size="16"
                         class="chevron-expand"
-                        :class="{ 'is-open': isExpanded(item.id || idx) }"
+                        :class="{ 'is-open': isExpanded(item.id || idx, idx) }"
                       />
                     </div>
                   </div>
 
                   <!-- Ekspanderbare detaljer (notat og bilde) -->
                   <div
-                    v-if="isExpanded(item.id || idx)"
+                    v-if="isExpanded(item.id || idx, idx)"
                     class="checkin-card-details"
                   >
                     <p v-if="item.description" class="checkin-desc">
