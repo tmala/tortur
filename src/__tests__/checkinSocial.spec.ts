@@ -37,9 +37,9 @@ describe('useCheckinSocial - Likes/Reaksjoner og Kommentarer', () => {
       {
         userId: 'friend_user_2',
         userName: 'Friend User',
-        userEmail: 'friend@example.com',
-        userAvatar: '',
-        confirmedAt: new Date().toISOString()
+        email: 'friend@example.com',
+        avatarUrl: '',
+        since: new Date().toISOString()
       }
     ]
   })
@@ -61,10 +61,10 @@ describe('useCheckinSocial - Likes/Reaksjoner og Kommentarer', () => {
     expect(res.newReaction?.userId).toBe('test_user_1')
 
     // Sjekk at PUT ble kalt til turposten og forfatterens checkins
-    const putTurpost = fetchSpy.mock.calls.find(c =>
+    const putTurpost = fetchSpy.mock.calls.find((c: any) =>
       String(c[0]).includes('/turposter/tp_100/chk_200/likes/test_user_1.json') && c[1]?.method === 'PUT'
     )
-    const putAuthor = fetchSpy.mock.calls.find(c =>
+    const putAuthor = fetchSpy.mock.calls.find((c: any) =>
       String(c[0]).includes('/brukere/friend_user_2/checkins/chk_200/likes/test_user_1.json') && c[1]?.method === 'PUT'
     )
 
@@ -105,7 +105,7 @@ describe('useCheckinSocial - Likes/Reaksjoner og Kommentarer', () => {
     expect(res.isRemoved).toBe(true)
     expect(res.newReaction).toBeNull()
 
-    const delTurpost = fetchSpy.mock.calls.find(c =>
+    const delTurpost = fetchSpy.mock.calls.find((c: any) =>
       String(c[0]).includes('/turposter/tp_100/chk_200/likes/test_user_1.json') && c[1]?.method === 'DELETE'
     )
     expect(delTurpost).toBeDefined()
@@ -139,7 +139,7 @@ describe('useCheckinSocial - Likes/Reaksjoner og Kommentarer', () => {
     expect(comment.userId).toBe('test_user_1')
     expect(comment.userName).toBe('Test User')
 
-    const putCommentTurpost = fetchSpy.mock.calls.find(c =>
+    const putCommentTurpost = fetchSpy.mock.calls.find((c: any) =>
       String(c[0]).includes(`/turposter/tp_100/chk_200/comments/${comment.id}.json`) && c[1]?.method === 'PUT'
     )
     expect(putCommentTurpost).toBeDefined()
@@ -170,7 +170,7 @@ describe('useCheckinSocial - Likes/Reaksjoner og Kommentarer', () => {
       commentUserId: 'friend_user_2' // skrevet av en venn
     })
 
-    const delCall = fetchSpy.mock.calls.find(c =>
+    const delCall = fetchSpy.mock.calls.find((c: any) =>
       String(c[0]).includes('/turposter/tp_100/chk_my_own/comments/comm_random_456.json') && c[1]?.method === 'DELETE'
     )
     expect(delCall).toBeDefined()
