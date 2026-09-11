@@ -1884,7 +1884,7 @@
   {
     "name": "Utlandet",
     "slug": "utlandet",
-    "count": 10,
+    "count": 12,
     "kommuner": [
       {
         "name": "Mallorca",
@@ -1894,7 +1894,7 @@
       {
         "name": "Spania",
         "slug": "spania",
-        "count": 6
+        "count": 8
       }
     ]
   }

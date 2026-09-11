@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon } from 'lucide-vue-next'
+import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon, Globe, Users, Lock } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type GoogleUser, type CheckinResult } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
+import { useFriends, type CheckinVisibility } from '@/composables/useFriends'
 import {
   type GeoLocationState,
   calculateDistanceMeters,
@@ -25,6 +26,7 @@ const emit = defineEmits<{
 
 const { submitCheckin } = useAuth()
 const { submitPrivateCheckin } = usePrivateTurposter()
+const { defaultVisibility, setCheckinVisibility } = useFriends()
 
 const description = ref('')
 const selectedFile = ref<File | null>(null)
@@ -32,6 +34,7 @@ const previewUrl = ref<string | null>(null)
 const isSubmitting = ref(false)
 const errorMessage = ref<string | null>(null)
 const isSuccess = ref(false)
+const selectedVisibility = ref<CheckinVisibility>('all')
 
 const cameraInputRef = ref<HTMLInputElement | null>(null)
 const galleryInputRef = ref<HTMLInputElement | null>(null)
@@ -73,6 +76,11 @@ watch(
       clearFile()
       errorMessage.value = null
       isSuccess.value = false
+      if (props.turpost?.isPrivate) {
+        selectedVisibility.value = 'private'
+      } else {
+        selectedVisibility.value = defaultVisibility.value || 'all'
+      }
     } else {
       stopWebcam()
     }
@@ -376,7 +384,8 @@ const handleSubmit = async () => {
         userEmail: props.user.email,
         post: props.turpost,
         description: description.value.trim(),
-        imageFile: fileToUpload
+        imageFile: fileToUpload,
+        visibility: selectedVisibility.value
       })
     } else {
       result = await submitCheckin({
@@ -385,8 +394,15 @@ const handleSubmit = async () => {
         description: description.value.trim(),
         imageFile: fileToUpload
       })
+      if (result.id) {
+        await setCheckinVisibility(result.id, selectedVisibility.value, {
+          turpostId: String(props.turpost.id),
+          userId: props.user?.userId
+        })
+      }
     }
 
+    (result as any).visibility = selectedVisibility.value
     isSuccess.value = true
     emit('submitted', result)
 
@@ -596,6 +612,43 @@ onUnmounted(() => {
                 class="hidden-file-input"
                 @change="handleFileInputChange"
               />
+            </div>
+
+            <!-- Synlighetsvalg -->
+            <div class="form-group checkin-visibility-section">
+              <label class="form-label vis-label">Hvem kan se innsjekkingen?</label>
+              <div class="checkin-vis-selector">
+                <button
+                  type="button"
+                  class="vis-pill-btn"
+                  :class="{ active: selectedVisibility === 'all' }"
+                  @click="selectedVisibility = 'all'"
+                  title="Synlig for alle turgåere"
+                >
+                  <Globe :size="13" />
+                  <span>Alle</span>
+                </button>
+                <button
+                  type="button"
+                  class="vis-pill-btn"
+                  :class="{ active: selectedVisibility === 'friends' }"
+                  @click="selectedVisibility = 'friends'"
+                  title="Kun synlig for deg og dine venner"
+                >
+                  <Users :size="13" />
+                  <span>Mine venner</span>
+                </button>
+                <button
+                  type="button"
+                  class="vis-pill-btn"
+                  :class="{ active: selectedVisibility === 'private' }"
+                  @click="selectedVisibility = 'private'"
+                  title="Kun synlig for deg"
+                >
+                  <Lock :size="13" />
+                  <span>Kun meg</span>
+                </button>
+              </div>
             </div>
 
             <!-- Feilmelding -->
@@ -1050,6 +1103,55 @@ onUnmounted(() => {
 
 .btn-remove-img:hover {
   background: #ef4444;
+}
+
+/* Visibility selector */
+.checkin-visibility-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.vis-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.checkin-vis-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.vis-pill-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.vis-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+
+.vis-pill-btn.active {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+  color: #34d399;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
 }
 
 /* Error box */

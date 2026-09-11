@@ -46,6 +46,7 @@ export interface FirebaseCheckinItem {
   imageUrl: string
   isPrivate?: boolean
   spotId?: string
+  visibility?: 'all' | 'friends' | 'private'
 }
 
 const STORAGE_KEY_USER   = 'tortur_user'
@@ -363,7 +364,8 @@ async function updatePublicCheckin(params: {
   description?: string
   imageFile?: File | null
   removeImage?: boolean
-}): Promise<{ imageUrl?: string; description?: string }> {
+  visibility?: 'all' | 'friends' | 'private'
+}): Promise<{ imageUrl?: string; description?: string; visibility?: 'all' | 'friends' | 'private' }> {
   if (!user.value) {
     throw new Error('Du må være innlogget for å oppdatere en innsjekking.')
   }
@@ -431,22 +433,30 @@ async function updatePublicCheckin(params: {
       } else if (finalImageUrl !== undefined) {
         patchData.imageUrl = finalImageUrl
       }
+      if (params.visibility !== undefined) {
+        patchData.visibility = params.visibility
+      }
 
       if (Object.keys(patchData).length > 0) {
         const patchBody = JSON.stringify(patchData)
         const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(params.checkinId)}.json`
         const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(params.checkinId)}.json`
-        await Promise.all([
+        const promises = [
           fetch(turpostUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody }),
           fetch(userUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody })
-        ])
+        ]
+        if (params.visibility !== undefined) {
+          const visUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/checkins_visibility/${encodeURIComponent(params.checkinId)}.json`
+          promises.push(fetch(visUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params.visibility) }))
+        }
+        await Promise.all(promises)
       }
     } catch (err) {
       console.warn('[useAuth] Feil ved direkte oppdatering i Firebase:', err)
     }
   }
 
-  return { imageUrl: finalImageUrl, description: params.description }
+  return { imageUrl: finalImageUrl, description: params.description, visibility: params.visibility }
 }
 
 // =============================================================================

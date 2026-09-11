@@ -15,7 +15,10 @@ import {
   Star,
   ClipboardList,
   Loader2,
-  Pencil
+  Pencil,
+  Users,
+  Globe,
+  Lock
 } from 'lucide-vue-next'
 import { useAuth, type GoogleUser, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
@@ -31,6 +34,8 @@ const props = defineProps<{
   savedTracksCount?: number
   mySpotsCount?: number
   spotSuggestionsCount?: number
+  friendsCount?: number
+  pendingFriendRequestsCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -41,6 +46,7 @@ const emit = defineEmits<{
   (e: 'open-saved-tracks'): void
   (e: 'open-my-spots'): void
   (e: 'open-spot-suggestions'): void
+  (e: 'open-friends'): void
   (e: 'checkin-deleted', checkinId: string): void
   (e: 'checkin-updated'): void
 }>()
@@ -384,7 +390,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Snarveier side om side: Mine GPS-spor og Mine turposter -->
+          <!-- Snarveier side om side: Mine GPS-spor, Private turposter og Venner -->
           <div class="profile-shortcuts-grid">
             <!-- Snarvei til Mine GPS-spor -->
             <button
@@ -398,7 +404,7 @@ onUnmounted(() => {
               <div class="shortcut-texts">
                 <span class="shortcut-title">Mine GPS-spor</span>
                 <span class="shortcut-sub">
-                  {{ savedTracksCount || 0 }} {{ (savedTracksCount || 0) === 1 ? 'spor lagret' : 'spor lagret' }}
+                  {{ savedTracksCount || 0 }} {{ (savedTracksCount || 0) === 1 ? 'spor' : 'spor' }}
                 </span>
               </div>
             </button>
@@ -416,6 +422,26 @@ onUnmounted(() => {
                 <span class="shortcut-title">Private turposter</span>
                 <span class="shortcut-sub">
                   {{ mySpotsCount || 0 }} {{ (mySpotsCount || 0) === 1 ? 'turpost' : 'turposter' }}
+                </span>
+              </div>
+            </button>
+
+            <!-- Snarvei til Venner -->
+            <button
+              class="profile-shortcut-card profile-friends-card"
+              @click="emit('open-friends'); emit('close')"
+              title="Se dine venner og administrer synlighet"
+            >
+              <div class="shortcut-icon-wrap friends-icon">
+                <Users :size="17" />
+                <span v-if="pendingFriendRequestsCount" class="friends-pending-dot">
+                  {{ pendingFriendRequestsCount }}
+                </span>
+              </div>
+              <div class="shortcut-texts">
+                <span class="shortcut-title">Venner</span>
+                <span class="shortcut-sub">
+                  {{ friendsCount || 0 }} {{ (friendsCount || 0) === 1 ? 'venn' : 'venner' }}
                 </span>
               </div>
             </button>
@@ -486,7 +512,34 @@ onUnmounted(() => {
                       >
                         {{ item.turpostName || ('Turpost ' + item.turpostId) }}
                       </span>
-                      <span v-if="item.isPrivate" class="private-badge-pill">Privat</span>
+                      <span v-if="item.isPrivate" class="private-badge-pill" title="Privat turpost">
+                        <Lock :size="10" />
+                        <span>Privat</span>
+                      </span>
+                      <span
+                        v-else-if="item.visibility === 'private'"
+                        class="visibility-badge-pill private"
+                        title="Synlighet: Kun meg"
+                      >
+                        <Lock :size="10" />
+                        <span>Kun meg</span>
+                      </span>
+                      <span
+                        v-else-if="item.visibility === 'friends'"
+                        class="visibility-badge-pill friends"
+                        title="Synlighet: Mine venner"
+                      >
+                        <Users :size="10" />
+                        <span>Venner</span>
+                      </span>
+                      <span
+                        v-else
+                        class="visibility-badge-pill all"
+                        title="Synlighet: Alle"
+                      >
+                        <Globe :size="10" />
+                        <span>Alle</span>
+                      </span>
                     </div>
                     <div class="checkin-header-right">
                       <div class="checkin-date-badge">
@@ -919,19 +972,25 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-/* Snarveier (Mine GPS-spor og Mine turposter side om side) */
+/* Snarveier (Mine GPS-spor, Private turposter og Venner) */
 .profile-shortcuts-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
   margin: 8px 16px 0 16px;
+}
+
+@media (max-width: 360px) {
+  .profile-shortcuts-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .profile-shortcut-card {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 6px;
+  padding: 8px 8px;
   border-radius: 12px;
   cursor: pointer;
   text-align: left;
@@ -962,9 +1021,21 @@ onUnmounted(() => {
   transform: translateY(-1px);
 }
 
+.profile-friends-card {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(15, 23, 42, 0.8));
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.profile-friends-card:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(15, 23, 42, 0.9));
+  border-color: #10b981;
+  transform: translateY(-1px);
+}
+
 .shortcut-icon-wrap {
-  width: 32px;
-  height: 32px;
+  position: relative;
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -980,6 +1051,30 @@ onUnmounted(() => {
 .shortcut-icon-wrap.spots-icon {
   background: rgba(168, 85, 247, 0.2);
   color: #c084fc;
+}
+
+.shortcut-icon-wrap.friends-icon {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.friends-pending-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #f97316;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  border-radius: 8px;
+  min-width: 15px;
+  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  box-shadow: 0 0 0 2px #0f172a;
+  animation: pulse 1.8s infinite ease-in-out;
 }
 
 .shortcut-icon-wrap.suggestions-icon {
@@ -1255,6 +1350,38 @@ onUnmounted(() => {
   padding: 1px 5px;
   border-radius: 4px;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.visibility-badge-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.visibility-badge-pill.all {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.visibility-badge-pill.friends {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.visibility-badge-pill.private {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
 .user-checkin-actions {

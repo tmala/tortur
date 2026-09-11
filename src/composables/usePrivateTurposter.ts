@@ -312,8 +312,9 @@ export function usePrivateTurposter() {
       description?: string
       imageFile?: File | null
       removeImage?: boolean
+      visibility?: 'all' | 'friends' | 'private'
     }
-  ): Promise<{ imageUrl?: string; description?: string }> {
+  ): Promise<{ imageUrl?: string; description?: string; visibility?: 'all' | 'friends' | 'private' }> {
     if (!userId || userId === 'guest' || !spotId || !checkinId) {
       throw new Error('Mangler parametre for oppdatering av privat innsjekking.')
     }
@@ -326,6 +327,9 @@ export function usePrivateTurposter() {
     if (params.description !== undefined) {
       patchData.description = params.description
     }
+    if (params.visibility !== undefined) {
+      patchData.visibility = params.visibility
+    }
 
     if (params.imageFile || params.removeImage) {
       const updateRes = await updatePublicCheckin({
@@ -333,7 +337,8 @@ export function usePrivateTurposter() {
         checkinId,
         description: params.description,
         imageFile: params.imageFile,
-        removeImage: params.removeImage
+        removeImage: params.removeImage,
+        visibility: params.visibility
       })
       if (updateRes.imageUrl !== undefined) {
         patchData.imageUrl = updateRes.imageUrl
@@ -341,17 +346,22 @@ export function usePrivateTurposter() {
     }
 
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}/${encodeURIComponent(checkinId)}.json`
-    const res = await fetch(url, {
+    const patchRes = await fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patchData)
     })
 
-    if (!res.ok) {
-      throw new Error(`Kunne ikke oppdatere privat innsjekking (status ${res.status})`)
+    if (params.visibility !== undefined) {
+      const visUrl = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(checkinId)}.json`
+      await fetch(visUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params.visibility) })
     }
 
-    return { imageUrl: patchData.imageUrl, description: patchData.description }
+    if (!patchRes.ok) {
+      throw new Error(`Kunne ikke oppdatere privat innsjekking (status ${patchRes.status})`)
+    }
+
+    return { imageUrl: patchData.imageUrl, description: patchData.description, visibility: params.visibility }
   }
 
   /**
@@ -420,6 +430,7 @@ export function usePrivateTurposter() {
     post: TurpostItem
     description?: string
     imageFile?: File | null
+    visibility?: 'all' | 'friends' | 'private'
   }): Promise<CheckinResult> {
     const config = await getFirebaseConfig()
     if (!config) {
@@ -437,6 +448,7 @@ export function usePrivateTurposter() {
     const checkinId = appScriptResult.id || `checkin_${Date.now()}`
     const nowIso = appScriptResult.timestamp || new Date().toISOString()
     const photoUrl = appScriptResult.imageUrl || ''
+    const visibility = params.visibility || 'private'
 
     const checkinItem: FirebaseCheckinItem = {
       id: checkinId,
@@ -447,15 +459,24 @@ export function usePrivateTurposter() {
       userAvatar: appScriptResult.userAvatar || '',
       timestamp: nowIso,
       description: params.description || appScriptResult.description || '',
-      imageUrl: photoUrl
+      imageUrl: photoUrl,
+      visibility
     }
 
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/my_spots_checkins/${encodeURIComponent(String(params.post.id))}/${checkinId}.json`
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(checkinItem)
-    })
+    const visUrl = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(checkinId)}.json`
+    const [res] = await Promise.all([
+      fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(checkinItem)
+      }),
+      fetch(visUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(visibility)
+      })
+    ])
 
     if (!res.ok) {
       throw new Error(`Kunne ikke lagre privat innsjekking (status ${res.status})`)

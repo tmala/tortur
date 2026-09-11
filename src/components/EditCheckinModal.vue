@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon, Trash2, Undo2 } from 'lucide-vue-next'
+import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon, Trash2, Undo2, Globe, Users, Lock } from 'lucide-vue-next'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
+import type { CheckinVisibility } from '@/composables/useFriends'
 
 const props = defineProps<{
   isOpen: boolean
@@ -23,6 +24,7 @@ const { updatePrivateCheckin, deletePrivateCheckin } = usePrivateTurposter()
 const description = ref('')
 const originalImageUrl = ref('')
 const selectedFile = ref<File | null>(null)
+const selectedVisibility = ref<CheckinVisibility>('all')
 const previewUrl = ref<string | null>(null)
 const isImageRemoved = ref(false)
 const isSubmitting = ref(false)
@@ -59,6 +61,7 @@ watch(
     if (open && props.checkin) {
       description.value = props.checkin.description || ''
       originalImageUrl.value = props.checkin.imageUrl || ''
+      selectedVisibility.value = props.checkin.visibility || (props.checkin.isPrivate || props.isPrivate ? 'private' : 'all')
       isImageRemoved.value = false
       clearSelectedFile()
       errorMessage.value = null
@@ -367,7 +370,8 @@ const handleSubmit = async () => {
         {
           description: newDescription,
           imageFile: selectedFile.value,
-          removeImage: isImageRemoved.value
+          removeImage: isImageRemoved.value,
+          visibility: selectedVisibility.value
         }
       )
       if (res.imageUrl !== undefined) {
@@ -380,7 +384,8 @@ const handleSubmit = async () => {
         timestamp: props.checkin.timestamp,
         description: newDescription,
         imageFile: selectedFile.value,
-        removeImage: isImageRemoved.value
+        removeImage: isImageRemoved.value,
+        visibility: selectedVisibility.value
       })
       if (res.imageUrl !== undefined) {
         updatedImageUrl = res.imageUrl
@@ -390,7 +395,8 @@ const handleSubmit = async () => {
     const updatedItem: FirebaseCheckinItem = {
       ...props.checkin,
       description: newDescription,
-      imageUrl: updatedImageUrl
+      imageUrl: updatedImageUrl,
+      visibility: selectedVisibility.value
     }
 
     isSuccess.value = true
@@ -712,6 +718,43 @@ onUnmounted(() => {
                   <Loader2 class="spinner" :size="16" />
                   <span>Klargjør bilde...</span>
                 </div>
+              </div>
+            </div>
+
+            <!-- Synlighetsvalg -->
+            <div class="form-group checkin-visibility-section">
+              <label class="form-label vis-label">Hvem kan se denne innsjekkingen?</label>
+              <div class="checkin-vis-selector">
+                <button
+                  type="button"
+                  class="vis-pill-btn"
+                  :class="{ active: selectedVisibility === 'all' }"
+                  @click="selectedVisibility = 'all'"
+                  title="Synlig for alle turgåere"
+                >
+                  <Globe :size="13" />
+                  <span>Alle</span>
+                </button>
+                <button
+                  type="button"
+                  class="vis-pill-btn"
+                  :class="{ active: selectedVisibility === 'friends' }"
+                  @click="selectedVisibility = 'friends'"
+                  title="Kun synlig for deg og dine venner"
+                >
+                  <Users :size="13" />
+                  <span>Mine venner</span>
+                </button>
+                <button
+                  type="button"
+                  class="vis-pill-btn"
+                  :class="{ active: selectedVisibility === 'private' }"
+                  @click="selectedVisibility = 'private'"
+                  title="Kun synlig for deg"
+                >
+                  <Lock :size="13" />
+                  <span>Kun meg</span>
+                </button>
               </div>
             </div>
 
@@ -1138,6 +1181,55 @@ onUnmounted(() => {
   border-radius: 8px;
   font-size: 13px;
   cursor: pointer;
+}
+
+/* Visibility selector */
+.checkin-visibility-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.vis-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.checkin-vis-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.vis-pill-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.vis-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+
+.vis-pill-btn.active {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+  color: #34d399;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
 }
 
 /* Varslinger */

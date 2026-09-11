@@ -11,11 +11,13 @@ import MySpotsModal from './components/MySpotsModal.vue'
 import SpotSuggestionsModal from './components/SpotSuggestionsModal.vue'
 import GpsTrackModal from './components/GpsTrackModal.vue'
 import SavedTracksPanel from './components/SavedTracksPanel.vue'
+import FriendsModal from './components/FriendsModal.vue'
 import { useGeolocation, calculateDistanceMeters, type GeoLocationState } from './composables/useGeolocation'
 import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from './composables/useTurposter'
 import { usePrivateTurposter, type SpotSuggestion } from './composables/usePrivateTurposter'
 import { useAis } from './composables/useAis'
 import { useAuth, type FirebaseCheckinItem } from './composables/useAuth'
+import { useFriends } from './composables/useFriends'
 import { useGeoDetect } from './composables/useGeoDetect'
 import { useGpsTrackStore, type SavedTrack } from './stores/gpsTrack'
 import { useAppUpdate } from './composables/useAppUpdate'
@@ -49,11 +51,20 @@ const {
 } = useAis()
 
 const { user, isLoggedIn, isAdmin, aisClientId, aisClientSecret, fetchMyCheckins, logout } = useAuth()
+const {
+  friends,
+  incomingRequests,
+  registerPublicUser,
+  loadFriends,
+  loadFriendRequests,
+  loadDefaultVisibility
+} = useFriends()
 const { needsUpdate, applyUpdate } = useAppUpdate()
 const activeLayer = ref<string>('norgeskart')
 const activeCheckinPost = ref<TurpostItem | null>(null)
 const activeViewCheckinsPost = ref<TurpostItem | null>(null)
 const isProfileOpen = ref(false)
+const isFriendsOpen = ref(false)
 
 // Sjekk om posisjon er i utlandet, og bytt til OpenStreetMap dersom Norgeskart er valgt
 const checkAndApplyAbroadLayer = async (lat: number, lng: number) => {
@@ -221,6 +232,12 @@ watch(
     if (loggedIn) {
       loadMyCheckins()
       loadMySpots()
+      if (user.value) {
+        registerPublicUser(user.value)
+        loadFriends(user.value.userId)
+        loadFriendRequests(user.value.userId)
+        loadDefaultVisibility(user.value.userId)
+      }
       if (isAdmin.value) {
         loadSpotSuggestions()
       }
@@ -228,6 +245,7 @@ watch(
       myCheckins.value = []
       mySpots.value = []
       spotSuggestionsCount.value = 0
+      isFriendsOpen.value = false
     }
   },
   { immediate: true }
@@ -752,14 +770,24 @@ onUnmounted(() => {
       :saved-tracks-count="trackStore.savedTracks.length"
       :my-spots-count="mySpots.length"
       :spot-suggestions-count="spotSuggestionsCount"
+      :friends-count="friends.length"
+      :pending-friend-requests-count="incomingRequests.length"
       @close="isProfileOpen = false"
       @logout="handleLogoutFromProfile"
       @toggle-admin-mode="handleToggleAdminMode"
       @open-saved-tracks="isSavedTracksOpen = true"
       @open-my-spots="isMySpotsOpen = true"
       @open-spot-suggestions="isSpotSuggestionsOpen = true"
+      @open-friends="isFriendsOpen = true"
       @checkin-deleted="loadMyCheckins"
       @checkin-updated="loadMyCheckins"
+    />
+
+    <!-- Venner og synlighetsinnstillinger -->
+    <FriendsModal
+      :is-open="isFriendsOpen"
+      :current-user="user"
+      @close="isFriendsOpen = false"
     />
 
     <!-- Mine turposter modal -->

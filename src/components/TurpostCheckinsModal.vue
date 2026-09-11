@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
-import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Image as ImageIcon, Trash2, Pencil } from 'lucide-vue-next'
+import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Image as ImageIcon, Trash2, Pencil, Globe, Users, Lock } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
+import { useFriends } from '@/composables/useFriends'
 import EditCheckinModal from './EditCheckinModal.vue'
 import {
   type GeoLocationState,
@@ -34,6 +35,7 @@ const emit = defineEmits<{
 
 const { fetchTurpostCheckins, deletePublicCheckin, updatePublicCheckinImage } = useAuth()
 const { fetchPrivateCheckinsForSpot, deletePrivateCheckin, updatePrivateCheckinImage } = usePrivateTurposter()
+const { friends, isFriend } = useFriends()
 
 const checkins = ref<FirebaseCheckinItem[]>([])
 const privateCheckins = ref<FirebaseCheckinItem[]>([])
@@ -58,13 +60,31 @@ const formatDate = (isoString: string) => {
   }
 }
 
-// Sorter felles innsjekkinger etter nyeste først
+// Sorter felles innsjekkinger etter nyeste først, og filtrer basert på synlighet
 const sortedPublicCheckins = computed(() => {
-  return [...checkins.value].sort((a, b) => {
-    const timeA = new Date(a.timestamp || 0).getTime()
-    const timeB = new Date(b.timestamp || 0).getTime()
-    return timeB - timeA
-  })
+  const currentUid = props.currentUserId
+  const friendIds = new Set(friends.value.map(f => f.userId))
+
+  return [...checkins.value]
+    .filter(c => {
+      // Innlogget brukers egne innsjekkinger vises alltid for en selv
+      if (currentUid && c.userId === currentUid) return true
+
+      const vis = c.visibility || 'all'
+      // 'private' (kun meg) er kun synlig for forfatteren selv
+      if (vis === 'private') return false
+      // 'friends' er kun synlig for forfatterens venner
+      if (vis === 'friends') {
+        return Boolean(currentUid && (friendIds.has(c.userId) || isFriend(c.userId)))
+      }
+      // 'all' / standard er synlig for alle
+      return true
+    })
+    .sort((a, b) => {
+      const timeA = new Date(a.timestamp || 0).getTime()
+      const timeB = new Date(b.timestamp || 0).getTime()
+      return timeB - timeA
+    })
 })
 
 // Sorter private innsjekkinger etter nyeste først
@@ -483,7 +503,18 @@ onUnmounted(() => {
                       <span class="name">
                         {{ item.userName || 'Turgåer' }}
                         <span v-if="item.userId === currentUserId" class="own-tag">Deg</span>
-                        <span v-if="activeTab === 'private'" class="private-tag">Privat</span>
+                        <span v-if="activeTab === 'private'" class="private-tag" title="Privat turpost">
+                          <Lock :size="10" /> Privat
+                        </span>
+                        <span v-else-if="item.visibility === 'friends'" class="vis-tag friends" title="Synlig for venner">
+                          <Users :size="10" /> Venner
+                        </span>
+                        <span v-else-if="item.visibility === 'private'" class="vis-tag private" title="Kun synlig for deg">
+                          <Lock :size="10" /> Kun meg
+                        </span>
+                        <span v-else class="vis-tag all" title="Synlig for alle">
+                          <Globe :size="10" /> Alle
+                        </span>
                       </span>
                       <span class="date">
                         <Calendar :size="12" />
@@ -1061,6 +1092,37 @@ onUnmounted(() => {
   border: 1px solid rgba(245, 158, 11, 0.4);
   padding: 1px 5px;
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.vis-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.vis-tag.all {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.vis-tag.friends {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.vis-tag.private {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
 .checkin-item.is-private-item {

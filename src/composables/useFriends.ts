@@ -1,0 +1,594 @@
+import { ref, computed } from 'vue'
+import { getFirebaseConfig, type GoogleUser } from './useAuth'
+
+export type CheckinVisibility = 'all' | 'friends' | 'private'
+
+export interface FriendUser {
+  userId: string
+  userName: string
+  email?: string
+  avatarUrl?: string
+  since?: string
+}
+
+export interface FriendRequest {
+  fromUserId: string
+  toUserId: string
+  userName: string
+  userAvatar?: string
+  userEmail?: string
+  timestamp: string
+}
+
+export interface PublicUser {
+  userId: string
+  userName: string
+  email?: string
+  avatarUrl?: string
+  lastSeen?: string
+}
+
+const STORAGE_KEY_VISIBILITY = 'tortur_default_visibility'
+
+// Singleton state på tvers av komponenter
+const friends = ref<FriendUser[]>([])
+const incomingRequests = ref<FriendRequest[]>([])
+const outgoingRequests = ref<FriendRequest[]>([])
+const defaultVisibility = ref<CheckinVisibility>('all')
+const isLoading = ref(false)
+const error = ref<string | null>(null)
+
+// Gjenopprett standard synlighet fra localStorage hvis tilgjengelig
+try {
+  const savedVis = localStorage.getItem(STORAGE_KEY_VISIBILITY) as CheckinVisibility | null
+  if (savedVis && ['all', 'friends', 'private'].includes(savedVis)) {
+    defaultVisibility.value = savedVis
+  }
+} catch {
+  // Ignorer
+}
+
+/**
+ * Registrerer eller oppdaterer brukerens offentlige profil i Firebase
+ * /users_public/<userId>.json for søk og venneforespørsler
+ */
+export async function registerPublicUser(googleUser: GoogleUser): Promise<void> {
+  if (!googleUser || !googleUser.userId || googleUser.userId === 'guest') return
+  const config = await getFirebaseConfig()
+  if (!config) return
+
+  try {
+    const publicData: PublicUser = {
+      userId: googleUser.userId,
+      userName: googleUser.userName || 'Ukjent turgåer',
+      email: googleUser.email || '',
+      avatarUrl: googleUser.avatarUrl || '',
+      lastSeen: new Date().toISOString()
+    }
+    const url = `${config.dbUrl}/${config.prefix}/users_public/${encodeURIComponent(googleUser.userId)}.json`
+    await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(publicData)
+    })
+  } catch (err) {
+    console.warn('[useFriends] Kunne ikke registrere public user:', err)
+  }
+}
+
+/**
+ * Henter alle venner for innlogget bruker
+ */
+export async function loadFriends(userId: string): Promise<FriendUser[]> {
+  if (!userId || userId === 'guest') {
+    friends.value = []
+    return []
+  }
+  const config = await getFirebaseConfig()
+  if (!config) return []
+
+  try {
+    const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/friends.json`
+    const res = await fetch(url)
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!data || typeof data !== 'object') {
+      friends.value = []
+      return []
+    }
+
+    const list: FriendUser[] = []
+    for (const [fId, val] of Object.entries(data)) {
+      if (!val) continue
+      if (typeof val === 'object') {
+        list.push({
+          userId: (val as any).userId || fId,
+          userName: (val as any).userName || 'Venn',
+          email: (val as any).email || (val as any).userEmail || '',
+          avatarUrl: (val as any).avatarUrl || '',
+          since: (val as any).since || ''
+        })
+      } else if (val === true) {
+        list.push({
+          userId: fId,
+          userName: 'Venn'
+        })
+      }
+    }
+    friends.value = list
+    return list
+  } catch (err) {
+    console.warn('[useFriends] Feil ved henting av venner:', err)
+    return []
+  }
+}
+
+/**
+ * Henter innkommende og utgående venneforespørsler
+ */
+export async function loadFriendRequests(userId: string): Promise<{
+  incoming: FriendRequest[]
+  outgoing: FriendRequest[]
+}> {
+  if (!userId || userId === 'guest') {
+    incomingRequests.value = []
+    outgoingRequests.value = []
+    return { incoming: [], outgoing: [] }
+  }
+  const config = await getFirebaseConfig()
+  if (!config) return { incoming: [], outgoing: [] }
+
+  try {
+    const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/friend_requests.json`
+    const res = await fetch(url)
+    if (!res.ok) return { incoming: [], outgoing: [] }
+    const data = await res.json()
+    if (!data || typeof data !== 'object') {
+      incomingRequests.value = []
+      outgoingRequests.value = []
+      return { incoming: [], outgoing: [] }
+    }
+
+    const incoming: FriendRequest[] = []
+    if (data.incoming && typeof data.incoming === 'object') {
+      for (const [reqId, val] of Object.entries(data.incoming)) {
+        if (val && typeof val === 'object') {
+          incoming.push({
+            fromUserId: (val as any).fromUserId || reqId,
+            toUserId: (val as any).toUserId || userId,
+            userName: (val as any).userName || 'Ukjent bruker',
+            userAvatar: (val as any).userAvatar || '',
+            userEmail: (val as any).userEmail || '',
+            timestamp: (val as any).timestamp || ''
+          })
+        }
+      }
+    }
+
+    const outgoing: FriendRequest[] = []
+    if (data.outgoing && typeof data.outgoing === 'object') {
+      for (const [targetId, val] of Object.entries(data.outgoing)) {
+        if (val && typeof val === 'object') {
+          outgoing.push({
+            fromUserId: (val as any).fromUserId || userId,
+            toUserId: (val as any).toUserId || targetId,
+            userName: (val as any).userName || 'Ukjent bruker',
+            userAvatar: (val as any).userAvatar || '',
+            userEmail: (val as any).userEmail || '',
+            timestamp: (val as any).timestamp || ''
+          })
+        }
+      }
+    }
+
+    incomingRequests.value = incoming
+    outgoingRequests.value = outgoing
+    return { incoming, outgoing }
+  } catch (err) {
+    console.warn('[useFriends] Feil ved henting av forespørsler:', err)
+    return { incoming: [], outgoing: [] }
+  }
+}
+
+/**
+ * Sender en venneforespørsel til en annen bruker
+ */
+export async function sendFriendRequest(
+  currentUser: GoogleUser,
+  targetUser: PublicUser
+): Promise<void> {
+  if (!currentUser?.userId || !targetUser?.userId) {
+    throw new Error('Mangler brukerdata for venneforespørsel.')
+  }
+  if (currentUser.userId === targetUser.userId) {
+    throw new Error('Du kan ikke sende venneforespørsel til deg selv.')
+  }
+  const config = await getFirebaseConfig()
+  if (!config) {
+    throw new Error('Firebase er ikke konfigurert.')
+  }
+
+  const timestamp = new Date().toISOString()
+
+  // 1. Skriv til målbrukerens innkommende forespørsler
+  const incomingReq: FriendRequest = {
+    fromUserId: currentUser.userId,
+    toUserId: targetUser.userId,
+    userName: currentUser.userName || 'Turgåer',
+    userAvatar: currentUser.avatarUrl || '',
+    userEmail: currentUser.email || '',
+    timestamp
+  }
+  const incomingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(targetUser.userId)}/friend_requests/incoming/${encodeURIComponent(currentUser.userId)}.json`
+
+  // 2. Skriv til innlogget brukers utgående forespørsler
+  const outgoingReq: FriendRequest = {
+    fromUserId: currentUser.userId,
+    toUserId: targetUser.userId,
+    userName: targetUser.userName || 'Turgåer',
+    userAvatar: targetUser.avatarUrl || '',
+    userEmail: targetUser.email || '',
+    timestamp
+  }
+  const outgoingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(currentUser.userId)}/friend_requests/outgoing/${encodeURIComponent(targetUser.userId)}.json`
+
+  const [resIn, resOut] = await Promise.all([
+    fetch(incomingUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(incomingReq)
+    }),
+    fetch(outgoingUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(outgoingReq)
+    })
+  ])
+
+  if (!resIn.ok || !resOut.ok) {
+    throw new Error('Kunne ikke sende venneforespørsel. Prøv igjen.')
+  }
+
+  // Oppdater lokal tilstand
+  outgoingRequests.value = [
+    ...outgoingRequests.value.filter(r => r.toUserId !== targetUser.userId),
+    outgoingReq
+  ]
+}
+
+/**
+ * Godtar en innkommende venneforespørsel
+ */
+export async function acceptFriendRequest(
+  currentUser: GoogleUser,
+  request: FriendRequest
+): Promise<void> {
+  if (!currentUser?.userId || !request?.fromUserId) {
+    throw new Error('Ugyldig forespørsel.')
+  }
+  const config = await getFirebaseConfig()
+  if (!config) throw new Error('Firebase ikke tilgjengelig.')
+
+  const now = new Date().toISOString()
+
+  // 1. Legg til som venn hos innlogget bruker
+  const myFriendData: FriendUser = {
+    userId: request.fromUserId,
+    userName: request.userName || 'Turgåer',
+    avatarUrl: request.userAvatar || '',
+    email: request.userEmail || '',
+    since: now
+  }
+  const myFriendUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(currentUser.userId)}/friends/${encodeURIComponent(request.fromUserId)}.json`
+
+  // 2. Legg til som venn hos avsenderen
+  const theirFriendData: FriendUser = {
+    userId: currentUser.userId,
+    userName: currentUser.userName || 'Turgåer',
+    avatarUrl: currentUser.avatarUrl || '',
+    email: currentUser.email || '',
+    since: now
+  }
+  const theirFriendUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(request.fromUserId)}/friends/${encodeURIComponent(currentUser.userId)}.json`
+
+  // 3. Slett fra begge forespørselsnoder
+  const delIncomingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(currentUser.userId)}/friend_requests/incoming/${encodeURIComponent(request.fromUserId)}.json`
+  const delOutgoingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(request.fromUserId)}/friend_requests/outgoing/${encodeURIComponent(currentUser.userId)}.json`
+
+  await Promise.all([
+    fetch(myFriendUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(myFriendData)
+    }),
+    fetch(theirFriendUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(theirFriendData)
+    }),
+    fetch(delIncomingUrl, { method: 'DELETE' }),
+    fetch(delOutgoingUrl, { method: 'DELETE' })
+  ])
+
+  // Oppdater lister
+  await Promise.all([
+    loadFriends(currentUser.userId),
+    loadFriendRequests(currentUser.userId)
+  ])
+}
+
+/**
+ * Avviser en innkommende venneforespørsel
+ */
+export async function rejectFriendRequest(
+  currentUserId: string,
+  senderUserId: string
+): Promise<void> {
+  const config = await getFirebaseConfig()
+  if (!config) return
+
+  const delIncomingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(currentUserId)}/friend_requests/incoming/${encodeURIComponent(senderUserId)}.json`
+  const delOutgoingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(senderUserId)}/friend_requests/outgoing/${encodeURIComponent(currentUserId)}.json`
+
+  await Promise.all([
+    fetch(delIncomingUrl, { method: 'DELETE' }),
+    fetch(delOutgoingUrl, { method: 'DELETE' })
+  ])
+
+  incomingRequests.value = incomingRequests.value.filter(r => r.fromUserId !== senderUserId)
+}
+
+/**
+ * Avbryter en utgående venneforespørsel
+ */
+export async function cancelFriendRequest(
+  currentUserId: string,
+  targetUserId: string
+): Promise<void> {
+  const config = await getFirebaseConfig()
+  if (!config) return
+
+  const delIncomingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(targetUserId)}/friend_requests/incoming/${encodeURIComponent(currentUserId)}.json`
+  const delOutgoingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(currentUserId)}/friend_requests/outgoing/${encodeURIComponent(targetUserId)}.json`
+
+  await Promise.all([
+    fetch(delIncomingUrl, { method: 'DELETE' }),
+    fetch(delOutgoingUrl, { method: 'DELETE' })
+  ])
+
+  outgoingRequests.value = outgoingRequests.value.filter(r => r.toUserId !== targetUserId)
+}
+
+/**
+ * Avslutter et vennskap (fjerner fra begges venneliste)
+ */
+export async function removeFriend(
+  currentUserId: string,
+  friendUserId: string
+): Promise<void> {
+  const config = await getFirebaseConfig()
+  if (!config) return
+
+  const urlA = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(currentUserId)}/friends/${encodeURIComponent(friendUserId)}.json`
+  const urlB = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}/friends/${encodeURIComponent(currentUserId)}.json`
+
+  await Promise.all([
+    fetch(urlA, { method: 'DELETE' }),
+    fetch(urlB, { method: 'DELETE' })
+  ])
+
+  friends.value = friends.value.filter(f => f.userId !== friendUserId)
+}
+
+/**
+ * Søker etter offentlige brukere i Firebase users_public
+ */
+export async function searchPublicUsers(query: string = ''): Promise<PublicUser[]> {
+  const config = await getFirebaseConfig()
+  if (!config) return []
+
+  try {
+    const url = `${config.dbUrl}/${config.prefix}/users_public.json`
+    const res = await fetch(url)
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!data || typeof data !== 'object') return []
+
+    const q = query.trim().toLowerCase()
+    const allUsers: PublicUser[] = Object.values(data).filter(
+      (u: any) => u && typeof u === 'object' && u.userId
+    ) as PublicUser[]
+
+    if (!q) return allUsers
+
+    return allUsers.filter(u => {
+      const name = (u.userName || '').toLowerCase()
+      const email = (u.email || '').toLowerCase()
+      return name.includes(q) || email.includes(q)
+    })
+  } catch (err) {
+    console.warn('[useFriends] Kunne ikke søke etter brukere:', err)
+    return []
+  }
+}
+
+/**
+ * Henter innlogget brukers standard synlighetsinnstilling
+ */
+export async function loadDefaultVisibility(userId: string): Promise<CheckinVisibility> {
+  if (!userId || userId === 'guest') return 'all'
+  const config = await getFirebaseConfig()
+  if (!config) return defaultVisibility.value
+
+  try {
+    const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/settings/defaultVisibility.json`
+    const res = await fetch(url)
+    if (res.ok) {
+      const data = await res.json()
+      if (data && ['all', 'friends', 'private'].includes(data)) {
+        defaultVisibility.value = data
+        try {
+          localStorage.setItem(STORAGE_KEY_VISIBILITY, data)
+        } catch {
+          // Ignorer
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[useFriends] Kunne ikke hente defaultVisibility:', err)
+  }
+  return defaultVisibility.value
+}
+
+/**
+ * Lagrer ny standard synlighetsinnstilling
+ */
+export async function setDefaultVisibility(
+  userId: string,
+  visibility: CheckinVisibility
+): Promise<void> {
+  defaultVisibility.value = visibility
+  try {
+    localStorage.setItem(STORAGE_KEY_VISIBILITY, visibility)
+  } catch {
+    // Ignorer
+  }
+
+  if (!userId || userId === 'guest') return
+  const config = await getFirebaseConfig()
+  if (!config) return
+
+  try {
+    const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/settings/defaultVisibility.json`
+    await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(visibility)
+    })
+  } catch (err) {
+    console.warn('[useFriends] Kunne ikke lagre defaultVisibility:', err)
+  }
+}
+
+/**
+ * Lagrer eller oppdaterer synlighet for en spesifikk innsjekking
+ */
+export async function setCheckinVisibility(
+  checkinId: string,
+  visibility: CheckinVisibility,
+  opts?: {
+    turpostId?: string | number
+    userId?: string
+    spotId?: string
+    isPrivate?: boolean
+  }
+): Promise<void> {
+  if (!checkinId) return
+  const config = await getFirebaseConfig()
+  if (!config) return
+
+  try {
+    // 1. Lagre i dedikert indeks checkins_visibility/<checkinId>.json
+    const visUrl = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(checkinId)}.json`
+    const patchBody = JSON.stringify(visibility)
+    await fetch(visUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: patchBody
+    })
+
+    // 2. Patch også inn på selve sjekk-inn-objektene for rask lesing
+    const jsonPatch = JSON.stringify({ visibility })
+
+    if (opts?.isPrivate && opts?.userId && opts?.spotId) {
+      const privateSpotUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(opts.userId)}/my_spots_checkins/${encodeURIComponent(String(opts.spotId))}/${encodeURIComponent(checkinId)}.json`
+      await fetch(privateSpotUrl, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: jsonPatch
+      })
+    } else {
+      const promises: Promise<any>[] = []
+      if (opts?.turpostId) {
+        const turpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(opts.turpostId))}/${encodeURIComponent(checkinId)}.json`
+        promises.push(
+          fetch(turpostUrl, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: jsonPatch
+          })
+        )
+      }
+      if (opts?.userId) {
+        const userUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(opts.userId)}/${encodeURIComponent(checkinId)}.json`
+        promises.push(
+          fetch(userUrl, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: jsonPatch
+          })
+        )
+      }
+      if (promises.length > 0) {
+        await Promise.all(promises)
+      }
+    }
+  } catch (err) {
+    console.warn('[useFriends] Kunne ikke lagre innsjekk-synlighet:', err)
+  }
+}
+
+/**
+ * Henter synlighet for en innsjekking
+ */
+export async function getCheckinVisibility(checkinId: string): Promise<CheckinVisibility> {
+  const config = await getFirebaseConfig()
+  if (!config || !checkinId) return 'all'
+
+  try {
+    const url = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(checkinId)}.json`
+    const res = await fetch(url)
+    if (!res.ok) return 'all'
+    const data = await res.json()
+    if (data && ['all', 'friends', 'private'].includes(data)) {
+      return data as CheckinVisibility
+    }
+    return 'all'
+  } catch {
+    return 'all'
+  }
+}
+
+export function useFriends() {
+  const friendUserIds = computed(() => new Set(friends.value.map(f => f.userId)))
+  const hasPendingRequests = computed(() => incomingRequests.value.length > 0)
+
+  function isFriend(targetUserId: string): boolean {
+    return friendUserIds.value.has(targetUserId)
+  }
+
+  return {
+    friends,
+    incomingRequests,
+    outgoingRequests,
+    defaultVisibility,
+    isLoading,
+    error,
+    friendUserIds,
+    hasPendingRequests,
+    isFriend,
+    registerPublicUser,
+    loadFriends,
+    loadFriendRequests,
+    sendFriendRequest,
+    acceptFriendRequest,
+    rejectFriendRequest,
+    cancelFriendRequest,
+    removeFriend,
+    searchPublicUsers,
+    loadDefaultVisibility,
+    setDefaultVisibility,
+    setCheckinVisibility,
+    getCheckinVisibility
+  }
+}
