@@ -267,4 +267,71 @@ describe('useFriends - Friends system and check-in visibility', () => {
     )
     expect(userCall).toBeDefined()
   })
+
+  it('fetchFriendCheckins henter vennens innsjekkinger og ekskluderer private', async () => {
+    const friendCheckinsData: Record<string, any> = {
+      chk_pub: {
+        id: 'chk_pub',
+        userId: 'friend_42',
+        turpostId: 'tp_1',
+        turpostName: 'Ulriken',
+        timestamp: '2026-09-10T10:00:00Z',
+        visibility: 'all'
+      },
+      chk_friends: {
+        id: 'chk_friends',
+        userId: 'friend_42',
+        turpostId: 'tp_2',
+        turpostName: 'Fløyen',
+        timestamp: '2026-09-11T12:00:00Z',
+        visibility: 'friends'
+      },
+      chk_secret: {
+        id: 'chk_secret',
+        userId: 'friend_42',
+        turpostId: 'tp_3',
+        turpostName: 'Hemmelig sted',
+        timestamp: '2026-09-09T08:00:00Z',
+        visibility: 'private'
+      },
+      chk_spot: {
+        id: 'chk_spot',
+        userId: 'friend_42',
+        turpostId: 'spot_99',
+        turpostName: 'Privat hytte',
+        timestamp: '2026-09-08T08:00:00Z',
+        isPrivate: true
+      }
+    }
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+      const urlStr = String(url)
+      if (urlStr.includes('/brukere/friend_42/checkins.json')) {
+        return {
+          ok: true,
+          json: async () => friendCheckinsData
+        } as any
+      }
+      return { ok: false, json: async () => ({}) } as any
+    })
+
+    const { systemConfig } = useAuth()
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const { fetchFriendCheckins } = useFriends()
+    const result = await fetchFriendCheckins('friend_42')
+
+    // Skal kun inneholde chk_pub og chk_friends (2 stk)
+    expect(result.length).toBe(2)
+    // Sortert nyeste først: chk_friends (11.09) før chk_pub (10.09)
+    expect(result[0]?.id).toBe('chk_friends')
+    expect(result[1]?.id).toBe('chk_pub')
+    // Ingen private
+    expect(result.some(c => c.id === 'chk_secret')).toBe(false)
+    expect(result.some(c => c.id === 'chk_spot')).toBe(false)
+  })
 })
+

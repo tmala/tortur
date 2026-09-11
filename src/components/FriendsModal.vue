@@ -15,7 +15,8 @@ import {
   AlertCircle,
   ShieldAlert,
   Send,
-  UserMinus
+  UserMinus,
+  User
 } from 'lucide-vue-next'
 import {
   useFriends,
@@ -33,6 +34,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'view-friend-profile', friend: FriendUser): void
 }>()
 
 const {
@@ -396,7 +398,11 @@ onUnmounted(() => {
                   :key="friend.userId"
                   class="friend-card"
                 >
-                  <div class="friend-user-info">
+                  <div
+                    class="friend-user-info clickable"
+                    @click="emit('view-friend-profile', friend)"
+                    title="Klikk for å se profil og innsjekkinger"
+                  >
                     <div class="avatar-wrap">
                       <img
                         v-if="friend.avatarUrl"
@@ -415,16 +421,26 @@ onUnmounted(() => {
                     </div>
                   </div>
 
-                  <button
-                    class="btn-remove-friend"
-                    :disabled="actionLoadingId === friend.userId"
-                    @click="handleRemoveFriend(friend)"
-                    title="Avslutt vennskap"
-                  >
-                    <Loader2 v-if="actionLoadingId === friend.userId" :size="14" class="spin" />
-                    <UserMinus v-else :size="14" />
-                    <span>Fjern</span>
-                  </button>
+                  <div class="friend-actions">
+                    <button
+                      class="btn-view-profile"
+                      @click="emit('view-friend-profile', friend)"
+                      title="Se profil og innsjekkinger"
+                    >
+                      <User :size="13" />
+                      <span>Profil</span>
+                    </button>
+                    <button
+                      class="btn-remove-friend"
+                      :disabled="actionLoadingId === friend.userId"
+                      @click="handleRemoveFriend(friend)"
+                      title="Avslutt vennskap"
+                    >
+                      <Loader2 v-if="actionLoadingId === friend.userId" :size="14" class="spin" />
+                      <UserMinus v-else :size="14" />
+                      <span>Fjern</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1041,6 +1057,41 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.friend-user-info.clickable {
+  cursor: pointer;
+}
+
+.friend-user-info.clickable:hover .friend-name {
+  color: #38bdf8;
+}
+
+.friend-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-view-profile {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #38bdf8;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-view-profile:hover {
+  background: rgba(56, 189, 248, 0.22);
+  color: #ffffff;
 }
 
 .btn-remove-friend {

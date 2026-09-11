@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { getFirebaseConfig, type GoogleUser } from './useAuth'
+import { getFirebaseConfig, type GoogleUser, type FirebaseCheckinItem } from './useAuth'
 
 export type CheckinVisibility = 'all' | 'friends' | 'private'
 
@@ -559,6 +559,88 @@ export async function getCheckinVisibility(checkinId: string): Promise<CheckinVi
   }
 }
 
+const RESERVED_USER_SUBKEYS = new Set([
+  'checkins',
+  'my_spots',
+  'my_spots_checkins',
+  'tracks',
+  'friends',
+  'friend_requests',
+  'settings'
+])
+
+/**
+ * Henter innsjekkinger for en gitt venn fra Firebase.
+ * Filtrerer ut private innsjekkinger (visibility: 'private' eller spot_).
+ * Viser 'all' og 'friends' innsjekkinger.
+ */
+export async function fetchFriendCheckins(friendUserId: string): Promise<FirebaseCheckinItem[]> {
+  if (!friendUserId) return []
+  const config = await getFirebaseConfig()
+  if (!config) return []
+
+  try {
+    const checkinsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}/checkins.json`
+    const res = await fetch(checkinsUrl)
+    let rawData: any = null
+    if (res.ok) {
+      rawData = await res.json()
+    }
+
+    const items: FirebaseCheckinItem[] = []
+
+    // 1. Sjekk /checkins/
+    if (rawData && typeof rawData === 'object') {
+      for (const [key, val] of Object.entries(rawData)) {
+        if (val && typeof val === 'object' && (val as any).turpostId != null) {
+          const item = val as FirebaseCheckinItem
+          if (!item.id) item.id = key
+          items.push(item)
+        }
+      }
+    }
+
+    // 2. Fallback hvis /checkins/ var tom: sjekk rotnivå (legacy format)
+    if (items.length === 0) {
+      const rootUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}.json`
+      const rootRes = await fetch(rootUrl)
+      if (rootRes.ok) {
+        const rootData = await rootRes.json()
+        if (rootData && typeof rootData === 'object') {
+          for (const [key, val] of Object.entries(rootData)) {
+            if (RESERVED_USER_SUBKEYS.has(key)) continue
+            if (val && typeof val === 'object' && (val as any).turpostId != null) {
+              const item = val as FirebaseCheckinItem
+              if (!item.id) item.id = key
+              items.push(item)
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Filtrer basert på synlighet og type:
+    // - Utelat private innsjekkinger (visibility: 'private')
+    // - Utelat private spots (turpostId starter med 'spot_' eller isPrivate: true)
+    // - Ta med 'friends', 'all', eller uspesifisert synlighet (standard offentlig)
+    const filtered = items.filter(c => {
+      if (c.isPrivate || (c.turpostId && String(c.turpostId).startsWith('spot_'))) return false
+      const vis = c.visibility || 'all'
+      return vis !== 'private'
+    })
+
+    // Sorter nyeste først
+    return filtered.sort((a, b) => {
+      const timeA = new Date(a.timestamp || 0).getTime()
+      const timeB = new Date(b.timestamp || 0).getTime()
+      return timeB - timeA
+    })
+  } catch (err) {
+    console.warn('[useFriends] Kunne ikke hente vennens innsjekkinger:', err)
+    return []
+  }
+}
+
 export function useFriends() {
   const friendUserIds = computed(() => new Set(friends.value.map(f => f.userId)))
   const hasPendingRequests = computed(() => incomingRequests.value.length > 0)
@@ -589,6 +671,7 @@ export function useFriends() {
     loadDefaultVisibility,
     setDefaultVisibility,
     setCheckinVisibility,
-    getCheckinVisibility
+    getCheckinVisibility,
+    fetchFriendCheckins
   }
 }

@@ -12,12 +12,13 @@ import SpotSuggestionsModal from './components/SpotSuggestionsModal.vue'
 import GpsTrackModal from './components/GpsTrackModal.vue'
 import SavedTracksPanel from './components/SavedTracksPanel.vue'
 import FriendsModal from './components/FriendsModal.vue'
+import FriendProfileModal from './components/FriendProfileModal.vue'
 import { useGeolocation, calculateDistanceMeters, type GeoLocationState } from './composables/useGeolocation'
 import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from './composables/useTurposter'
 import { usePrivateTurposter, type SpotSuggestion } from './composables/usePrivateTurposter'
 import { useAis } from './composables/useAis'
 import { useAuth, type FirebaseCheckinItem } from './composables/useAuth'
-import { useFriends } from './composables/useFriends'
+import { useFriends, type FriendUser } from './composables/useFriends'
 import { useGeoDetect } from './composables/useGeoDetect'
 import { useGpsTrackStore, type SavedTrack } from './stores/gpsTrack'
 import { useAppUpdate } from './composables/useAppUpdate'
@@ -65,6 +66,13 @@ const activeCheckinPost = ref<TurpostItem | null>(null)
 const activeViewCheckinsPost = ref<TurpostItem | null>(null)
 const isProfileOpen = ref(false)
 const isFriendsOpen = ref(false)
+const isFriendProfileOpen = ref(false)
+const selectedFriendForProfile = ref<FriendUser | null>(null)
+
+const handleOpenFriendProfile = (friend: FriendUser) => {
+  selectedFriendForProfile.value = friend
+  isFriendProfileOpen.value = true
+}
 
 // Sjekk om posisjon er i utlandet, og bytt til OpenStreetMap dersom Norgeskart er valgt
 const checkAndApplyAbroadLayer = async (lat: number, lng: number) => {
@@ -482,6 +490,7 @@ const handleFocusPost = (post: TurpostItem) => {
 
 const handleViewCheckinOnMap = async (checkin: FirebaseCheckinItem) => {
   isProfileOpen.value = false
+  isFriendProfileOpen.value = false
 
   if (mapViewerRef.value) {
     mapViewerRef.value.resetAutoCenter()
@@ -840,6 +849,16 @@ onUnmounted(() => {
       :is-open="isFriendsOpen"
       :current-user="user"
       @close="isFriendsOpen = false"
+      @view-friend-profile="handleOpenFriendProfile"
+    />
+
+    <!-- Venneprofil -->
+    <FriendProfileModal
+      :is-open="isFriendProfileOpen"
+      :friend="selectedFriendForProfile"
+      :current-user-id="user?.userId"
+      @close="isFriendProfileOpen = false"
+      @view-turpost-on-map="handleViewCheckinOnMap"
     />
 
     <!-- Mine turposter modal -->
