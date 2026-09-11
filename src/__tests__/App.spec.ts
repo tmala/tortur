@@ -880,5 +880,52 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
     // For posisjon i Norge forblir kartet på norgeskart
     expect(locationControls.props('activeLayer')).toBe('norgeskart')
   })
+
+  it('sentrerer kartet på brukerens posisjon så snart den blir funnet', async () => {
+    const osloCoords = {
+      latitude: 59.9139,
+      longitude: 10.7522,
+      accuracy: 10,
+      heading: null,
+      speed: null,
+      altitude: null
+    }
+
+    const centerOnUserSpy = vi.fn()
+
+    const mockGeolocation = {
+      getCurrentPosition: vi.fn((success) => {
+        success({
+          coords: osloCoords,
+          timestamp: Date.now()
+        })
+      }),
+      watchPosition: vi.fn(),
+      clearWatch: vi.fn()
+    }
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      geolocation: mockGeolocation
+    })
+
+    const wrapper = mount(App, {
+      global: {
+        plugins: [createPinia()],
+        stubs: {
+          MapViewer: {
+            template: '<div id="map-viewer-stub"></div>',
+            methods: {
+              centerOnUser: centerOnUserSpy
+            }
+          }
+        }
+      }
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    expect(centerOnUserSpy).toHaveBeenCalledWith(true, 15)
+  })
 })
 

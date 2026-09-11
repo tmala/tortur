@@ -800,10 +800,12 @@ const renderMunicipalitiesLayer = () => {
 }
 
 const isAutoCenter = ref(true)
+const hasInitiallyCenteredOnUser = ref(false)
 
 const centerOnUser = (animate = true, zoomLevel?: number) => {
   if (!map || !props.userLocation) return
   isAutoCenter.value = true
+  hasInitiallyCenteredOnUser.value = true
 
   const targetZoom = zoomLevel ?? Math.max(map.getZoom(), 15)
   const targetLatLng: L.LatLngExpression = [props.userLocation.lat, props.userLocation.lng]
@@ -983,7 +985,10 @@ watch(
   (newLoc) => {
     if (newLoc) {
       updateUserMarker(newLoc)
-      if (props.isTracking && isAutoCenter.value && map) {
+      if (!hasInitiallyCenteredOnUser.value && isAutoCenter.value && map) {
+        hasInitiallyCenteredOnUser.value = true
+        map.setView([newLoc.lat, newLoc.lng], 15)
+      } else if (props.isTracking && isAutoCenter.value && map) {
         map.panTo([newLoc.lat, newLoc.lng], { animate: true, duration: 0.5 })
       }
     }
@@ -1172,6 +1177,7 @@ onMounted(() => {
   vesselsLayerGroup = L.layerGroup().addTo(map)
 
   if (props.userLocation) {
+    hasInitiallyCenteredOnUser.value = true
     updateUserMarker(props.userLocation)
   }
 

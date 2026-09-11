@@ -506,6 +506,8 @@ const loadLocalTurposterForLocation = async (loc: GeoLocationState, showFeedback
   if (isLoadingLocalTurposter.value) return
   isLoadingLocalTurposter.value = true
   try {
+    // Sentrer kartutsnittet der brukeren befinner seg umiddelbart
+    mapViewerRef.value?.centerOnUser?.(true, 15)
     await checkAndApplyAbroadLayer(loc.lat, loc.lng)
     const geoResult = await detectKommune(loc.lat, loc.lng)
     if (!geoResult || !geoResult.kommune) {
@@ -517,7 +519,6 @@ const loadLocalTurposterForLocation = async (loc: GeoLocationState, showFeedback
       const utlandResult = await selectKommuneByName('Utlandet')
       if (utlandResult) {
         isTurposterOpen.value = false
-        mapViewerRef.value?.centerOnUser?.(true, 15)
         return
       }
       if (showFeedback) {
@@ -530,7 +531,6 @@ const loadLocalTurposterForLocation = async (loc: GeoLocationState, showFeedback
     const result = await selectKommuneByName(geoResult.kommune)
     if (result) {
       isTurposterOpen.value = false
-      mapViewerRef.value?.centerOnUser?.(true, 15)
     } else if (showFeedback) {
       turError.value = `Fant ingen registrerte turposter for ${geoResult.kommune}. Velg kommune manuelt fra menyen.`
     }
