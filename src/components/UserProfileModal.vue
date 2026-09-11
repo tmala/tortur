@@ -24,6 +24,7 @@ import {
 import { useAuth, type GoogleUser, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import EditCheckinModal from './EditCheckinModal.vue'
+import CheckinSocialSection from './CheckinSocialSection.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -67,6 +68,14 @@ function handleViewOnMap(item: FirebaseCheckinItem) {
 function handleCheckinEdited(updatedItem: FirebaseCheckinItem) {
   emit('checkin-updated')
   editingCheckin.value = null
+}
+
+function handleSocialUpdated(updatedItem: FirebaseCheckinItem) {
+  const idx = props.checkins.findIndex((c) => c.id === updatedItem.id)
+  if (idx !== -1) {
+    props.checkins[idx] = { ...props.checkins[idx], ...updatedItem }
+  }
+  emit('checkin-updated')
 }
 
 function handleCheckinDeleted(deletedId: string) {
@@ -594,6 +603,15 @@ onUnmounted(() => {
                     >
                       Ingen notat eller bilde registrert på denne turen.
                     </p>
+
+                    <!-- Reaksjoner og kommentarer -->
+                    <CheckinSocialSection
+                      :checkin="item"
+                      :current-user-id="user?.userId"
+                      :is-private="item.isPrivate"
+                      :spot-id="item.spotId"
+                      @updated="handleSocialUpdated"
+                    />
 
                     <!-- Handlingsknapper for innsjekkingen -->
                     <div class="user-checkin-actions">

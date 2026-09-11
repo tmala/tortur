@@ -6,6 +6,7 @@ import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import { useFriends } from '@/composables/useFriends'
 import EditCheckinModal from './EditCheckinModal.vue'
+import CheckinSocialSection from './CheckinSocialSection.vue'
 import {
   type GeoLocationState,
   calculateDistanceMeters,
@@ -181,6 +182,15 @@ function handleCheckinEdited(updatedItem: FirebaseCheckinItem) {
   }
   emit('checkin-updated')
   editingCheckin.value = null
+}
+
+function handleSocialUpdated(updatedItem: FirebaseCheckinItem) {
+  const targetArray = activeTab.value === 'private' ? privateCheckins : checkins
+  const idx = targetArray.value.findIndex((c) => c.id === updatedItem.id)
+  if (idx !== -1) {
+    targetArray.value[idx] = { ...targetArray.value[idx], ...updatedItem }
+  }
+  emit('checkin-updated')
 }
 
 function handleCheckinDeleted(deletedId: string) {
@@ -547,6 +557,15 @@ onUnmounted(() => {
                     <span>🔍 Vis full størrelse</span>
                   </div>
                 </div>
+
+                <!-- Reaksjoner og kommentarer -->
+                <CheckinSocialSection
+                  :checkin="item"
+                  :current-user-id="currentUserId"
+                  :is-private="activeTab === 'private'"
+                  :spot-id="matchingPrivateSpot ? String(matchingPrivateSpot.id) : (turpost?.isPrivate ? String(turpost.id) : undefined)"
+                  @updated="handleSocialUpdated"
+                />
               </div>
             </div>
           </div>

@@ -34,6 +34,26 @@ export interface CheckinResult {
   userAvatar?: string
 }
 
+export type CheckinReactionType = 'like' | 'love' | 'laugh' | 'sad' | 'wow' | 'angry'
+
+export interface CheckinReaction {
+  userId: string
+  userName: string
+  userAvatar?: string
+  reaction: CheckinReactionType
+  emoji: string
+  timestamp?: string
+}
+
+export interface CheckinComment {
+  id: string
+  userId: string
+  userName: string
+  userAvatar?: string
+  text: string
+  timestamp: string
+}
+
 export interface FirebaseCheckinItem {
   id: string
   userId: string
@@ -47,6 +67,8 @@ export interface FirebaseCheckinItem {
   isPrivate?: boolean
   spotId?: string
   visibility?: 'all' | 'friends' | 'private'
+  likes?: Record<string, CheckinReaction>
+  comments?: Record<string, CheckinComment>
 }
 
 const STORAGE_KEY_USER   = 'tortur_user'
