@@ -71,6 +71,7 @@ const selectedFriendForProfile = ref<FriendUser | null>(null)
 
 const handleOpenFriendProfile = (friend: FriendUser) => {
   selectedFriendForProfile.value = friend
+  isFriendsOpen.value = false
   isFriendProfileOpen.value = true
 }
 

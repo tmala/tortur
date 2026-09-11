@@ -580,46 +580,59 @@ export async function fetchFriendCheckins(friendUserId: string): Promise<Firebas
   if (!config) return []
 
   try {
+    const checkinMap = new Map<string, FirebaseCheckinItem>()
+
+    // 1. Hent fra /checkins/
     const checkinsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}/checkins.json`
     const res = await fetch(checkinsUrl)
-    let rawData: any = null
     if (res.ok) {
-      rawData = await res.json()
-    }
-
-    const items: FirebaseCheckinItem[] = []
-
-    // 1. Sjekk /checkins/
-    if (rawData && typeof rawData === 'object') {
-      for (const [key, val] of Object.entries(rawData)) {
-        if (val && typeof val === 'object' && (val as any).turpostId != null) {
-          const item = val as FirebaseCheckinItem
-          if (!item.id) item.id = key
-          items.push(item)
+      const rawData = await res.json()
+      if (rawData && typeof rawData === 'object') {
+        for (const [key, val] of Object.entries(rawData)) {
+          if (val && typeof val === 'object') {
+            const item = { ...(val as any), id: (val as any).id || key }
+            checkinMap.set(key, item)
+          }
         }
       }
     }
 
-    // 2. Fallback hvis /checkins/ var tom: sjekk rotnivå (legacy format)
-    if (items.length === 0) {
-      const rootUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}.json`
-      const rootRes = await fetch(rootUrl)
-      if (rootRes.ok) {
-        const rootData = await rootRes.json()
-        if (rootData && typeof rootData === 'object') {
-          for (const [key, val] of Object.entries(rootData)) {
-            if (RESERVED_USER_SUBKEYS.has(key)) continue
-            if (val && typeof val === 'object' && (val as any).turpostId != null) {
-              const item = val as FirebaseCheckinItem
-              if (!item.id) item.id = key
-              items.push(item)
+    // 2. Hent også fra rotnivå (hvis vennen har legacy innsjekkinger som ikke er flyttet enda)
+    const rootUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}.json`
+    const rootRes = await fetch(rootUrl)
+    if (rootRes.ok) {
+      const rootData = await rootRes.json()
+      if (rootData && typeof rootData === 'object') {
+        for (const [key, val] of Object.entries(rootData)) {
+          if (RESERVED_USER_SUBKEYS.has(key)) continue
+          if (val && typeof val === 'object') {
+            const existing = checkinMap.get(key)
+            if (existing) {
+              checkinMap.set(key, {
+                ...val,
+                ...existing,
+                id: existing.id || (val as any).id || key,
+                likes: existing.likes || (val as any).likes,
+                comments: existing.comments || (val as any).comments
+              })
+            } else {
+              checkinMap.set(key, { ...(val as any), id: (val as any).id || key })
             }
           }
         }
       }
     }
 
-    // 3. Filtrer basert på synlighet og type:
+    // 3. Samle innsjekkinger med turpostId og sørg for at userId er satt
+    const items: FirebaseCheckinItem[] = []
+    for (const item of checkinMap.values()) {
+      if (item.turpostId != null) {
+        if (!item.userId) item.userId = friendUserId
+        items.push(item)
+      }
+    }
+
+    // 4. Filtrer basert på synlighet og type:
     // - Utelat private innsjekkinger (visibility: 'private')
     // - Utelat private spots (turpostId starter med 'spot_' eller isPrivate: true)
     // - Ta med 'friends', 'all', eller uspesifisert synlighet (standard offentlig)
@@ -628,6 +641,34 @@ export async function fetchFriendCheckins(friendUserId: string): Promise<Firebas
       const vis = c.visibility || 'all'
       return vis !== 'private'
     })
+
+    // 5. Hent ferske reaksjoner og kommentarer direkte fra turpost-noden i Firebase
+    // Slik at likes/kommentarer lagt inn på turposten alltid vises i venneprofilen
+    await Promise.all(
+      filtered.map(async (item) => {
+        if (!item.turpostId || item.isPrivate) return
+        try {
+          const turpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`
+          const tpRes = await fetch(turpostUrl)
+          if (tpRes.ok) {
+            const tpData = await tpRes.json()
+            if (tpData && typeof tpData === 'object') {
+              if (tpData.likes) {
+                item.likes = { ...(item.likes || {}), ...tpData.likes }
+              }
+              if (tpData.comments) {
+                item.comments = { ...(item.comments || {}), ...tpData.comments }
+              }
+              if (!item.turpostName && tpData.turpostName) {
+                item.turpostName = tpData.turpostName
+              }
+            }
+          }
+        } catch {
+          // Ignorer nettverksfeil per post
+        }
+      })
+    )
 
     // Sorter nyeste først
     return filtered.sort((a, b) => {

@@ -333,5 +333,53 @@ describe('useFriends - Friends system and check-in visibility', () => {
     expect(result.some(c => c.id === 'chk_secret')).toBe(false)
     expect(result.some(c => c.id === 'chk_spot')).toBe(false)
   })
+
+  it('fetchFriendCheckins fletter inn likes og kommentarer fra turposten', async () => {
+    const friendCheckins = {
+      chk_1: {
+        id: 'chk_1',
+        turpostId: 'tp_fløyen',
+        turpostName: 'Fløyen',
+        timestamp: '2026-09-11T12:00:00Z',
+        description: 'Fin tur!'
+      }
+    }
+
+    const turpostSocialData = {
+      likes: {
+        user_liker: { userId: 'user_liker', userName: 'Liker', reaction: 'like', emoji: '👍' }
+      },
+      comments: {
+        comm_1: { id: 'comm_1', userId: 'user_comm', userName: 'Kommentator', text: 'Bra jobba!' }
+      }
+    }
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+      const urlStr = String(url)
+      if (urlStr.includes('/brukere/friend_50/checkins.json')) {
+        return { ok: true, json: async () => friendCheckins } as any
+      }
+      if (urlStr.includes('/turposter/tp_fl%C3%B8yen/chk_1.json') || urlStr.includes('/turposter/tp_fløyen/chk_1.json')) {
+        return { ok: true, json: async () => turpostSocialData } as any
+      }
+      return { ok: false, json: async () => ({}) } as any
+    })
+
+    const { systemConfig } = useAuth()
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const { fetchFriendCheckins } = useFriends()
+    const result = await fetchFriendCheckins('friend_50')
+
+    expect(result.length).toBe(1)
+    expect(result[0]?.likes?.user_liker).toBeDefined()
+    expect(result[0]?.likes?.user_liker?.emoji).toBe('👍')
+    expect(result[0]?.comments?.comm_1).toBeDefined()
+    expect(result[0]?.comments?.comm_1?.text).toBe('Bra jobba!')
+    expect(result[0]?.userId).toBe('friend_50')
+  })
 })
 

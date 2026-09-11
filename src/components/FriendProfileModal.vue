@@ -99,7 +99,11 @@ async function loadCheckins() {
   isLoading.value = true
   try {
     const data = await fetchFriendCheckins(props.friend.userId)
-    checkins.value = data
+    checkins.value = data.map(c => ({
+      ...c,
+      userId: c.userId || props.friend?.userId || '',
+      userName: c.userName || props.friend?.userName || ''
+    }))
     expandedCheckinIds.value.clear()
     collapsedCheckinIds.value.clear()
   } catch (err) {

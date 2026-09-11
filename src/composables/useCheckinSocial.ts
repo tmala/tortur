@@ -115,9 +115,12 @@ export function useCheckinSocial() {
       )
     }
 
-    // Speil alltid til forfatterens bruker-checkin
+    // Speil alltid til forfatterens bruker-checkin (både /checkins/ og rot for bakoverkompatibilitet)
     urls.push(
       `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/checkins/${chkIdEncoded}/likes/${uidEncoded}.json`
+    )
+    urls.push(
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/${chkIdEncoded}/likes/${uidEncoded}.json`
     )
 
     if (isSame) {
@@ -189,9 +192,12 @@ export function useCheckinSocial() {
       )
     }
 
-    // Speil til forfatterens bruker-checkin
+    // Speil til forfatterens bruker-checkin (både /checkins/ og rot for bakoverkompatibilitet)
     urls.push(
       `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
+    )
+    urls.push(
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/${chkIdEncoded}/comments/${commIdEncoded}.json`
     )
 
     await Promise.all(
@@ -246,6 +252,9 @@ export function useCheckinSocial() {
 
     urls.push(
       `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
+    )
+    urls.push(
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/${chkIdEncoded}/comments/${commIdEncoded}.json`
     )
 
     await Promise.all(urls.map(u => fetch(u, { method: 'DELETE' }).catch(() => {})))

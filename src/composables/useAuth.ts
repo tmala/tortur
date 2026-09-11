@@ -654,8 +654,12 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
     if (!data || typeof data !== 'object') return []
     // Filtrer ut eventuelle private innsjekkinger (turpostId som starter med 'spot_') som Apps Script automatisk synkroniserte hit
     const checkins: FirebaseCheckinItem[] = []
-    for (const item of Object.values(data) as any[]) {
+    for (const [key, val] of Object.entries(data)) {
+      const item = val as any
       if (!item || typeof item !== 'object' || item.turpostId == null) continue
+      if (!item.id) item.id = key
+      if (!item.userId && user.value) item.userId = user.value.userId
+      if (!item.userName && user.value) item.userName = user.value.userName
       if (String(item.turpostId).startsWith('spot_')) {
         // Rydd opp uønsket kopi som Apps Script la under offentlig turpost- og checkins-node
         if (item.id) {
@@ -666,6 +670,26 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
       }
       checkins.push(item as FirebaseCheckinItem)
     }
+
+    // Hent eventuelle oppdaterte likes og kommentarer fra turpost-noden
+    await Promise.all(
+      checkins.map(async (item) => {
+        if (!item.turpostId || item.isPrivate) return
+        try {
+          const tpUrl = `${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`
+          const tpRes = await fetch(tpUrl)
+          if (tpRes.ok) {
+            const tpData = await tpRes.json()
+            if (tpData && typeof tpData === 'object') {
+              if (tpData.likes) item.likes = { ...(item.likes || {}), ...tpData.likes }
+              if (tpData.comments) item.comments = { ...(item.comments || {}), ...tpData.comments }
+              if (!item.turpostName && tpData.turpostName) item.turpostName = tpData.turpostName
+            }
+          }
+        } catch {}
+      })
+    )
+
     return checkins
   } catch (err) {
     console.warn('[useAuth] Kunne ikke hente bruker-innsjekkinger fra Firebase:', err)
