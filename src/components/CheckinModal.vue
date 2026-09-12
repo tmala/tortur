@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon, Globe, Users, Lock } from 'lucide-vue-next'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type GoogleUser, type CheckinResult } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import { useFriends, type CheckinVisibility } from '@/composables/useFriends'
+import { compressImage } from '@/utils/imageCompression'
+import WebcamCapture from '@/components/checkin/WebcamCapture.vue'
+import CheckinVisibilitySelector from '@/components/checkin/CheckinVisibilitySelector.vue'
 import {
   type GeoLocationState,
   calculateDistanceMeters,
@@ -38,9 +41,7 @@ const selectedVisibility = ref<CheckinVisibility>('all')
 
 const cameraInputRef = ref<HTMLInputElement | null>(null)
 const galleryInputRef = ref<HTMLInputElement | null>(null)
-const videoRef = ref<HTMLVideoElement | null>(null)
 const isWebcamActive = ref(false)
-const webcamStream = ref<MediaStream | null>(null)
 const isProcessingImage = ref(false)
 
 // Sjekk om enheten er mobil eller nettbrett (for å åpne native kamera vs webkamera)
@@ -82,7 +83,7 @@ watch(
         selectedVisibility.value = defaultVisibility.value || 'all'
       }
     } else {
-      stopWebcam()
+      isWebcamActive.value = false
     }
   }
 )
@@ -92,85 +93,8 @@ const handleTakePhoto = () => {
   if (isMobileDevice.value) {
     cameraInputRef.value?.click()
   } else {
-    startWebcam()
-  }
-}
-
-async function startWebcam() {
-  errorMessage.value = null
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    errorMessage.value = 'Webkamera støttes ikke i denne nettleseren. Vennligst velg en bildefil i stedet.'
-    return
-  }
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
-      audio: false
-    })
-    webcamStream.value = stream
     isWebcamActive.value = true
-    await nextTick()
-    if (videoRef.value) {
-      videoRef.value.srcObject = stream
-      await videoRef.value.play().catch(() => {})
-    }
-  } catch (err: unknown) {
-    stopWebcam()
-    console.warn('Feil ved åpning av webkamera:', err)
-    const errName = err instanceof Error ? err.name : ''
-    if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
-      errorMessage.value = 'Ingen tilgang til webkamera. Vennligst tillat kamera i nettleseren, eller velg en bildefil.'
-    } else {
-      errorMessage.value = 'Kunne ikke starte webkamera. Velg en bildefil i stedet.'
-    }
   }
-}
-
-function stopWebcam() {
-  if (webcamStream.value) {
-    webcamStream.value.getTracks().forEach((track) => track.stop())
-    webcamStream.value = null
-  }
-  if (videoRef.value) {
-    videoRef.value.srcObject = null
-  }
-  isWebcamActive.value = false
-}
-
-async function captureWebcamPhoto() {
-  if (!videoRef.value) return
-  const video = videoRef.value
-  const width = video.videoWidth || 1280
-  const height = video.videoHeight || 720
-
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) {
-    stopWebcam()
-    return
-  }
-
-  ctx.drawImage(video, 0, 0, width, height)
-  stopWebcam()
-
-  canvas.toBlob(
-    async (blob) => {
-      canvas.width = 0
-      canvas.height = 0
-      if (blob) {
-        const file = new File([blob], `webkamera_${Date.now()}.jpg`, { type: 'image/jpeg' })
-        await processAndSetImage(file)
-      }
-    },
-    'image/jpeg',
-    0.85
-  )
 }
 
 const handleFileInputChange = (e: Event) => {
@@ -216,7 +140,7 @@ async function processAndSetImage(file: File) {
 }
 
 const clearFile = () => {
-  stopWebcam()
+  isWebcamActive.value = false
   if (previewUrl.value) {
     URL.revokeObjectURL(previewUrl.value)
   }
@@ -228,136 +152,6 @@ const clearFile = () => {
   if (cameraInputRef.value) {
     cameraInputRef.value.value = ''
   }
-}
-
-// Komprimerer og nedskalerer bildet umiddelbart ved valg for å unngå minneproblemer på mobil/Android
-async function compressImage(file: File): Promise<File> {
-  const maxDim = 1024
-  const quality = 0.80
-
-  // Rask forhåndssjekk: hvis filen allerede er en liten JPEG, sjekk dimensjoner raskt
-  if (typeof createImageBitmap === 'function') {
-    try {
-      const bitmap = await createImageBitmap(file)
-      let { width, height } = bitmap
-
-      if (width <= maxDim && height <= maxDim && file.size <= 300 * 1024 && file.type === 'image/jpeg') {
-        bitmap.close()
-        return file
-      }
-
-      if (width > maxDim || height > maxDim) {
-        if (width > height) {
-          height = Math.round((height * maxDim) / width)
-          width = maxDim
-        } else {
-          width = Math.round((width * maxDim) / height)
-          height = maxDim
-        }
-      }
-
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        bitmap.close()
-        return file
-      }
-
-      ctx.drawImage(bitmap, 0, 0, width, height)
-      bitmap.close() // Frigjør GPU-/dekodingsminne umiddelbart!
-
-      return await new Promise<File>((resolve) => {
-        canvas.toBlob(
-          (blob) => {
-            canvas.width = 0
-            canvas.height = 0
-
-            if (blob) {
-              const cleanName = file.name.replace(/\.[^.]+$/, '') || 'innsjekk'
-              resolve(new File([blob], `${cleanName}.jpg`, { type: 'image/jpeg' }))
-            } else {
-              resolve(file)
-            }
-          },
-          'image/jpeg',
-          quality
-        )
-      })
-    } catch {
-      // Ved eventuelle feil med createImageBitmap, fall tilbake til new Image()
-    }
-  }
-
-  // Fallback for eldre nettlesere
-  return new Promise((resolve) => {
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      let width = img.width
-      let height = img.height
-
-      if (width <= maxDim && height <= maxDim && file.size <= 300 * 1024 && file.type === 'image/jpeg') {
-        img.src = ''
-        img.onload = null
-        resolve(file)
-        return
-      }
-
-      if (width > maxDim || height > maxDim) {
-        if (width > height) {
-          height = Math.round((height * maxDim) / width)
-          width = maxDim
-        } else {
-          width = Math.round((width * maxDim) / height)
-          height = maxDim
-        }
-      }
-
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        img.src = ''
-        img.onload = null
-        resolve(file)
-        return
-      }
-
-      ctx.drawImage(img, 0, 0, width, height)
-      img.src = ''
-      img.onload = null
-
-      canvas.toBlob(
-        (blob) => {
-          canvas.width = 0
-          canvas.height = 0
-
-          if (blob) {
-            const cleanName = file.name.replace(/\.[^.]+$/, '') || 'innsjekk'
-            resolve(new File([blob], `${cleanName}.jpg`, { type: 'image/jpeg' }))
-          } else {
-            resolve(file)
-          }
-        },
-        'image/jpeg',
-        quality
-      )
-    }
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      img.src = ''
-      img.onload = null
-      resolve(file)
-    }
-
-    img.src = url
-  })
 }
 
 const handleSubmit = async () => {
@@ -422,7 +216,7 @@ const handleSubmit = async () => {
 
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Escape' && props.isOpen && !isSubmitting.value) {
-    stopWebcam()
+    isWebcamActive.value = false
     emit('close')
   }
 }
@@ -433,7 +227,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
-  stopWebcam()
+  isWebcamActive.value = false
   if (previewUrl.value) {
     URL.revokeObjectURL(previewUrl.value)
   }
@@ -550,19 +344,12 @@ onUnmounted(() => {
               </div>
 
               <!-- Webkamera live visning (PC/Mac) -->
-              <div v-else-if="isWebcamActive" class="webcam-container">
-                <video ref="videoRef" class="webcam-video" autoplay playsinline muted></video>
-                <div class="webcam-controls">
-                  <button type="button" class="btn-webcam-cancel" @click="stopWebcam">
-                    <X :size="16" />
-                    <span>Avbryt</span>
-                  </button>
-                  <button type="button" class="btn-webcam-snap" @click="captureWebcamPhoto">
-                    <Camera :size="18" />
-                    <span>Knips bilde</span>
-                  </button>
-                </div>
-              </div>
+              <WebcamCapture
+                v-else-if="isWebcamActive"
+                @photo="(file) => { isWebcamActive = false; processAndSetImage(file) }"
+                @close="isWebcamActive = false"
+                @error="(msg) => { isWebcamActive = false; errorMessage = msg }"
+              />
 
               <!-- Valg mellom å ta nytt bilde eller velge eksisterende bilde -->
               <div v-else class="photo-choice-grid">
@@ -616,41 +403,10 @@ onUnmounted(() => {
             </div>
 
             <!-- Synlighetsvalg -->
-            <div class="form-group checkin-visibility-section">
-              <label class="form-label vis-label">Hvem kan se innsjekkingen?</label>
-              <div class="checkin-vis-selector">
-                <button
-                  type="button"
-                  class="vis-pill-btn"
-                  :class="{ active: selectedVisibility === 'all' }"
-                  @click="selectedVisibility = 'all'"
-                  title="Synlig for alle turgåere"
-                >
-                  <Globe :size="13" />
-                  <span>Alle</span>
-                </button>
-                <button
-                  type="button"
-                  class="vis-pill-btn"
-                  :class="{ active: selectedVisibility === 'friends' }"
-                  @click="selectedVisibility = 'friends'"
-                  title="Kun synlig for deg og dine venner"
-                >
-                  <Users :size="13" />
-                  <span>Mine venner</span>
-                </button>
-                <button
-                  type="button"
-                  class="vis-pill-btn"
-                  :class="{ active: selectedVisibility === 'private' }"
-                  @click="selectedVisibility = 'private'"
-                  title="Kun synlig for deg"
-                >
-                  <Lock :size="13" />
-                  <span>Kun meg</span>
-                </button>
-              </div>
-            </div>
+            <CheckinVisibilitySelector
+              v-model="selectedVisibility"
+              :disabled="isSubmitting"
+            />
 
             <!-- Feilmelding -->
             <div v-if="errorMessage" class="error-box">
@@ -1000,73 +756,7 @@ onUnmounted(() => {
   animation: spin 1s linear infinite;
 }
 
-/* Webcam (PC/Mac) */
-.webcam-container {
-  display: flex;
-  flex-direction: column;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #000000;
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-}
 
-.webcam-video {
-  width: 100%;
-  max-height: 220px;
-  object-fit: cover;
-  background: #000000;
-  display: block;
-}
-
-.webcam-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: rgba(15, 23, 42, 0.95);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.btn-webcam-cancel {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  color: #cbd5e1;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-webcam-cancel:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
-}
-
-.btn-webcam-snap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  background: linear-gradient(135deg, #0284c7, #2563eb);
-  border: 1px solid #38bdf8;
-  border-radius: 8px;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: 0 2px 10px rgba(2, 132, 199, 0.4);
-}
-
-.btn-webcam-snap:hover {
-  background: linear-gradient(135deg, #0369a1, #1d4ed8);
-  transform: translateY(-1px);
-}
 
 /* Image preview */
 .image-preview-wrap {
@@ -1106,54 +796,7 @@ onUnmounted(() => {
   background: #ef4444;
 }
 
-/* Visibility selector */
-.checkin-visibility-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
-}
 
-.vis-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #94a3b8;
-}
-
-.checkin-vis-selector {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-}
-
-.vis-pill-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  color: #94a3b8;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.vis-pill-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f1f5f9;
-}
-
-.vis-pill-btn.active {
-  background: rgba(16, 185, 129, 0.18);
-  border-color: #10b981;
-  color: #34d399;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
-}
 
 /* Error box */
 .error-box {

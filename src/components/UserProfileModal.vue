@@ -4,27 +4,14 @@ import {
   X,
   LogOut,
   Mountain,
-  Image as ImageIcon,
-  CheckCircle2,
   Trophy,
-  Maximize2,
   ShieldCheck,
   RotateCw,
-  ChevronDown,
-  Route,
-  Star,
-  ClipboardList,
-  Loader2,
-  Pencil,
-  Users,
-  Globe,
-  Lock,
-  Map as MapIcon,
 } from 'lucide-vue-next'
-import { useAuth, type GoogleUser, type FirebaseCheckinItem } from '@/composables/useAuth'
-import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
+import type { GoogleUser, FirebaseCheckinItem } from '@/composables/useAuth'
 import EditCheckinModal from './EditCheckinModal.vue'
-import CheckinSocialSection from './CheckinSocialSection.vue'
+import UserCheckinCard from './profile/UserCheckinCard.vue'
+import UserProfileShortcuts from './profile/UserProfileShortcuts.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -54,10 +41,6 @@ const emit = defineEmits<{
   (e: 'view-turpost-on-map', checkin: FirebaseCheckinItem): void
 }>()
 
-const { deletePublicCheckin } = useAuth()
-const { deletePrivateCheckin } = usePrivateTurposter()
-
-const isActionLoading = ref<string | null>(null)
 const editingCheckin = ref<FirebaseCheckinItem | null>(null)
 
 function handleViewOnMap(item: FirebaseCheckinItem) {
@@ -81,35 +64,6 @@ function handleSocialUpdated(updatedItem: FirebaseCheckinItem) {
 function handleCheckinDeleted(deletedId: string) {
   emit('checkin-deleted', deletedId)
   editingCheckin.value = null
-}
-
-async function handleDeleteCheckin(item: FirebaseCheckinItem) {
-  if (
-    !confirm(
-      'Er du sikker på at du vil slette denne innsjekkingen? Hvis den har et tilhørende bilde vil også bildet bli slettet.',
-    )
-  )
-    return
-
-  isActionLoading.value = item.id
-  try {
-    if (item.isPrivate) {
-      if (props.user) {
-        await deletePrivateCheckin(props.user.userId, item.spotId || item.turpostId, item.id)
-      }
-    } else {
-      await deletePublicCheckin({
-        turpostId: item.turpostId,
-        checkinId: item.id,
-        timestamp: item.timestamp,
-      })
-    }
-    emit('checkin-deleted', item.id)
-  } catch (err: any) {
-    alert(err?.message || 'Kunne ikke slette innsjekkingen.')
-  } finally {
-    isActionLoading.value = null
-  }
 }
 
 const isRefreshing = ref(false)
@@ -193,22 +147,6 @@ const sortedCheckins = computed(() => {
 const uniqueTurpostIds = computed(() => {
   return new Set(sortedCheckins.value.map((c) => String(c.turpostId)))
 })
-
-const formatDate = (isoString?: string) => {
-  if (!isoString) return ''
-  try {
-    const d = new Date(isoString)
-    if (isNaN(d.getTime())) return isoString
-    const day = String(d.getDate()).padStart(2, '0')
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const year = d.getFullYear()
-    const hours = String(d.getHours()).padStart(2, '0')
-    const minutes = String(d.getMinutes()).padStart(2, '0')
-    return `${day}.${month}.${year} ${hours}:${minutes}`
-  } catch {
-    return isoString
-  }
-}
 
 // Dra/flytte-logikk for profilmodalen
 const modalRef = ref<HTMLElement | null>(null)
@@ -412,85 +350,18 @@ onUnmounted(() => {
           </div>
 
           <!-- Snarveier side om side: Mine spor, Private turposter, Venner og (for admin) Forslag -->
-          <div
-            class="profile-shortcuts-grid"
-            :class="{ 'has-4-cols': props.isAdmin && (spotSuggestionsCount || 0) > 0 }"
-          >
-            <!-- Snarvei til Mine spor -->
-            <button
-              class="profile-shortcut-card profile-tracks-card"
-              @click="emit('open-saved-tracks')"
-              title="Se og administrer dine lagrede GPS-spor"
-            >
-              <div class="shortcut-icon-wrap tracks-icon">
-                <Route :size="17" />
-              </div>
-              <div class="shortcut-texts">
-                <span class="shortcut-title">Mine spor</span>
-                <span class="shortcut-sub">
-                  {{ savedTracksCount || 0 }} {{ (savedTracksCount || 0) === 1 ? 'spor' : 'spor' }}
-                </span>
-              </div>
-            </button>
-
-            <!-- Snarvei til Private turposter -->
-            <button
-              class="profile-shortcut-card profile-spots-card"
-              @click="emit('open-my-spots')"
-              title="Se og administrer dine private turposter"
-            >
-              <div class="shortcut-icon-wrap spots-icon">
-                <Star :size="17" />
-              </div>
-              <div class="shortcut-texts">
-                <span class="shortcut-title">Private turposter</span>
-                <span class="shortcut-sub">
-                  {{ mySpotsCount || 0 }} {{ (mySpotsCount || 0) === 1 ? 'turpost' : 'turposter' }}
-                </span>
-              </div>
-            </button>
-
-            <!-- Snarvei til Venner -->
-            <button
-              class="profile-shortcut-card profile-friends-card"
-              @click="emit('open-friends')"
-              title="Se dine venner og administrer synlighet"
-            >
-              <div class="shortcut-icon-wrap friends-icon">
-                <Users :size="17" />
-                <span v-if="pendingFriendRequestsCount" class="friends-pending-dot">
-                  {{ pendingFriendRequestsCount }}
-                </span>
-              </div>
-              <div class="shortcut-texts">
-                <span class="shortcut-title">Venner</span>
-                <span class="shortcut-sub">
-                  {{ friendsCount || 0 }} {{ (friendsCount || 0) === 1 ? 'venn' : 'venner' }}
-                </span>
-              </div>
-            </button>
-
-            <!-- Snarvei til Forslag turposter (kun admin og kun ved nye forslag) -->
-            <button
-              v-if="props.isAdmin && (spotSuggestionsCount || 0) > 0"
-              class="profile-shortcut-card profile-suggestions-card"
-              @click="emit('open-spot-suggestions')"
-              title="Se innkommende forslag til turposter"
-            >
-              <div class="shortcut-icon-wrap suggestions-icon">
-                <ClipboardList :size="17" />
-                <span class="suggestions-pending-dot">
-                  {{ spotSuggestionsCount }}
-                </span>
-              </div>
-              <div class="shortcut-texts">
-                <span class="shortcut-title">Forslag</span>
-                <span class="shortcut-sub">
-                  {{ spotSuggestionsCount }} {{ spotSuggestionsCount === 1 ? 'nytt' : 'nye' }}
-                </span>
-              </div>
-            </button>
-          </div>
+          <UserProfileShortcuts
+            :is-admin="props.isAdmin"
+            :saved-tracks-count="savedTracksCount"
+            :my-spots-count="mySpotsCount"
+            :friends-count="friendsCount"
+            :pending-friend-requests-count="pendingFriendRequestsCount"
+            :spot-suggestions-count="spotSuggestionsCount"
+            @open-saved-tracks="emit('open-saved-tracks')"
+            @open-my-spots="emit('open-my-spots')"
+            @open-friends="emit('open-friends')"
+            @open-spot-suggestions="emit('open-spot-suggestions')"
+          />
 
           <!-- Seksjonstitel -->
           <div class="section-divider">
@@ -520,126 +391,18 @@ onUnmounted(() => {
 
             <!-- Innsjekkingsliste (ekspanderbar) -->
             <div v-else class="checkin-cards-list">
-              <div
+              <UserCheckinCard
                 v-for="(item, idx) in sortedCheckins"
                 :key="item.id || idx"
-                class="user-checkin-card"
-                :class="{ 'card-expanded': isExpanded(item.id || idx) }"
-              >
-                <div class="checkin-card-main">
-                  <!-- Klikkbart hode: Viser turpostnavn, dato og pil -->
-                  <div
-                    class="checkin-card-header"
-                    @click="toggleExpand(item.id || idx)"
-                    title="Klikk for å vise/skjule detaljer og bilde"
-                  >
-                    <div class="turpost-name-row">
-                      <CheckCircle2 :size="16" class="check-icon" />
-                      <span
-                        class="turpost-heading"
-                        :title="item.turpostName || 'Turpost ' + item.turpostId"
-                      >
-                        {{ item.turpostName || 'Turpost ' + item.turpostId }}
-                      </span>
-                      <span v-if="item.isPrivate" class="private-badge-pill" title="Privat turpost">
-                        <Lock :size="10" />
-                        <span>Privat</span>
-                      </span>
-                      <span
-                        v-else-if="item.visibility === 'private'"
-                        class="visibility-badge-pill private"
-                        title="Synlighet: Kun meg"
-                      >
-                        <Lock :size="10" />
-                        <span>Kun meg</span>
-                      </span>
-                      <span
-                        v-else-if="item.visibility === 'friends'"
-                        class="visibility-badge-pill friends"
-                        title="Synlighet: Mine venner"
-                      >
-                        <Users :size="10" />
-                        <span>Venner</span>
-                      </span>
-                      <span v-else class="visibility-badge-pill all" title="Synlighet: Alle">
-                        <Globe :size="10" />
-                        <span>Alle</span>
-                      </span>
-                    </div>
-                    <div class="checkin-header-right">
-                      <div class="checkin-date-badge">
-                        <span>{{ formatDate(item.timestamp) }}</span>
-                      </div>
-                      <ChevronDown
-                        :size="16"
-                        class="chevron-expand"
-                        :class="{ 'is-open': isExpanded(item.id || idx) }"
-                      />
-                    </div>
-                  </div>
-
-                  <!-- Ekspanderbare detaljer (notat og bilde) -->
-                  <div v-if="isExpanded(item.id || idx)" class="checkin-card-details">
-                    <p v-if="item.description" class="checkin-desc">
-                      {{ item.description }}
-                    </p>
-
-                    <div v-if="item.imageUrl" class="checkin-photo-wrap">
-                      <button
-                        type="button"
-                        class="photo-thumb-btn"
-                        @click.stop="lightboxImage = item.imageUrl"
-                        title="Klikk for å se bildet i fullskjerm"
-                      >
-                        <img
-                          :src="item.imageUrl"
-                          alt="Turbilde"
-                          class="checkin-photo-thumb"
-                          loading="lazy"
-                        />
-                        <div class="photo-overlay">
-                          <Maximize2 :size="16" />
-                        </div>
-                      </button>
-                    </div>
-
-                    <p v-if="!item.description && !item.imageUrl" class="checkin-empty-detail">
-                      Ingen notat eller bilde registrert på denne turen.
-                    </p>
-
-                    <!-- Reaksjoner og kommentarer -->
-                    <CheckinSocialSection
-                      :checkin="item"
-                      :current-user-id="user?.userId"
-                      :is-private="item.isPrivate"
-                      :spot-id="item.spotId"
-                      @updated="handleSocialUpdated"
-                    />
-
-                    <!-- Handlingsknapper for innsjekkingen -->
-                    <div class="user-checkin-actions">
-                      <button
-                        type="button"
-                        class="btn-checkin-action"
-                        @click.stop="handleViewOnMap(item)"
-                        title="Vis og flytt kartet til denne turposten"
-                      >
-                        <MapIcon :size="12" />
-                        <span>Vis på kart</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="btn-checkin-action"
-                        @click.stop="editingCheckin = item"
-                        title="Rediger eller slett denne innsjekkingen"
-                      >
-                        <Pencil :size="12" />
-                        <span>Edit</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                :item="item"
+                :is-expanded="isExpanded(item.id || idx)"
+                :current-user-id="user?.userId"
+                @toggle-expand="toggleExpand(item.id || idx)"
+                @view-on-map="handleViewOnMap"
+                @edit="editingCheckin = $event"
+                @view-photo="lightboxImage = $event"
+                @social-updated="handleSocialUpdated"
+              />
             </div>
           </div>
         </div>
@@ -1002,179 +765,6 @@ onUnmounted(() => {
   line-height: 1;
 }
 
-/* Snarveier (Mine spor, Private turposter, Venner og ev. Forslag) */
-.profile-shortcuts-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin: 12px 16px 0 16px;
-}
-
-.profile-shortcuts-grid.has-4-cols {
-  grid-template-columns: repeat(4, 1fr);
-}
-
-@media (max-width: 480px) {
-  .profile-shortcuts-grid.has-4-cols {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 360px) {
-  .profile-shortcuts-grid:not(.has-4-cols) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.profile-shortcut-card {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 8px;
-  border-radius: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s ease;
-  border: 1px solid transparent;
-  min-width: 0;
-}
-
-.profile-tracks-card {
-  background: linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(15, 23, 42, 0.8));
-  border-color: rgba(249, 115, 22, 0.35);
-}
-
-.profile-tracks-card:hover {
-  background: linear-gradient(135deg, rgba(249, 115, 22, 0.22), rgba(15, 23, 42, 0.9));
-  border-color: #f97316;
-  transform: translateY(-1px);
-}
-
-.profile-spots-card {
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(15, 23, 42, 0.8));
-  border-color: rgba(168, 85, 247, 0.35);
-}
-
-.profile-spots-card:hover {
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(15, 23, 42, 0.9));
-  border-color: #a855f7;
-  transform: translateY(-1px);
-}
-
-.profile-friends-card {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(15, 23, 42, 0.8));
-  border-color: rgba(16, 185, 129, 0.35);
-}
-
-.profile-friends-card:hover {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(15, 23, 42, 0.9));
-  border-color: #10b981;
-  transform: translateY(-1px);
-}
-
-.shortcut-icon-wrap {
-  position: relative;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.shortcut-icon-wrap.tracks-icon {
-  background: rgba(249, 115, 22, 0.2);
-  color: #f97316;
-}
-
-.shortcut-icon-wrap.spots-icon {
-  background: rgba(168, 85, 247, 0.2);
-  color: #c084fc;
-}
-
-.shortcut-icon-wrap.friends-icon {
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
-}
-
-.friends-pending-dot {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  background: #f97316;
-  color: #fff;
-  font-size: 9px;
-  font-weight: 800;
-  border-radius: 8px;
-  min-width: 15px;
-  height: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 3px;
-  box-shadow: 0 0 0 2px #0f172a;
-  animation: pulse 1.8s infinite ease-in-out;
-}
-
-.shortcut-icon-wrap.suggestions-icon {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-}
-
-.shortcut-texts {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.shortcut-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #f8fafc;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.shortcut-sub {
-  font-size: 11px;
-  color: #94a3b8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.profile-suggestions-card {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.8));
-  border-color: rgba(245, 158, 11, 0.35);
-}
-
-.profile-suggestions-card:hover {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(15, 23, 42, 0.9));
-  border-color: #f59e0b;
-  transform: translateY(-1px);
-}
-
-.suggestions-pending-dot {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  background: #f59e0b;
-  color: #0f172a;
-  font-size: 9px;
-  font-weight: 800;
-  border-radius: 8px;
-  min-width: 15px;
-  height: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 3px;
-  box-shadow: 0 0 0 2px #0f172a;
-  animation: pulse 1.8s infinite ease-in-out;
-}
 
 /* Seksjonslinje */
 .section-divider {
@@ -1264,281 +854,6 @@ onUnmounted(() => {
   gap: 10px;
 }
 
-.user-checkin-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 12px 14px;
-  transition:
-    transform 0.15s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.user-checkin-card:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(16, 185, 129, 0.35);
-  transform: translateY(-1px);
-}
-
-.checkin-card-main {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.checkin-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  cursor: pointer;
-  user-select: none;
-  min-width: 0;
-}
-
-.checkin-header-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.chevron-expand {
-  color: #94a3b8;
-  transition:
-    transform 0.2s ease,
-    color 0.2s ease;
-  flex-shrink: 0;
-}
-
-.chevron-expand.is-open {
-  transform: rotate(180deg);
-  color: #38bdf8;
-}
-
-.checkin-card-details {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  margin-top: 2px;
-  animation: expand-fade 0.2s ease;
-}
-
-@keyframes expand-fade {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.checkin-empty-detail {
-  font-size: 12px;
-  color: #64748b;
-  font-style: italic;
-  margin: 0;
-  padding: 4px 0;
-}
-
-.turpost-name-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex: 1;
-}
-
-.check-icon {
-  color: #10b981;
-  flex-shrink: 0;
-}
-
-.turpost-heading {
-  font-size: 14px;
-  font-weight: 700;
-  color: #f8fafc;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.private-badge-pill {
-  font-size: 10px;
-  font-weight: 600;
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  padding: 1px 5px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.visibility-badge-pill {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.visibility-badge-pill.all {
-  background: rgba(59, 130, 246, 0.15);
-  color: #93c5fd;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-}
-
-.visibility-badge-pill.friends {
-  background: rgba(16, 185, 129, 0.15);
-  color: #6ee7b7;
-  border: 1px solid rgba(16, 185, 129, 0.35);
-}
-
-.visibility-badge-pill.private {
-  background: rgba(245, 158, 11, 0.18);
-  color: #fcd34d;
-  border: 1px solid rgba(245, 158, 11, 0.35);
-}
-
-.user-checkin-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding-top: 8px;
-  margin-top: 4px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.08);
-}
-
-.btn-checkin-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 9px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  color: #e2e8f0;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-checkin-action:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: #ffffff;
-}
-
-.btn-checkin-action:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-checkin-action.danger-subtle {
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
-}
-
-.btn-checkin-action.danger-subtle:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.18);
-  border-color: rgba(239, 68, 68, 0.4);
-}
-
-.btn-checkin-action.danger {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #f87171;
-  margin-left: auto;
-}
-
-.btn-checkin-action.danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: #ef4444;
-  color: #fef2f2;
-}
-
-.checkin-date-badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-  color: #94a3b8;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 3px 6px;
-  border-radius: 6px;
-  white-space: nowrap;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.checkin-desc {
-  margin: 0;
-  font-size: 13px;
-  color: #cbd5e1;
-  line-height: 1.45;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 8px 10px;
-  border-radius: 8px;
-  border-left: 2px solid #10b981;
-}
-
-.checkin-photo-wrap {
-  margin-top: 4px;
-}
-
-.photo-thumb-btn {
-  position: relative;
-  display: block;
-  width: 110px;
-  height: 80px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 0;
-  background: #0f172a;
-  cursor: pointer;
-}
-
-.checkin-photo-thumb {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.2s ease;
-}
-
-.photo-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.photo-thumb-btn:hover .photo-overlay {
-  opacity: 1;
-}
-
-.photo-thumb-btn:hover .checkin-photo-thumb {
-  transform: scale(1.06);
-}
 
 /* Lightbox */
 .lightbox-backdrop {
