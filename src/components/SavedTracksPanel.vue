@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   Route,
   X,
@@ -119,7 +119,18 @@ watch(
   }
 )
 
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && props.isOpen) {
+    emit('close')
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+})
+
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('pointermove', onDragMove)
   window.removeEventListener('pointerup', onDragEnd)
   window.removeEventListener('pointercancel', onDragEnd)
@@ -134,12 +145,6 @@ const formatDate = (timestamp: number): string => {
   })
 }
 
-const formatTime = (timestamp: number): string => {
-  return new Date(timestamp).toLocaleTimeString('no-NO', {
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
 
 const formatDuration = (ms: number): string => {
   if (!ms || ms <= 0) return '< 1 min'
@@ -229,18 +234,20 @@ const handleConfirmSaveLiveTrack = () => {
 </script>
 
 <template>
-  <transition name="fade-slide">
-    <div
-      v-if="isOpen"
-      ref="panelRef"
-      class="saved-tracks-panel glass-panel"
-      :class="{ 'is-dragging': isDragging }"
-      :style="panelStyle"
-      role="dialog"
-      aria-label="Mine GPS-spor"
-    >
-      <!-- Header (klikk og dra for å flytte) -->
-      <div class="panel-header" @pointerdown="startDrag" title="Klikk og dra for å flytte">
+  <Teleport to="body">
+    <transition name="tracks-modal-fade">
+      <div v-if="isOpen" class="saved-tracks-backdrop" @click.self="emit('close')">
+        <div
+          ref="panelRef"
+          class="saved-tracks-panel glass-panel"
+          :class="{ 'is-dragging': isDragging }"
+          :style="panelStyle"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mine GPS-spor"
+        >
+          <!-- Header (klikk og dra for å flytte) -->
+          <div class="panel-header" @pointerdown="startDrag" title="Klikk og dra for å flytte">
         <div class="header-title">
           <div class="header-icon-wrap">
             <Route :size="18" class="header-icon" />
@@ -481,45 +488,64 @@ const handleConfirmSaveLiveTrack = () => {
         </div>
       </div>
     </div>
-  </transition>
+  </div>
+</transition>
+</Teleport>
 </template>
 
 <style scoped>
+.saved-tracks-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 25, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 10500;
+  padding: clamp(20px, 6vh, 48px) 16px 24px;
+}
+
 .saved-tracks-panel {
-  position: absolute;
-  top: calc(72px + env(safe-area-inset-top, 0px));
-  right: calc(16px + env(safe-area-inset-right, 0px));
-  width: 390px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100dvh - 150px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  position: relative;
+  top: auto;
+  right: auto;
+  width: 100%;
+  max-width: 550px;
+  max-height: calc(100vh - clamp(20px, 6vh, 48px) - 24px);
+  min-height: 380px;
   display: flex;
   flex-direction: column;
-  z-index: 25;
+  z-index: 10501;
   overflow: hidden;
   padding: 0;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 16px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75);
+  background: rgba(24, 30, 42, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
   pointer-events: auto;
   color: #f8fafc;
   transition: box-shadow 0.2s ease;
+  user-select: none;
 }
 
 .saved-tracks-panel.is-dragging {
   user-select: none;
   -webkit-user-select: none;
   transition: none !important;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(249, 115, 22, 0.4);
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.7);
 }
 
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #334155;
-  background: #1e293b;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
@@ -534,33 +560,35 @@ const handleConfirmSaveLiveTrack = () => {
 .header-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .header-icon-wrap {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: rgba(249, 115, 22, 0.15);
-  border: 1px solid rgba(249, 115, 22, 0.35);
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.35);
 }
 
 .header-icon {
-  color: #f97316;
+  color: #fff;
 }
 
 .header-title h3 {
-  font-size: 15px;
+  font-size: 1.05rem;
   font-weight: 700;
   color: #f8fafc;
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
 .tracks-count-badge {
-  background: #334155;
+  background: rgba(255, 255, 255, 0.1);
   color: #94a3b8;
   font-size: 11px;
   font-weight: 600;
@@ -575,21 +603,22 @@ const handleConfirmSaveLiveTrack = () => {
 }
 
 .btn-sync {
-  background: #334155;
+  background: rgba(255, 255, 255, 0.08);
   border: none;
-  color: #94a3b8;
-  cursor: pointer;
+  border-radius: 10px;
+  color: #9ca3af;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .btn-sync:hover:not(:disabled) {
   color: #38bdf8;
-  background: #475569;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .btn-sync:disabled {
@@ -607,21 +636,32 @@ const handleConfirmSaveLiveTrack = () => {
 }
 
 .btn-close {
-  background: #334155;
+  background: rgba(255, 255, 255, 0.08);
   border: none;
-  color: #cbd5e1;
-  cursor: pointer;
+  border-radius: 10px;
+  color: #9ca3af;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .btn-close:hover {
-  color: white;
-  background: #475569;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.tracks-modal-fade-enter-active,
+.tracks-modal-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.tracks-modal-fade-enter-from,
+.tracks-modal-fade-leave-to {
+  opacity: 0;
 }
 
 /* Sammendragslinje */
@@ -884,11 +924,13 @@ const handleConfirmSaveLiveTrack = () => {
 /* Liste med spor */
 .tracks-list-container {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  scrollbar-gutter: stable;
 }
 
 .tracks-list-container::-webkit-scrollbar {

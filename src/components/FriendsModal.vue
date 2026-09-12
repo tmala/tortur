@@ -4,7 +4,6 @@ import {
   Users,
   UserPlus,
   UserCheck,
-  UserX,
   Search,
   X,
   Loader2,
@@ -13,17 +12,16 @@ import {
   Clock,
   Check,
   AlertCircle,
-  ShieldAlert,
   Send,
   UserMinus,
-  User
+  User,
 } from 'lucide-vue-next'
 import {
   useFriends,
   type FriendUser,
   type FriendRequest,
   type PublicUser,
-  type CheckinVisibility
+  type CheckinVisibility,
 } from '@/composables/useFriends'
 import type { GoogleUser } from '@/composables/useAuth'
 
@@ -52,7 +50,7 @@ const {
   removeFriend,
   searchPublicUsers,
   loadDefaultVisibility,
-  setDefaultVisibility
+  setDefaultVisibility,
 } = useFriends()
 
 type TabKey = 'friends' | 'requests' | 'search' | 'settings'
@@ -77,7 +75,7 @@ const modalStyle = computed(() => {
     return {}
   }
   return {
-    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`
+    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`,
   }
 })
 
@@ -142,7 +140,7 @@ watch(
         await Promise.all([
           loadFriends(props.currentUser.userId),
           loadFriendRequests(props.currentUser.userId),
-          loadDefaultVisibility(props.currentUser.userId)
+          loadDefaultVisibility(props.currentUser.userId),
         ])
         if (incomingRequests.value.length > 0 && friends.value.length === 0) {
           activeTab.value = 'requests'
@@ -152,13 +150,13 @@ watch(
         handleSearch()
       }
     }
-  }
+  },
 )
 
-const outgoingTargetIds = computed(() => new Set(outgoingRequests.value.map(r => r.toUserId)))
-const incomingSenderIds = computed(() => new Set(incomingRequests.value.map(r => r.fromUserId)))
+const outgoingTargetIds = computed(() => new Set(outgoingRequests.value.map((r) => r.toUserId)))
+const incomingSenderIds = computed(() => new Set(incomingRequests.value.map((r) => r.fromUserId)))
 
-let searchDebounceTimeout: any = null
+let searchDebounceTimeout: ReturnType<typeof setTimeout> | undefined = undefined
 watch(searchQuery, () => {
   clearTimeout(searchDebounceTimeout)
   searchDebounceTimeout = setTimeout(() => {
@@ -175,12 +173,22 @@ async function handleSearch() {
   try {
     const users = await searchPublicUsers(searchQuery.value)
     // Sorter slik at andre brukere vises først, og ikke innlogget bruker
-    searchResults.value = users.filter(u => u.userId !== props.currentUser?.userId)
-  } catch (err: any) {
-    errorMessage.value = err?.message || 'Kunne ikke søke etter brukere'
+    searchResults.value = users.filter((u) => u.userId !== props.currentUser?.userId)
+  } catch (err: unknown) {
+    errorMessage.value = err instanceof Error ? err.message : 'Kunne ikke søke etter brukere'
   } finally {
     isSearching.value = false
   }
+}
+
+function openSearchTab() {
+  activeTab.value = 'search'
+  handleSearch()
+}
+
+function clearSearch() {
+  searchQuery.value = ''
+  handleSearch()
 }
 
 async function handleSendRequest(targetUser: PublicUser) {
@@ -190,9 +198,11 @@ async function handleSendRequest(targetUser: PublicUser) {
   try {
     await sendFriendRequest(props.currentUser, targetUser)
     successMessage.value = `Forespørsel sendt til ${targetUser.userName}!`
-    setTimeout(() => { successMessage.value = null }, 3500)
-  } catch (err: any) {
-    errorMessage.value = err?.message || 'Kunne ikke sende venneforespørsel'
+    setTimeout(() => {
+      successMessage.value = null
+    }, 3500)
+  } catch (err: unknown) {
+    errorMessage.value = err instanceof Error ? err.message : 'Kunne ikke sende venneforespørsel'
   } finally {
     actionLoadingId.value = null
   }
@@ -205,9 +215,11 @@ async function handleAccept(request: FriendRequest) {
   try {
     await acceptFriendRequest(props.currentUser, request)
     successMessage.value = `Du og ${request.userName} er nå venner!`
-    setTimeout(() => { successMessage.value = null }, 3500)
-  } catch (err: any) {
-    errorMessage.value = err?.message || 'Kunne ikke godta forespørsel'
+    setTimeout(() => {
+      successMessage.value = null
+    }, 3500)
+  } catch (err: unknown) {
+    errorMessage.value = err instanceof Error ? err.message : 'Kunne ikke godta forespørsel'
   } finally {
     actionLoadingId.value = null
   }
@@ -219,8 +231,8 @@ async function handleReject(fromUserId: string) {
   errorMessage.value = null
   try {
     await rejectFriendRequest(props.currentUser.userId, fromUserId)
-  } catch (err: any) {
-    errorMessage.value = err?.message || 'Kunne ikke avvise forespørsel'
+  } catch (err: unknown) {
+    errorMessage.value = err instanceof Error ? err.message : 'Kunne ikke avvise forespørsel'
   } finally {
     actionLoadingId.value = null
   }
@@ -232,8 +244,8 @@ async function handleCancel(targetUserId: string) {
   errorMessage.value = null
   try {
     await cancelFriendRequest(props.currentUser.userId, targetUserId)
-  } catch (err: any) {
-    errorMessage.value = err?.message || 'Kunne ikke avbryte forespørsel'
+  } catch (err: unknown) {
+    errorMessage.value = err instanceof Error ? err.message : 'Kunne ikke avbryte forespørsel'
   } finally {
     actionLoadingId.value = null
   }
@@ -248,9 +260,11 @@ async function handleRemoveFriend(friend: FriendUser) {
   try {
     await removeFriend(props.currentUser.userId, friend.userId)
     successMessage.value = `Vennskapet med ${friend.userName} er avsluttet.`
-    setTimeout(() => { successMessage.value = null }, 3500)
-  } catch (err: any) {
-    errorMessage.value = err?.message || 'Kunne ikke fjerne venn'
+    setTimeout(() => {
+      successMessage.value = null
+    }, 3500)
+  } catch (err: unknown) {
+    errorMessage.value = err instanceof Error ? err.message : 'Kunne ikke fjerne venn'
   } finally {
     actionLoadingId.value = null
   }
@@ -261,9 +275,11 @@ async function handleSetVisibility(val: CheckinVisibility) {
   try {
     await setDefaultVisibility(props.currentUser.userId, val)
     successMessage.value = 'Standard synlighet er oppdatert!'
-    setTimeout(() => { successMessage.value = null }, 2500)
-  } catch (err: any) {
-    errorMessage.value = err?.message || 'Kunne ikke lagre innstilling'
+    setTimeout(() => {
+      successMessage.value = null
+    }, 2500)
+  } catch (err: unknown) {
+    errorMessage.value = err instanceof Error ? err.message : 'Kunne ikke lagre innstilling'
   }
 }
 
@@ -298,7 +314,11 @@ onUnmounted(() => {
           aria-modal="true"
         >
           <!-- Header -->
-          <div class="friends-modal-header" @pointerdown="startDrag" title="Klikk og dra for å flytte">
+          <div
+            class="friends-modal-header"
+            @pointerdown="startDrag"
+            title="Klikk og dra for å flytte"
+          >
             <div class="header-title-row">
               <div class="header-icon-badge">
                 <Users :size="20" />
@@ -360,10 +380,11 @@ onUnmounted(() => {
             <button
               class="friends-tab-btn"
               :class="{ active: activeTab === 'search' }"
-              @click="activeTab = 'search'; handleSearch()"
+              @click="openSearchTab"
+              title="Finn / søk etter venner"
             >
               <Search :size="15" />
-              <span>Finn venner</span>
+              <span>Venner</span>
             </button>
 
             <button
@@ -385,19 +406,20 @@ onUnmounted(() => {
                   <Users :size="32" />
                 </div>
                 <h4>Ingen venner enda</h4>
-                <p>Når du blir venner med andre turgåere, kan dere dele innsjekkinger med hverandre.</p>
-                <button class="btn-primary-action" @click="activeTab = 'search'; handleSearch()">
+                <p>
+                  Når du blir venner med andre turgåere, kan dere dele innsjekkinger med hverandre.
+                </p>
+                <button
+                  class="btn-primary-action"
+                  @click="openSearchTab"
+                >
                   <UserPlus :size="16" />
                   <span>Finn venner å invitere</span>
                 </button>
               </div>
 
               <div v-else class="friends-list">
-                <div
-                  v-for="friend in friends"
-                  :key="friend.userId"
-                  class="friend-card"
-                >
+                <div v-for="friend in friends" :key="friend.userId" class="friend-card">
                   <div
                     class="friend-user-info clickable"
                     @click="emit('view-friend-profile', friend)"
@@ -489,7 +511,11 @@ onUnmounted(() => {
                         :disabled="actionLoadingId === req.fromUserId"
                         @click="handleAccept(req)"
                       >
-                        <Loader2 v-if="actionLoadingId === req.fromUserId" :size="14" class="spin" />
+                        <Loader2
+                          v-if="actionLoadingId === req.fromUserId"
+                          :size="14"
+                          class="spin"
+                        />
                         <Check v-else :size="14" />
                         <span>Godta</span>
                       </button>
@@ -570,7 +596,7 @@ onUnmounted(() => {
                 <button
                   v-if="searchQuery"
                   class="search-clear-btn"
-                  @click="searchQuery = ''; handleSearch()"
+                  @click="clearSearch"
                 >
                   <X :size="14" />
                 </button>
@@ -587,15 +613,14 @@ onUnmounted(() => {
                   <Search :size="28" />
                 </div>
                 <h4>Ingen brukere funnet</h4>
-                <p>Prøv et annet søkeord. Brukere må ha logget inn i TorTur minst én gang for å vises her.</p>
+                <p>
+                  Prøv et annet søkeord. Brukere må ha logget inn i TorTur minst én gang for å vises
+                  her.
+                </p>
               </div>
 
               <div v-else class="search-results-list">
-                <div
-                  v-for="user in searchResults"
-                  :key="user.userId"
-                  class="search-user-card"
-                >
+                <div v-for="user in searchResults" :key="user.userId" class="search-user-card">
                   <div class="search-user-info">
                     <div class="avatar-wrap">
                       <img
@@ -624,7 +649,10 @@ onUnmounted(() => {
                     </span>
 
                     <!-- Forespørsel allerede sendt -->
-                    <span v-else-if="outgoingTargetIds.has(user.userId)" class="badge-status pending">
+                    <span
+                      v-else-if="outgoingTargetIds.has(user.userId)"
+                      class="badge-status pending"
+                    >
                       <Clock :size="13" />
                       <span>Sendt</span>
                     </span>
@@ -660,8 +688,8 @@ onUnmounted(() => {
               <div class="settings-card">
                 <h4>Standard synlighet for nye innsjekkinger</h4>
                 <p class="settings-desc">
-                  Velg hvem som som standard skal kunne se dine nye innsjekkinger og turbilder.
-                  Du kan også justere dette for hver enkelt innsjekking når du sjekker inn.
+                  Velg hvem som som standard skal kunne se dine nye innsjekkinger og turbilder. Du
+                  kan også justere dette for hver enkelt innsjekking når du sjekker inn.
                 </p>
 
                 <div class="visibility-options-grid">
@@ -695,7 +723,11 @@ onUnmounted(() => {
                     <div class="opt-content">
                       <div class="opt-title-row">
                         <span class="opt-title">Mine venner</span>
-                        <Check v-if="defaultVisibility === 'friends'" :size="16" class="check-active" />
+                        <Check
+                          v-if="defaultVisibility === 'friends'"
+                          :size="16"
+                          class="check-active"
+                        />
                       </div>
                       <span class="opt-desc">Kun synlig for deg og de du er venner med.</span>
                     </div>
@@ -713,9 +745,15 @@ onUnmounted(() => {
                     <div class="opt-content">
                       <div class="opt-title-row">
                         <span class="opt-title">Kun meg</span>
-                        <Check v-if="defaultVisibility === 'private'" :size="16" class="check-active" />
+                        <Check
+                          v-if="defaultVisibility === 'private'"
+                          :size="16"
+                          class="check-active"
+                        />
                       </div>
-                      <span class="opt-desc">Helt privat. Synlig kun for deg i din egen profil.</span>
+                      <span class="opt-desc"
+                        >Helt privat. Synlig kun for deg i din egen profil.</span
+                      >
                     </div>
                   </button>
                 </div>
@@ -736,22 +774,25 @@ onUnmounted(() => {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 10500;
-  padding: 16px;
+  padding: clamp(20px, 6vh, 48px) 16px 24px;
 }
 
 .friends-modal-card {
   width: 100%;
-  max-width: 520px;
-  max-height: 88vh;
+  max-width: 550px;
+  max-height: calc(100vh - clamp(20px, 6vh, 48px) - 24px);
+  min-height: 380px;
   background: rgba(24, 30, 42, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 20px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
   overflow: hidden;
   transition: box-shadow 0.2s ease;
   user-select: none;
@@ -851,25 +892,31 @@ onUnmounted(() => {
 /* Faner */
 .friends-tabs-bar {
   display: flex;
-  padding: 8px 12px;
+  padding: 8px 10px;
   gap: 6px;
   background: rgba(15, 20, 30, 0.4);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.friends-tabs-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .friends-tab-btn {
   flex: 1;
-  min-width: fit-content;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 8px 10px;
   background: transparent;
   border: none;
   border-radius: 10px;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: #9ca3af;
   cursor: pointer;
@@ -906,16 +953,24 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.85; transform: scale(1.08); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
 }
 
 /* Scroll Content */
 .friends-scroll-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px;
-  max-height: calc(88vh - 125px);
+  scrollbar-gutter: stable;
 }
 
 .tab-pane {
@@ -1246,7 +1301,9 @@ onUnmounted(() => {
   color: #f3f4f6;
   font-size: 0.85rem;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .search-input:focus {
@@ -1472,8 +1529,12 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .mt-4 {
@@ -1493,7 +1554,9 @@ onUnmounted(() => {
 
 .msg-fade-enter-active,
 .msg-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .msg-fade-enter-from,

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useAuth } from '@/composables/useAuth'
-import { LogOut, LogIn, Shield, User, Loader2, AlertCircle, X } from 'lucide-vue-next'
+import { Shield, User, Loader2, AlertCircle, X } from 'lucide-vue-next'
 
-const { user, isLoggedIn, isLoading, error, login, logout } = useAuth()
+const { user, isLoggedIn, isLoading, error, login } = useAuth()
 
 const emit = defineEmits<{
   (e: 'open-profile'): void
@@ -85,16 +85,21 @@ onUnmounted(() => {
 
       <!-- Login-modal -->
       <transition name="modal-fade">
-        <div 
-          v-if="showPanel && !isLoggedIn" 
-          class="auth-modal-overlay" 
+        <div
+          v-if="showPanel && !isLoggedIn"
+          class="auth-modal-overlay"
           @click.self="showPanel = false"
         >
-          <div class="auth-modal glass-panel" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
-            <button 
-              class="auth-modal-close" 
-              @click="showPanel = false" 
-              title="Lukk vindu (Esc)" 
+          <div
+            class="auth-modal glass-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="auth-modal-title"
+          >
+            <button
+              class="auth-modal-close"
+              @click="showPanel = false"
+              title="Lukk vindu (Esc)"
               aria-label="Lukk vindu"
             >
               <X :size="20" />
@@ -114,29 +119,33 @@ onUnmounted(() => {
               <div id="google-signin-btn" class="google-btn-container" />
 
               <!-- Visuell Google-knapp (trigger GIS prompt) -->
-              <button
-                class="auth-google-btn"
-                :disabled="isLoading"
-                @click="handleLogin"
-              >
+              <button class="auth-google-btn" :disabled="isLoading" @click="handleLogin">
                 <svg class="google-logo" viewBox="0 0 24 24" width="20" height="20">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  />
                 </svg>
                 <span>{{ isLoading ? 'Vent litt…' : 'Fortsett med Google' }}</span>
                 <Loader2 v-if="isLoading" :size="16" class="spin-icon" />
               </button>
             </div>
 
-            <p class="auth-modal-note">
-              Kun forhåndsgodkjente e-postadresser kan logge inn.
-            </p>
+            <p class="auth-modal-note">Kun forhåndsgodkjente e-postadresser kan logge inn.</p>
 
-            <button class="auth-modal-cancel-btn" @click="showPanel = false">
-              Lukk
-            </button>
+            <button class="auth-modal-cancel-btn" @click="showPanel = false">Lukk</button>
           </div>
         </div>
       </transition>
@@ -208,7 +217,7 @@ onUnmounted(() => {
   z-index: 9999;
   background: #0f172a;
   border: 1px solid rgba(56, 189, 248, 0.25);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 .auth-dropdown-header {
   display: flex;
@@ -221,7 +230,7 @@ onUnmounted(() => {
   height: 40px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid rgba(56,189,248,0.3);
+  border: 1px solid rgba(56, 189, 248, 0.3);
 }
 .auth-dropdown-info {
   display: flex;
@@ -246,7 +255,7 @@ onUnmounted(() => {
 }
 .auth-dropdown-divider {
   height: 1px;
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   margin: 8px 0;
 }
 .auth-dropdown-logout {
@@ -316,9 +325,13 @@ onUnmounted(() => {
   color: #fca5a5;
   font-size: 13px;
   z-index: 10000;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
 }
-.error-icon { color: #f87171; flex-shrink: 0; margin-top: 2px; }
+.error-icon {
+  color: #f87171;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
 .error-close {
   margin-left: auto;
   background: none;
@@ -371,9 +384,9 @@ onUnmounted(() => {
   border-radius: 8px;
   transition: all 0.2s ease;
 }
-.auth-modal-close:hover { 
+.auth-modal-close:hover {
   background: rgba(255, 255, 255, 0.16);
-  color: #ffffff; 
+  color: #ffffff;
   transform: scale(1.05);
 }
 
@@ -394,8 +407,12 @@ onUnmounted(() => {
   color: #f1f5f9;
 }
 
-.auth-modal-logo { margin-bottom: 16px; }
-.auth-shield-icon { color: #38bdf8; }
+.auth-modal-logo {
+  margin-bottom: 16px;
+}
+.auth-shield-icon {
+  color: #38bdf8;
+}
 
 .auth-modal-title {
   font-size: 20px;
@@ -416,7 +433,9 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
 }
-.google-btn-container { min-height: 0; }
+.google-btn-container {
+  min-height: 0;
+}
 
 .auth-google-btn {
   display: flex;
@@ -426,7 +445,7 @@ onUnmounted(() => {
   width: 100%;
   padding: 12px 20px;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(255, 255, 255, 0.06);
   color: #e2e8f0;
   font-size: 14px;
@@ -436,13 +455,15 @@ onUnmounted(() => {
 }
 .auth-google-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255,255,255,0.3);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 .auth-google-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
-.google-logo { flex-shrink: 0; }
+.google-logo {
+  flex-shrink: 0;
+}
 
 .auth-modal-note {
   font-size: 11px;
@@ -451,21 +472,42 @@ onUnmounted(() => {
 }
 
 /* ===== Animasjoner ===== */
-.spin-icon { animation: spin 1s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 .dropdown-fade-enter-active,
-.dropdown-fade-leave-active { transition: opacity 0.15s, transform 0.15s; }
+.dropdown-fade-leave-active {
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+}
 .dropdown-fade-enter-from,
-.dropdown-fade-leave-to { opacity: 0; transform: translateY(-6px); }
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
 
 .modal-fade-enter-active,
-.modal-fade-leave-active { transition: opacity 0.2s; }
+.modal-fade-leave-active {
+  transition: opacity 0.2s;
+}
 .modal-fade-enter-from,
-.modal-fade-leave-to { opacity: 0; }
+.modal-fade-leave-to {
+  opacity: 0;
+}
 
 .fade-enter-active,
-.fade-leave-active { transition: opacity 0.2s; }
+.fade-leave-active {
+  transition: opacity 0.2s;
+}
 .fade-enter-from,
-.fade-leave-to { opacity: 0; }
+.fade-leave-to {
+  opacity: 0;
+}
 </style>

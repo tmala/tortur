@@ -19,7 +19,7 @@ import {
   Users,
   Globe,
   Lock,
-  Map as MapIcon
+  Map as MapIcon,
 } from 'lucide-vue-next'
 import { useAuth, type GoogleUser, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
@@ -84,7 +84,12 @@ function handleCheckinDeleted(deletedId: string) {
 }
 
 async function handleDeleteCheckin(item: FirebaseCheckinItem) {
-  if (!confirm('Er du sikker på at du vil slette denne innsjekkingen? Hvis den har et tilhørende bilde vil også bildet bli slettet.')) return
+  if (
+    !confirm(
+      'Er du sikker på at du vil slette denne innsjekkingen? Hvis den har et tilhørende bilde vil også bildet bli slettet.',
+    )
+  )
+    return
 
   isActionLoading.value = item.id
   try {
@@ -96,7 +101,7 @@ async function handleDeleteCheckin(item: FirebaseCheckinItem) {
       await deletePublicCheckin({
         turpostId: item.turpostId,
         checkinId: item.id,
-        timestamp: item.timestamp
+        timestamp: item.timestamp,
       })
     }
     emit('checkin-deleted', item.id)
@@ -118,9 +123,7 @@ const handleForceRefresh = async () => {
     if ('caches' in window) {
       const cacheNames = await caches.keys()
       await Promise.all(
-        cacheNames
-          .filter((name) => !name.includes('map-tiles'))
-          .map((name) => caches.delete(name))
+        cacheNames.filter((name) => !name.includes('map-tiles')).map((name) => caches.delete(name)),
       )
     }
 
@@ -186,7 +189,7 @@ const sortedCheckins = computed(() => {
 
 // Unike turposter
 const uniqueTurpostIds = computed(() => {
-  return new Set(sortedCheckins.value.map(c => String(c.turpostId)))
+  return new Set(sortedCheckins.value.map((c) => String(c.turpostId)))
 })
 
 const formatDate = (isoString?: string) => {
@@ -217,7 +220,7 @@ const modalStyle = computed(() => {
     return {}
   }
   return {
-    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`
+    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`,
   }
 })
 
@@ -278,7 +281,7 @@ watch(
       dragPosition.value = { x: 0, y: 0 }
       expandedCheckinIds.value.clear()
     }
-  }
+  },
 )
 
 const handleKeyDown = (e: KeyboardEvent) => {
@@ -316,7 +319,11 @@ onUnmounted(() => {
           aria-modal="true"
         >
           <!-- Header med brukerinfo og Lukk-knapp -->
-          <div class="profile-modal-header" @pointerdown="startDrag" title="Klikk og dra for å flytte">
+          <div
+            class="profile-modal-header"
+            @pointerdown="startDrag"
+            title="Klikk og dra for å flytte"
+          >
             <!-- Øverste rad: Profilbilde, navn, e-post og Lukk-knapp -->
             <div class="profile-header-top">
               <div class="user-info-row">
@@ -395,11 +402,7 @@ onUnmounted(() => {
               </button>
 
               <!-- Logg ut -->
-              <button
-                class="btn-profile-logout"
-                @click="emit('logout')"
-                title="Logg ut av TorTur"
-              >
+              <button class="btn-profile-logout" @click="emit('logout')" title="Logg ut av TorTur">
                 <LogOut :size="14" />
                 <span>Logg ut</span>
               </button>
@@ -507,7 +510,10 @@ onUnmounted(() => {
                 <Mountain :size="32" />
               </div>
               <h4>Ingen innsjekkinger enda</h4>
-              <p>Trykk på en turpost i kartet og velg «Sjekk inn her» for å registrere din første tur!</p>
+              <p>
+                Trykk på en turpost i kartet og velg «Sjekk inn her» for å registrere din første
+                tur!
+              </p>
             </div>
 
             <!-- Innsjekkingsliste (ekspanderbar) -->
@@ -529,9 +535,9 @@ onUnmounted(() => {
                       <CheckCircle2 :size="16" class="check-icon" />
                       <span
                         class="turpost-heading"
-                        :title="item.turpostName || ('Turpost ' + item.turpostId)"
+                        :title="item.turpostName || 'Turpost ' + item.turpostId"
                       >
-                        {{ item.turpostName || ('Turpost ' + item.turpostId) }}
+                        {{ item.turpostName || 'Turpost ' + item.turpostId }}
                       </span>
                       <span v-if="item.isPrivate" class="private-badge-pill" title="Privat turpost">
                         <Lock :size="10" />
@@ -553,11 +559,7 @@ onUnmounted(() => {
                         <Users :size="10" />
                         <span>Venner</span>
                       </span>
-                      <span
-                        v-else
-                        class="visibility-badge-pill all"
-                        title="Synlighet: Alle"
-                      >
+                      <span v-else class="visibility-badge-pill all" title="Synlighet: Alle">
                         <Globe :size="10" />
                         <span>Alle</span>
                       </span>
@@ -575,10 +577,7 @@ onUnmounted(() => {
                   </div>
 
                   <!-- Ekspanderbare detaljer (notat og bilde) -->
-                  <div
-                    v-if="isExpanded(item.id || idx)"
-                    class="checkin-card-details"
-                  >
+                  <div v-if="isExpanded(item.id || idx)" class="checkin-card-details">
                     <p v-if="item.description" class="checkin-desc">
                       {{ item.description }}
                     </p>
@@ -602,10 +601,7 @@ onUnmounted(() => {
                       </button>
                     </div>
 
-                    <p
-                      v-if="!item.description && !item.imageUrl"
-                      class="checkin-empty-detail"
-                    >
+                    <p v-if="!item.description && !item.imageUrl" class="checkin-empty-detail">
                       Ingen notat eller bilde registrert på denne turen.
                     </p>
 
@@ -659,11 +655,7 @@ onUnmounted(() => {
 
         <!-- Lightbox for fullskjermvisning av turbilder -->
         <transition name="lightbox-fade">
-          <div
-            v-if="lightboxImage"
-            class="lightbox-backdrop"
-            @click="lightboxImage = null"
-          >
+          <div v-if="lightboxImage" class="lightbox-backdrop" @click="lightboxImage = null">
             <button
               class="btn-lightbox-close"
               @click.stop="lightboxImage = null"
@@ -717,7 +709,9 @@ onUnmounted(() => {
   background: rgba(26, 35, 50, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 18px;
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 20px 45px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
   overflow: hidden;
   transition: box-shadow 0.2s ease;
 }
@@ -726,7 +720,9 @@ onUnmounted(() => {
   user-select: none;
   -webkit-user-select: none;
   transition: none !important;
-  box-shadow: 0 35px 80px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 35px 80px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 /* Header */
@@ -903,8 +899,12 @@ onUnmounted(() => {
 }
 
 @keyframes spin-cw {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .btn-profile-logout {
@@ -1250,7 +1250,9 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Innsjekkingskort */
@@ -1265,7 +1267,10 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   padding: 12px 14px;
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .user-checkin-card:hover {
@@ -1299,7 +1304,9 @@ onUnmounted(() => {
 
 .chevron-expand {
   color: #94a3b8;
-  transition: transform 0.2s ease, color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease;
   flex-shrink: 0;
 }
 
@@ -1560,7 +1567,9 @@ onUnmounted(() => {
 
 .lightbox-img {
   max-width: 95vw;
-  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 150px);
+  max-height: calc(
+    100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 150px
+  );
   object-fit: contain;
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.85);
@@ -1642,7 +1651,9 @@ onUnmounted(() => {
     padding-bottom: calc(max(10px, env(safe-area-inset-bottom, 0px)) + 48px);
   }
   .lightbox-img {
-    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 100px);
+    max-height: calc(
+      100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 100px
+    );
   }
 }
 
@@ -1666,6 +1677,4 @@ onUnmounted(() => {
 .lightbox-fade-leave-to {
   opacity: 0;
 }
-
-
 </style>

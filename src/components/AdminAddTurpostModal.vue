@@ -260,7 +260,7 @@ async function updateCsvPlacementHint() {
   }
 }
 
-let placementTimeout: any = null
+let placementTimeout: ReturnType<typeof setTimeout> | undefined = undefined
 function onInputChange() {
   copied.value = false
   saveSuccessMessage.value = null
@@ -356,8 +356,8 @@ async function handleSaveSpot() {
         emit('close')
       }
     }, 1600)
-  } catch (err: any) {
-    saveErrorMessage.value = err.message || 'Kunne ikke lagre turposten.'
+  } catch (err: unknown) {
+    saveErrorMessage.value = err instanceof Error ? err.message : 'Kunne ikke lagre turposten.'
   } finally {
     isSavingSpot.value = false
   }

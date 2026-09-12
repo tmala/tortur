@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import {
   X,
   Users,
@@ -9,11 +9,9 @@ import {
   ChevronDown,
   Maximize2,
   Loader2,
-  MapPin,
   Map as MapIcon,
   Globe,
-  Lock,
-  Search
+  Search,
 } from 'lucide-vue-next'
 import type { FirebaseCheckinItem } from '@/composables/useAuth'
 import { useFriends, type FriendUser } from '@/composables/useFriends'
@@ -52,7 +50,7 @@ const modalStyle = computed(() => {
     return {}
   }
   return {
-    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`
+    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`,
   }
 })
 
@@ -78,7 +76,7 @@ const onDragMove = (e: PointerEvent) => {
   const dy = e.clientY - dragStart.y
   dragPosition.value = {
     x: initialPosition.x + dx,
-    y: initialPosition.y + dy
+    y: initialPosition.y + dy,
   }
 }
 
@@ -98,10 +96,10 @@ async function loadCheckins() {
   isLoading.value = true
   try {
     const data = await fetchFriendCheckins(props.friend.userId)
-    checkins.value = data.map(c => ({
+    checkins.value = data.map((c) => ({
       ...c,
       userId: c.userId || props.friend?.userId || '',
-      userName: c.userName || props.friend?.userName || ''
+      userName: c.userName || props.friend?.userName || '',
     }))
     expandedCheckinIds.value.clear()
   } catch (err) {
@@ -122,19 +120,20 @@ watch(
       loadCheckins()
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 const uniqueTurpostIds = computed(() => {
-  return new Set(checkins.value.map(c => String(c.turpostId)))
+  return new Set(checkins.value.map((c) => String(c.turpostId)))
 })
 
 const filteredCheckins = computed(() => {
   if (!searchQuery.value.trim()) return checkins.value
   const q = searchQuery.value.toLowerCase().trim()
-  return checkins.value.filter(c =>
-    (c.turpostName && c.turpostName.toLowerCase().includes(q)) ||
-    (c.description && c.description.toLowerCase().includes(q))
+  return checkins.value.filter(
+    (c) =>
+      (c.turpostName && c.turpostName.toLowerCase().includes(q)) ||
+      (c.description && c.description.toLowerCase().includes(q)),
   )
 })
 
@@ -158,7 +157,7 @@ function handleViewOnMap(item: FirebaseCheckinItem) {
 }
 
 function handleSocialUpdated(updatedItem: FirebaseCheckinItem) {
-  const idx = checkins.value.findIndex(c => c.id === updatedItem.id)
+  const idx = checkins.value.findIndex((c) => c.id === updatedItem.id)
   if (idx !== -1) {
     checkins.value[idx] = { ...checkins.value[idx], ...updatedItem }
   }
@@ -173,7 +172,7 @@ function formatDate(isoString?: string): string {
       month: 'short',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     })
   } catch {
     return isoString
@@ -228,12 +227,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <button
-            type="button"
-            class="btn-close"
-            title="Lukk"
-            @click="emit('close')"
-          >
+          <button type="button" class="btn-close" title="Lukk" @click="emit('close')">
             <X :size="18" />
           </button>
         </div>
@@ -300,11 +294,7 @@ onUnmounted(() => {
               :class="{ expanded: isExpanded(item.id) }"
             >
               <!-- Overskriftsrad (klikkbar for ekspandering) -->
-              <button
-                type="button"
-                class="checkin-header-btn"
-                @click="toggleExpand(item.id)"
-              >
+              <button type="button" class="checkin-header-btn" @click="toggleExpand(item.id)">
                 <div class="checkin-title-left">
                   <span class="turpost-name">{{ item.turpostName || 'Navnløs turpost' }}</span>
                   <span
@@ -314,11 +304,7 @@ onUnmounted(() => {
                   >
                     <Users :size="10" /> Venner
                   </span>
-                  <span
-                    v-else
-                    class="vis-tag all"
-                    title="Offentlig tur"
-                  >
+                  <span v-else class="vis-tag all" title="Offentlig tur">
                     <Globe :size="10" /> Alle
                   </span>
                 </div>
@@ -363,10 +349,7 @@ onUnmounted(() => {
                   </button>
                 </div>
 
-                <p
-                  v-if="!item.description && !item.imageUrl"
-                  class="checkin-empty-detail"
-                >
+                <p v-if="!item.description && !item.imageUrl" class="checkin-empty-detail">
                   Ingen turboknotat eller bilde registrert på denne turen.
                 </p>
 
@@ -396,11 +379,7 @@ onUnmounted(() => {
 
         <!-- Lightbox for fullskjermbilde -->
         <transition name="lightbox-fade">
-          <div
-            v-if="lightboxImage"
-            class="lightbox-backdrop"
-            @click="lightboxImage = null"
-          >
+          <div v-if="lightboxImage" class="lightbox-backdrop" @click="lightboxImage = null">
             <div class="lightbox-dialog" @click.stop>
               <button
                 type="button"
@@ -410,11 +389,7 @@ onUnmounted(() => {
               >
                 <X :size="20" />
               </button>
-              <img
-                :src="lightboxImage"
-                alt="Fullskjerm turbilde"
-                class="lightbox-img"
-              />
+              <img :src="lightboxImage" alt="Fullskjerm turbilde" class="lightbox-img" />
             </div>
           </div>
         </transition>
@@ -942,8 +917,12 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .modal-fade-enter-active,

@@ -870,20 +870,37 @@ watch(
   { deep: true }
 )
 
+const clearSpotSuggestion = () => {
+  if (suggestionMarker && map) {
+    map.removeLayer(suggestionMarker)
+    suggestionMarker = null
+  }
+}
+
 const flyToPost = (post: TurpostItem) => {
   if (!map) return
+
+  clearSpotSuggestion()
 
   map.flyTo([post.lat, post.lng], Math.max(map.getZoom(), 15), {
     duration: 1.0,
     easeLinearity: 0.25
   })
 
-  const marker = markerMap.get(post.id)
-  if (marker) {
-    setTimeout(() => {
+  const openMarkerPopup = () => {
+    const marker = markerMap.get(String(post.id)) || markerMap.get(post.id)
+    if (marker) {
       marker.openPopup()
-    }, 400)
+      return true
+    }
+    return false
   }
+
+  setTimeout(() => {
+    if (!openMarkerPopup()) {
+      setTimeout(openMarkerPopup, 300)
+    }
+  }, 400)
 }
 
 const panToCoordinate = (lat: number, lng: number, zoomLevel?: number) => {
@@ -960,12 +977,6 @@ const showSpotSuggestion = (spot: {
   })
 }
 
-const clearSpotSuggestion = () => {
-  if (suggestionMarker && map) {
-    map.removeLayer(suggestionMarker)
-    suggestionMarker = null
-  }
-}
 
 defineExpose({
   centerOnUser,

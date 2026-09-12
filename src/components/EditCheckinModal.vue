@@ -1,6 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon, Trash2, Undo2, Globe, Users, Lock } from 'lucide-vue-next'
+import {
+  Mountain,
+  Camera,
+  X,
+  Check,
+  Loader2,
+  AlertCircle,
+  Image as ImageIcon,
+  Trash2,
+  Undo2,
+  Globe,
+  Users,
+  Lock,
+} from 'lucide-vue-next'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import type { CheckinVisibility } from '@/composables/useFriends'
@@ -43,7 +56,8 @@ const isMobileDevice = computed(() => {
   if (typeof navigator === 'undefined') return false
   return (
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-    (Boolean(navigator.maxTouchPoints && navigator.maxTouchPoints > 2) && /Macintosh/i.test(navigator.userAgent))
+    (Boolean(navigator.maxTouchPoints && navigator.maxTouchPoints > 2) &&
+      /Macintosh/i.test(navigator.userAgent))
   )
 })
 
@@ -61,7 +75,8 @@ watch(
     if (open && props.checkin) {
       description.value = props.checkin.description || ''
       originalImageUrl.value = props.checkin.imageUrl || ''
-      selectedVisibility.value = props.checkin.visibility || (props.checkin.isPrivate || props.isPrivate ? 'private' : 'all')
+      selectedVisibility.value =
+        props.checkin.visibility || (props.checkin.isPrivate || props.isPrivate ? 'private' : 'all')
       isImageRemoved.value = false
       clearSelectedFile()
       errorMessage.value = null
@@ -71,7 +86,7 @@ watch(
       stopWebcam()
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 const handleTakePhoto = () => {
@@ -86,7 +101,8 @@ const handleTakePhoto = () => {
 async function startWebcam() {
   errorMessage.value = null
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    errorMessage.value = 'Webkamera støttes ikke i denne nettleseren. Vennligst velg en bildefil i stedet.'
+    errorMessage.value =
+      'Webkamera støttes ikke i denne nettleseren. Vennligst velg en bildefil i stedet.'
     return
   }
 
@@ -94,9 +110,9 @@ async function startWebcam() {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         width: { ideal: 1280 },
-        height: { ideal: 720 }
+        height: { ideal: 720 },
       },
-      audio: false
+      audio: false,
     })
     webcamStream.value = stream
     isWebcamActive.value = true
@@ -105,11 +121,13 @@ async function startWebcam() {
       videoRef.value.srcObject = stream
       await videoRef.value.play().catch(() => {})
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     stopWebcam()
     console.warn('Feil ved åpning av webkamera:', err)
-    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-      errorMessage.value = 'Ingen tilgang til webkamera. Vennligst tillat kamera i nettleseren, eller velg en bildefil.'
+    const errName = err instanceof Error ? err.name : ''
+    if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+      errorMessage.value =
+        'Ingen tilgang til webkamera. Vennligst tillat kamera i nettleseren, eller velg en bildefil.'
     } else {
       errorMessage.value = 'Kunne ikke starte webkamera. Velg en bildefil i stedet.'
     }
@@ -153,7 +171,7 @@ async function captureWebcamPhoto() {
       }
     },
     'image/jpeg',
-    0.85
+    0.85,
   )
 }
 
@@ -172,7 +190,7 @@ async function processAndSetFile(file: File) {
     const compressed = await compressImage(file)
     setFile(compressed)
     isImageRemoved.value = false
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.warn('Kunne ikke komprimere bildet, bruker original:', err)
     setFile(file)
     isImageRemoved.value = false
@@ -216,7 +234,7 @@ const handleRestoreOriginalImage = () => {
 
 async function compressImage(file: File): Promise<File> {
   const maxDim = 1024
-  const quality = 0.80
+  const quality = 0.8
 
   // Rask forhåndssjekk: hvis filen allerede er en liten JPEG, sjekk dimensjoner raskt
   if (typeof createImageBitmap === 'function') {
@@ -224,7 +242,12 @@ async function compressImage(file: File): Promise<File> {
       const bitmap = await createImageBitmap(file)
       let { width, height } = bitmap
 
-      if (width <= maxDim && height <= maxDim && file.size <= 300 * 1024 && file.type === 'image/jpeg') {
+      if (
+        width <= maxDim &&
+        height <= maxDim &&
+        file.size <= 300 * 1024 &&
+        file.type === 'image/jpeg'
+      ) {
         bitmap.close()
         return file
       }
@@ -265,7 +288,7 @@ async function compressImage(file: File): Promise<File> {
             }
           },
           'image/jpeg',
-          quality
+          quality,
         )
       })
     } catch {
@@ -283,7 +306,12 @@ async function compressImage(file: File): Promise<File> {
       let width = img.width
       let height = img.height
 
-      if (width <= maxDim && height <= maxDim && file.size <= 300 * 1024 && file.type === 'image/jpeg') {
+      if (
+        width <= maxDim &&
+        height <= maxDim &&
+        file.size <= 300 * 1024 &&
+        file.type === 'image/jpeg'
+      ) {
         img.src = ''
         img.onload = null
         resolve(file)
@@ -328,7 +356,7 @@ async function compressImage(file: File): Promise<File> {
           }
         },
         'image/jpeg',
-        quality
+        quality,
       )
     }
 
@@ -352,8 +380,6 @@ const handleSubmit = async () => {
 
   try {
     const newDescription = description.value.trim()
-    const hasImageChange = selectedFile.value !== null || isImageRemoved.value
-
     let updatedImageUrl = props.checkin.imageUrl
     if (isImageRemoved.value && !selectedFile.value) {
       updatedImageUrl = ''
@@ -371,8 +397,8 @@ const handleSubmit = async () => {
           description: newDescription,
           imageFile: selectedFile.value,
           removeImage: isImageRemoved.value,
-          visibility: selectedVisibility.value
-        }
+          visibility: selectedVisibility.value,
+        },
       )
       if (res.imageUrl !== undefined) {
         updatedImageUrl = res.imageUrl
@@ -385,7 +411,7 @@ const handleSubmit = async () => {
         description: newDescription,
         imageFile: selectedFile.value,
         removeImage: isImageRemoved.value,
-        visibility: selectedVisibility.value
+        visibility: selectedVisibility.value,
       })
       if (res.imageUrl !== undefined) {
         updatedImageUrl = res.imageUrl
@@ -396,7 +422,7 @@ const handleSubmit = async () => {
       ...props.checkin,
       description: newDescription,
       imageUrl: updatedImageUrl,
-      visibility: selectedVisibility.value
+      visibility: selectedVisibility.value,
     }
 
     isSuccess.value = true
@@ -407,8 +433,9 @@ const handleSubmit = async () => {
         emit('close')
       }
     }, 1200)
-  } catch (err: any) {
-    errorMessage.value = err.message || 'Kunne ikke lagre endringene. Prøv igjen.'
+  } catch (err: unknown) {
+    errorMessage.value =
+      err instanceof Error ? err.message : 'Kunne ikke lagre endringene. Prøv igjen.'
   } finally {
     isSubmitting.value = false
   }
@@ -417,7 +444,11 @@ const handleSubmit = async () => {
 // Slett innsjekkingen permanent
 async function handleDeleteCheckin() {
   if (!props.checkin || isSubmitting.value || isDeleting.value) return
-  if (!confirm('Er du sikker på at du vil slette denne innsjekkingen? Hvis den har et tilhørende bilde vil også bildet bli slettet.')) {
+  if (
+    !confirm(
+      'Er du sikker på at du vil slette denne innsjekkingen? Hvis den har et tilhørende bilde vil også bildet bli slettet.',
+    )
+  ) {
     return
   }
 
@@ -430,19 +461,19 @@ async function handleDeleteCheckin() {
       await deletePrivateCheckin(
         user.value.userId,
         props.checkin.spotId || props.checkin.turpostId,
-        props.checkin.id
+        props.checkin.id,
       )
     } else {
       await deletePublicCheckin({
         turpostId: props.checkin.turpostId,
         checkinId: props.checkin.id,
-        timestamp: props.checkin.timestamp
+        timestamp: props.checkin.timestamp,
       })
     }
     emit('deleted', props.checkin.id)
     emit('close')
-  } catch (err: any) {
-    errorMessage.value = err?.message || 'Kunne ikke slette innsjekkingen.'
+  } catch (err: unknown) {
+    errorMessage.value = err instanceof Error ? err.message : 'Kunne ikke slette innsjekkingen.'
   } finally {
     isDeleting.value = false
   }
@@ -460,14 +491,19 @@ const modalStyle = computed(() => {
     return {}
   }
   return {
-    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`
+    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`,
   }
 })
 
 const startDrag = (e: PointerEvent) => {
   if (e.button !== 0) return
   const target = e.target as HTMLElement | null
-  if (target?.closest('button') || target?.closest('a') || target?.closest('input') || target?.closest('textarea')) {
+  if (
+    target?.closest('button') ||
+    target?.closest('a') ||
+    target?.closest('input') ||
+    target?.closest('textarea')
+  ) {
     return
   }
 
@@ -557,7 +593,9 @@ onUnmounted(() => {
               <div class="header-text">
                 <h3 class="post-title">Rediger innsjekking</h3>
                 <span class="post-subtitle">
-                  {{ turpostName || checkin?.turpostName || ('Turpost ' + (checkin?.turpostId || '')) }}
+                  {{
+                    turpostName || checkin?.turpostName || 'Turpost ' + (checkin?.turpostId || '')
+                  }}
                 </span>
               </div>
             </div>
@@ -696,7 +734,9 @@ onUnmounted(() => {
                     <Camera :size="18" class="action-icon" />
                     <div class="btn-text-wrap">
                       <span class="btn-title">Ta nytt bilde</span>
-                      <span class="btn-sub">{{ isMobileDevice ? 'Åpne kamera' : 'Bruk webkamera' }}</span>
+                      <span class="btn-sub">{{
+                        isMobileDevice ? 'Åpne kamera' : 'Bruk webkamera'
+                      }}</span>
                     </div>
                   </button>
 
@@ -820,7 +860,9 @@ onUnmounted(() => {
   background: #0f172a;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 25px 60px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
   display: flex;
   flex-direction: column;
   color: #f8fafc;
@@ -831,7 +873,9 @@ onUnmounted(() => {
 .edit-checkin-card.is-dragging {
   user-select: none;
   -webkit-user-select: none;
-  box-shadow: 0 35px 80px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 35px 80px rgba(0, 0, 0, 0.9),
+    0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .card-header {

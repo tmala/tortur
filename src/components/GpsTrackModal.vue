@@ -5,19 +5,17 @@ import {
   X,
   Download,
   Trash2,
-  Clock,
-  MapPin,
   Check,
   Play,
   Square,
   AlertTriangle,
   BookmarkPlus,
-  FolderHeart
+  FolderHeart,
 } from 'lucide-vue-next'
 import {
   type TrackPoint,
   calculateDistanceMeters,
-  formatDistance
+  formatDistance,
 } from '@/composables/useGeolocation'
 import { useGpsTrackStore } from '@/stores/gpsTrack'
 
@@ -86,7 +84,7 @@ const formatDate = (d: Date | null) => {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   })
 }
 
@@ -110,7 +108,9 @@ const handleDownloadGpx = () => {
   gpx += `    <trkseg>\n`
 
   for (const pt of props.trackPoints) {
-    const timeXml = pt.timestamp ? `\n        <time>${new Date(pt.timestamp).toISOString()}</time>` : ''
+    const timeXml = pt.timestamp
+      ? `\n        <time>${new Date(pt.timestamp).toISOString()}</time>`
+      : ''
     gpx += `      <trkpt lat="${pt.lat.toFixed(6)}" lon="${pt.lng.toFixed(6)}">${timeXml}\n      </trkpt>\n`
   }
 
@@ -178,7 +178,7 @@ const modalStyle = computed(() => {
     return {}
   }
   return {
-    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`
+    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`,
   }
 })
 
@@ -242,7 +242,7 @@ watch(
       hasSaved.value = false
       dragPosition.value = { x: 0, y: 0 }
     }
-  }
+  },
 )
 
 const handleKeyDown = (e: KeyboardEvent) => {
@@ -311,7 +311,9 @@ onUnmounted(() => {
               </div>
               <div class="stat-card">
                 <span class="stat-label">Startet</span>
-                <span class="stat-value stat-small">{{ startTime ? formatDate(startTime) : '–' }}</span>
+                <span class="stat-value stat-small">{{
+                  startTime ? formatDate(startTime) : '–'
+                }}</span>
               </div>
             </div>
 
@@ -319,7 +321,8 @@ onUnmounted(() => {
             <div class="info-banner">
               <div class="info-icon">💾</div>
               <p class="info-text">
-                Sporet lagres fortløpende i nettleseren din (localStorage). Du kan laste det ned som en standard <strong>.gpx-fil</strong> for Strava, UT.no, Garmin eller Google Earth.
+                Sporet lagres fortløpende i nettleseren din (localStorage). Du kan laste det ned som
+                en standard <strong>.gpx-fil</strong> for Strava, UT.no, Garmin eller Google Earth.
               </p>
             </div>
 
@@ -334,9 +337,7 @@ onUnmounted(() => {
                   <button class="btn-danger-confirm" @click="handleDeleteTrack">
                     Ja, slett spor
                   </button>
-                  <button class="btn-cancel" @click="showConfirmDelete = false">
-                    Avbryt
-                  </button>
+                  <button class="btn-cancel" @click="showConfirmDelete = false">Avbryt</button>
                 </div>
               </div>
             </Transition>
@@ -360,9 +361,7 @@ onUnmounted(() => {
                     <Check :size="15" />
                     <span>Bekreft lagring</span>
                   </button>
-                  <button class="btn-cancel-save" @click="showSaveForm = false">
-                    Avbryt
-                  </button>
+                  <button class="btn-cancel-save" @click="showSaveForm = false">Avbryt</button>
                 </div>
               </div>
 
@@ -376,7 +375,9 @@ onUnmounted(() => {
               >
                 <Check v-if="hasSaved" :size="18" class="download-check" />
                 <BookmarkPlus v-else :size="18" />
-                <span>{{ hasSaved ? 'Sporet er lagret i Mine spor!' : 'Lagre spor til Mine spor' }}</span>
+                <span>{{
+                  hasSaved ? 'Sporet er lagret i Mine spor!' : 'Lagre spor til Mine spor'
+                }}</span>
               </button>
 
               <!-- Last ned GPX -->
@@ -451,7 +452,9 @@ onUnmounted(() => {
   background: #0f172a;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 25px 60px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
   display: flex;
   flex-direction: column;
   color: #f8fafc;
@@ -463,7 +466,9 @@ onUnmounted(() => {
   user-select: none;
   -webkit-user-select: none;
   transition: none !important;
-  box-shadow: 0 35px 80px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(249, 115, 22, 0.3);
+  box-shadow:
+    0 35px 80px rgba(0, 0, 0, 0.9),
+    0 0 0 1px rgba(249, 115, 22, 0.3);
 }
 
 /* Header */

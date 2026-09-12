@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import {
-  ThumbsUp,
-  MessageSquare,
-  Send,
-  Trash2,
-  User,
-  Loader2,
-  Smile
-} from 'lucide-vue-next'
-import type { FirebaseCheckinItem, CheckinReactionType, CheckinReaction, CheckinComment } from '@/composables/useAuth'
+import { ref, computed, onUnmounted, nextTick } from 'vue'
+import { ThumbsUp, MessageSquare, Send, Trash2, User, Loader2 } from 'lucide-vue-next'
+import type {
+  FirebaseCheckinItem,
+  CheckinReactionType,
+  CheckinReaction,
+  CheckinComment,
+} from '@/composables/useAuth'
 import { useCheckinSocial, REACTION_OPTIONS } from '@/composables/useCheckinSocial'
 
 const props = defineProps<{
@@ -24,7 +21,6 @@ const emit = defineEmits<{
 }>()
 
 const {
-  isSubmitting,
   getReactionsList,
   getUserReaction,
   getCommentsList,
@@ -32,7 +28,7 @@ const {
   canDeleteComment,
   toggleReaction,
   addComment,
-  deleteComment
+  deleteComment,
 } = useCheckinSocial()
 
 const commentText = ref('')
@@ -42,7 +38,7 @@ const showPicker = ref(false)
 const isCommentsExpanded = ref(true)
 const isCommentInputVisible = ref(false)
 const commentInputRef = ref<HTMLInputElement | null>(null)
-const pickerTimeout = ref<any>(null)
+const pickerTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 const actionError = ref<string | null>(null)
 
 function handleToggleCommentInput() {
@@ -59,7 +55,9 @@ function handleToggleCommentInput() {
 // Reaksjoner
 const reactions = computed(() => getReactionsList(props.checkin))
 const myReaction = computed(() => getUserReaction(props.checkin, props.currentUserId))
-const isOwnCheckin = computed(() => Boolean(props.currentUserId && props.checkin.userId === props.currentUserId))
+const isOwnCheckin = computed(() =>
+  Boolean(props.currentUserId && props.checkin.userId === props.currentUserId),
+)
 
 // Grupper reaksjoner for oppsummering (f.eks. 👍 2, ❤️ 1)
 const reactionSummary = computed(() => {
@@ -73,7 +71,7 @@ const reactionSummary = computed(() => {
       map.set(r.reaction, {
         emoji: r.emoji || '👍',
         count: 1,
-        users: [r.userName || 'Ukjent']
+        users: [r.userName || 'Ukjent'],
       })
     }
   }
@@ -83,7 +81,7 @@ const reactionSummary = computed(() => {
 // Tooltip med navn på alle som har reagert
 const reactionsTooltip = computed(() => {
   if (reactions.value.length === 0) return ''
-  return reactions.value.map(r => `${r.userName} (${r.emoji})`).join(', ')
+  return reactions.value.map((r) => `${r.userName} (${r.emoji})`).join(', ')
 })
 
 // Kommentarer
@@ -98,7 +96,7 @@ function formatDate(isoString?: string): string {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     })
   } catch {
     return isoString
@@ -116,11 +114,6 @@ function handleMouseLeavePicker() {
   pickerTimeout.value = setTimeout(() => {
     showPicker.value = false
   }, 350)
-}
-
-function togglePicker() {
-  if (isOwnCheckin.value || !props.currentUserId) return
-  showPicker.value = !showPicker.value
 }
 
 // Hovedknapp for reaksjon
@@ -144,7 +137,7 @@ async function applyReaction(type: CheckinReactionType) {
       reactionType: type,
       isPrivate: props.isPrivate,
       spotId: props.spotId || props.checkin.spotId,
-      currentCheckin: props.checkin
+      currentCheckin: props.checkin,
     })
 
     // Lokal oppdatering av props.checkin for umiddelbar responsivitet
@@ -157,11 +150,11 @@ async function applyReaction(type: CheckinReactionType) {
 
     const updated: FirebaseCheckinItem = {
       ...props.checkin,
-      likes: newLikes
+      likes: newLikes,
     }
     emit('updated', updated)
-  } catch (err: any) {
-    actionError.value = err.message || 'Kunne ikke oppdatere reaksjon.'
+  } catch (err: unknown) {
+    actionError.value = err instanceof Error ? err.message : 'Kunne ikke oppdatere reaksjon.'
   }
 }
 
@@ -179,7 +172,7 @@ async function handleSendComment() {
       authorUserId: props.checkin.userId,
       text,
       isPrivate: props.isPrivate,
-      spotId: props.spotId || props.checkin.spotId
+      spotId: props.spotId || props.checkin.spotId,
     })
 
     commentText.value = ''
@@ -188,16 +181,16 @@ async function handleSendComment() {
 
     const newComments: Record<string, CheckinComment> = {
       ...(props.checkin.comments || {}),
-      [newComment.id]: newComment
+      [newComment.id]: newComment,
     }
 
     const updated: FirebaseCheckinItem = {
       ...props.checkin,
-      comments: newComments
+      comments: newComments,
     }
     emit('updated', updated)
-  } catch (err: any) {
-    actionError.value = err.message || 'Kunne ikke sende kommentar.'
+  } catch (err: unknown) {
+    actionError.value = err instanceof Error ? err.message : 'Kunne ikke sende kommentar.'
   } finally {
     isPostingComment.value = false
   }
@@ -216,7 +209,7 @@ async function handleDeleteComment(comment: CheckinComment) {
       commentId: comment.id,
       commentUserId: comment.userId,
       isPrivate: props.isPrivate,
-      spotId: props.spotId || props.checkin.spotId
+      spotId: props.spotId || props.checkin.spotId,
     })
 
     const newComments: Record<string, CheckinComment> = { ...(props.checkin.comments || {}) }
@@ -224,11 +217,11 @@ async function handleDeleteComment(comment: CheckinComment) {
 
     const updated: FirebaseCheckinItem = {
       ...props.checkin,
-      comments: newComments
+      comments: newComments,
     }
     emit('updated', updated)
-  } catch (err: any) {
-    actionError.value = err.message || 'Kunne ikke slette kommentar.'
+  } catch (err: unknown) {
+    actionError.value = err instanceof Error ? err.message : 'Kunne ikke slette kommentar.'
   } finally {
     deletingCommentId.value = null
   }
@@ -249,17 +242,9 @@ onUnmounted(() => {
     <!-- Oppsummeringslinje (vises hvis det er reaksjoner eller kommentarer) -->
     <div v-if="reactions.length > 0 || comments.length > 0" class="social-summary-bar">
       <!-- Reaksjoner -->
-      <div
-        v-if="reactions.length > 0"
-        class="reactions-summary"
-        :title="reactionsTooltip"
-      >
+      <div v-if="reactions.length > 0" class="reactions-summary" :title="reactionsTooltip">
         <span class="emoji-cluster">
-          <span
-            v-for="s in reactionSummary"
-            :key="s.emoji"
-            class="summary-emoji"
-          >
+          <span v-for="s in reactionSummary" :key="s.emoji" class="summary-emoji">
             {{ s.emoji }}
           </span>
         </span>
@@ -308,17 +293,17 @@ onUnmounted(() => {
           class="btn-social-action btn-reaction"
           :class="{
             'is-reacted': !!myReaction,
-            'is-disabled': isOwnCheckin || !currentUserId
+            'is-disabled': isOwnCheckin || !currentUserId,
           }"
           :disabled="isOwnCheckin || !currentUserId"
           :title="
             isOwnCheckin
               ? 'Du kan ikke like din egen innsjekking'
               : !currentUserId
-              ? 'Logg inn for å like'
-              : myReaction
-              ? 'Fjern reaksjon'
-              : 'Trykk for tommel opp, eller hold over for flere reaksjoner'
+                ? 'Logg inn for å like'
+                : myReaction
+                  ? 'Fjern reaksjon'
+                  : 'Trykk for tommel opp, eller hold over for flere reaksjoner'
           "
           @click="handleMainReactionClick"
         >
@@ -334,7 +319,13 @@ onUnmounted(() => {
         class="btn-social-action"
         :class="{ 'is-active': isCommentInputVisible }"
         :disabled="!currentUserId"
-        :title="!currentUserId ? 'Logg inn for å kommentere' : (isCommentInputVisible ? 'Skjul kommentarfelt' : 'Skriv en kommentar')"
+        :title="
+          !currentUserId
+            ? 'Logg inn for å kommentere'
+            : isCommentInputVisible
+              ? 'Skjul kommentarfelt'
+              : 'Skriv en kommentar'
+        "
         @click="handleToggleCommentInput"
       >
         <MessageSquare :size="13" />
@@ -343,7 +334,10 @@ onUnmounted(() => {
     </div>
 
     <!-- Kommentarseksjon -->
-    <div v-if="(isCommentsExpanded && comments.length > 0) || isCommentInputVisible" class="comments-section">
+    <div
+      v-if="(isCommentsExpanded && comments.length > 0) || isCommentInputVisible"
+      class="comments-section"
+    >
       <!-- Kommentarliste -->
       <div v-if="isCommentsExpanded && comments.length > 0" class="comments-list">
         <div
@@ -353,12 +347,7 @@ onUnmounted(() => {
           :class="{ 'is-own-comment': c.userId === currentUserId }"
         >
           <!-- Forfatter-avatar -->
-          <img
-            v-if="c.userAvatar"
-            :src="c.userAvatar"
-            :alt="c.userName"
-            class="comment-avatar"
-          />
+          <img v-if="c.userAvatar" :src="c.userAvatar" :alt="c.userName" class="comment-avatar" />
           <div v-else class="comment-avatar-fallback">
             <User :size="12" />
           </div>
@@ -412,7 +401,10 @@ onUnmounted(() => {
       </div>
 
       <!-- Informasjon hvis bruker ikke kan kommentere -->
-      <div v-else-if="isCommentInputVisible && currentUserId && !canWriteComment" class="comment-restricted-hint">
+      <div
+        v-else-if="isCommentInputVisible && currentUserId && !canWriteComment"
+        class="comment-restricted-hint"
+      >
         🔒 Kun venner av innsjekkingens eier kan kommentere.
       </div>
     </div>
@@ -516,7 +508,9 @@ onUnmounted(() => {
   background: rgba(15, 23, 42, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(12px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 0 12px rgba(56, 189, 248, 0.2);
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.6),
+    0 0 12px rgba(56, 189, 248, 0.2);
   border-radius: 30px;
   padding: 4px 8px;
   z-index: 50;
@@ -750,13 +744,19 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .popover-fade-enter-active,
 .popover-fade-leave-active {
-  transition: opacity 0.15s, transform 0.15s;
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
 }
 
 .popover-fade-enter-from,

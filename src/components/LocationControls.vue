@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
-  Navigation,
   Layers,
-  Compass,
   Route,
   FileDown,
-  Trash2,
   AlertTriangle,
   Loader2,
   Download,
@@ -17,7 +14,6 @@ import {
   Map as MapIcon,
   Anchor,
   Radio,
-  Settings,
   MapPin,
   ChevronDown,
   X,
@@ -395,8 +391,6 @@ const handleInstallClick = async () => {
                 {{ savedTracksCount }}
               </span>
             </button>
-
-
 
             <!-- AIS Båttrafikk-knapp – kun synlig for admin -->
             <button
@@ -956,8 +950,6 @@ const handleInstallClick = async () => {
   border-radius: 4px;
   font-size: 11px;
 }
-
-
 
 .icon-btn {
   background: #1e293b;

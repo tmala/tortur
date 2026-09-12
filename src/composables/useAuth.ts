@@ -32,6 +32,7 @@ export interface CheckinResult {
   imageUrl: string
   userName?: string
   userAvatar?: string
+  visibility?: 'all' | 'friends' | 'private'
 }
 
 export type CheckinReactionType = 'like' | 'love' | 'laugh' | 'sad' | 'wow' | 'angry'

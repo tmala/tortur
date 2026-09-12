@@ -145,7 +145,9 @@ async function handleDeletePrivateSpot(spotId: string) {
 
 function handleViewSpotOnMap(spot: TurpostItem | SpotSuggestion) {
   if (!mapViewerRef.value) return
-  if ('suggestedAt' in spot || 'csvLine' in spot) {
+  if ((spot as TurpostItem).isPrivate) {
+    mapViewerRef.value.flyToPost(spot as TurpostItem)
+  } else if ('suggestedAt' in spot) {
     mapViewerRef.value.showSpotSuggestion(spot as SpotSuggestion)
   } else {
     mapViewerRef.value.flyToPost(spot as TurpostItem)

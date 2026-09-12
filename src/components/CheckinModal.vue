@@ -118,10 +118,11 @@ async function startWebcam() {
       videoRef.value.srcObject = stream
       await videoRef.value.play().catch(() => {})
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     stopWebcam()
     console.warn('Feil ved åpning av webkamera:', err)
-    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+    const errName = err instanceof Error ? err.name : ''
+    if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
       errorMessage.value = 'Ingen tilgang til webkamera. Vennligst tillat kamera i nettleseren, eller velg en bildefil.'
     } else {
       errorMessage.value = 'Kunne ikke starte webkamera. Velg en bildefil i stedet.'
@@ -202,7 +203,7 @@ async function processAndSetImage(file: File) {
     }
     selectedFile.value = compressed
     previewUrl.value = URL.createObjectURL(compressed)
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.warn('Bildeoptimalisering feilet, bruker original:', err)
     if (previewUrl.value) {
       URL.revokeObjectURL(previewUrl.value)
@@ -402,7 +403,7 @@ const handleSubmit = async () => {
       }
     }
 
-    (result as any).visibility = selectedVisibility.value
+    result.visibility = selectedVisibility.value
     isSuccess.value = true
     emit('submitted', result)
 
@@ -412,8 +413,8 @@ const handleSubmit = async () => {
         emit('close')
       }
     }, 1800)
-  } catch (err: any) {
-    errorMessage.value = err.message || 'Kunne ikke fullføre innsjekkingen. Prøv igjen.'
+  } catch (err: unknown) {
+    errorMessage.value = err instanceof Error ? err.message : 'Kunne ikke fullføre innsjekkingen. Prøv igjen.'
   } finally {
     isSubmitting.value = false
   }
