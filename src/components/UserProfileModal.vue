@@ -144,28 +144,23 @@ const handleForceRefresh = async () => {
   }
 }
 
-// Sporer hvilke innsjekkinger som er manuelt ekspandert/kollapset i listen.
-// Som standard er de 3 første (ferskeste) ekspandert.
+// Sporer hvilke innsjekkinger som er manuelt ekspandert i listen.
+// Som standard er alle innsjekkinger minimert (ikke ekspandert).
 const expandedCheckinIds = ref<Set<string>>(new Set())
-const collapsedCheckinIds = ref<Set<string>>(new Set())
 
-const isExpanded = (id: string | number, index?: number): boolean => {
-  const key = String(id)
-  if (expandedCheckinIds.value.has(key)) return true
-  if (collapsedCheckinIds.value.has(key)) return false
-  return index !== undefined ? index < 3 : false
+const isExpanded = (id: string | number): boolean => {
+  return expandedCheckinIds.value.has(String(id))
 }
 
-const toggleExpand = (id: string | number, index?: number) => {
+const toggleExpand = (id: string | number) => {
   const key = String(id)
-  const currentlyExpanded = isExpanded(key, index)
-  if (currentlyExpanded) {
-    expandedCheckinIds.value.delete(key)
-    collapsedCheckinIds.value.add(key)
+  const next = new Set(expandedCheckinIds.value)
+  if (next.has(key)) {
+    next.delete(key)
   } else {
-    collapsedCheckinIds.value.delete(key)
-    expandedCheckinIds.value.add(key)
+    next.add(key)
   }
+  expandedCheckinIds.value = next
 }
 
 // Lightbox for bildevisning
@@ -282,7 +277,6 @@ watch(
     if (open) {
       dragPosition.value = { x: 0, y: 0 }
       expandedCheckinIds.value.clear()
-      collapsedCheckinIds.value.clear()
     }
   }
 )
@@ -345,6 +339,25 @@ onUnmounted(() => {
                 </div>
               </div>
 
+              <!-- Kompakte tellere for innsjekkinger og unike turposter -->
+              <div class="header-stats-badges">
+                <div
+                  class="header-stat-badge trophy"
+                  :title="`${sortedCheckins.length} ${sortedCheckins.length === 1 ? 'innsjekking' : 'innsjekkinger'}`"
+                >
+                  <Trophy :size="15" />
+                  <span class="header-stat-value">{{ sortedCheckins.length }}</span>
+                </div>
+
+                <div
+                  class="header-stat-badge mountain"
+                  :title="`${uniqueTurpostIds.size} ${uniqueTurpostIds.size === 1 ? 'unik turpost' : 'unike turposter'}`"
+                >
+                  <Mountain :size="15" />
+                  <span class="header-stat-value">{{ uniqueTurpostIds.size }}</span>
+                </div>
+              </div>
+
               <!-- Lukk-knapp oppe til høyre -->
               <button
                 class="btn-profile-close"
@@ -393,42 +406,22 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Statistikk-striper (2 kolonner, kompakt) -->
-          <div class="profile-stats-grid">
-            <div class="stat-card">
-              <div class="stat-icon-wrap trophy">
-                <Trophy :size="18" />
-              </div>
-              <div class="stat-content">
-                <span class="stat-number">{{ sortedCheckins.length }}</span>
-                <span class="stat-label">Innsjekkinger</span>
-              </div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-icon-wrap mountain">
-                <Mountain :size="18" />
-              </div>
-              <div class="stat-content">
-                <span class="stat-number">{{ uniqueTurpostIds.size }}</span>
-                <span class="stat-label">Unike turposter</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Snarveier side om side: Mine GPS-spor, Private turposter og Venner -->
-          <div class="profile-shortcuts-grid">
-            <!-- Snarvei til Mine GPS-spor -->
+          <!-- Snarveier side om side: Mine spor, Private turposter, Venner og (for admin) Forslag -->
+          <div
+            class="profile-shortcuts-grid"
+            :class="{ 'has-4-cols': props.isAdmin && (spotSuggestionsCount || 0) > 0 }"
+          >
+            <!-- Snarvei til Mine spor -->
             <button
               class="profile-shortcut-card profile-tracks-card"
-              @click="emit('open-saved-tracks'); emit('close')"
+              @click="emit('open-saved-tracks')"
               title="Se og administrer dine lagrede GPS-spor"
             >
               <div class="shortcut-icon-wrap tracks-icon">
                 <Route :size="17" />
               </div>
               <div class="shortcut-texts">
-                <span class="shortcut-title">Mine GPS-spor</span>
+                <span class="shortcut-title">Mine spor</span>
                 <span class="shortcut-sub">
                   {{ savedTracksCount || 0 }} {{ (savedTracksCount || 0) === 1 ? 'spor' : 'spor' }}
                 </span>
@@ -438,7 +431,7 @@ onUnmounted(() => {
             <!-- Snarvei til Private turposter -->
             <button
               class="profile-shortcut-card profile-spots-card"
-              @click="emit('open-my-spots'); emit('close')"
+              @click="emit('open-my-spots')"
               title="Se og administrer dine private turposter"
             >
               <div class="shortcut-icon-wrap spots-icon">
@@ -455,7 +448,7 @@ onUnmounted(() => {
             <!-- Snarvei til Venner -->
             <button
               class="profile-shortcut-card profile-friends-card"
-              @click="emit('open-friends'); emit('close')"
+              @click="emit('open-friends')"
               title="Se dine venner og administrer synlighet"
             >
               <div class="shortcut-icon-wrap friends-icon">
@@ -471,26 +464,28 @@ onUnmounted(() => {
                 </span>
               </div>
             </button>
-          </div>
 
-          <!-- For admin: Forslag turposter (kompakt) -->
-          <button
-            v-if="props.isAdmin"
-            class="profile-suggestions-banner"
-            @click="emit('open-spot-suggestions'); emit('close')"
-            title="Se forslag til turposter"
-          >
-            <div class="profile-suggestions-left">
+            <!-- Snarvei til Forslag turposter (kun admin og kun ved nye forslag) -->
+            <button
+              v-if="props.isAdmin && (spotSuggestionsCount || 0) > 0"
+              class="profile-shortcut-card profile-suggestions-card"
+              @click="emit('open-spot-suggestions')"
+              title="Se innkommende forslag til turposter"
+            >
               <div class="shortcut-icon-wrap suggestions-icon">
-                <ClipboardList :size="16" />
+                <ClipboardList :size="17" />
+                <span class="suggestions-pending-dot">
+                  {{ spotSuggestionsCount }}
+                </span>
               </div>
-              <span class="suggestions-title">Forslag turposter</span>
-              <span v-if="spotSuggestionsCount" class="suggestions-count-badge">
-                {{ spotSuggestionsCount }}
-              </span>
-            </div>
-            <span class="suggestions-arrow">Vis forslag →</span>
-          </button>
+              <div class="shortcut-texts">
+                <span class="shortcut-title">Forslag</span>
+                <span class="shortcut-sub">
+                  {{ spotSuggestionsCount }} {{ spotSuggestionsCount === 1 ? 'nytt' : 'nye' }}
+                </span>
+              </div>
+            </button>
+          </div>
 
           <!-- Seksjonstitel -->
           <div class="section-divider">
@@ -521,13 +516,13 @@ onUnmounted(() => {
                 v-for="(item, idx) in sortedCheckins"
                 :key="item.id || idx"
                 class="user-checkin-card"
-                :class="{ 'card-expanded': isExpanded(item.id || idx, idx) }"
+                :class="{ 'card-expanded': isExpanded(item.id || idx) }"
               >
                 <div class="checkin-card-main">
                   <!-- Klikkbart hode: Viser turpostnavn, dato og pil -->
                   <div
                     class="checkin-card-header"
-                    @click="toggleExpand(item.id || idx, idx)"
+                    @click="toggleExpand(item.id || idx)"
                     title="Klikk for å vise/skjule detaljer og bilde"
                   >
                     <div class="turpost-name-row">
@@ -574,14 +569,14 @@ onUnmounted(() => {
                       <ChevronDown
                         :size="16"
                         class="chevron-expand"
-                        :class="{ 'is-open': isExpanded(item.id || idx, idx) }"
+                        :class="{ 'is-open': isExpanded(item.id || idx) }"
                       />
                     </div>
                   </div>
 
                   <!-- Ekspanderbare detaljer (notat og bilde) -->
                   <div
-                    v-if="isExpanded(item.id || idx, idx)"
+                    v-if="isExpanded(item.id || idx)"
                     class="checkin-card-details"
                   >
                     <p v-if="item.description" class="checkin-desc">
@@ -952,80 +947,79 @@ onUnmounted(() => {
   color: #ffffff;
 }
 
-/* Statistikk */
-.profile-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(15, 23, 42, 0.3);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.stat-card {
+/* Kompakte tellere i header */
+.header-stats-badges {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 8px 12px;
-  border-radius: 12px;
-}
-
-.stat-icon-wrap {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  gap: 6px;
   flex-shrink: 0;
 }
 
-.stat-icon-wrap.trophy {
-  background: rgba(245, 158, 11, 0.15);
+.header-stat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: default;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.header-stat-badge:hover {
+  transform: translateY(-1px);
+}
+
+.header-stat-badge.trophy {
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.35);
   color: #fbbf24;
 }
 
-.stat-icon-wrap.mountain {
-  background: rgba(16, 185, 129, 0.15);
+.header-stat-badge.trophy:hover {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #fbbf24;
+}
+
+.header-stat-badge.mountain {
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.35);
   color: #34d399;
 }
 
-.stat-content {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+.header-stat-badge.mountain:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #34d399;
 }
 
-.stat-number {
-  font-size: 15px;
-  font-weight: 700;
+.header-stat-value {
   color: #f8fafc;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
-.stat-label {
-  font-size: 10px;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
-}
-
-/* Snarveier (Mine GPS-spor, Private turposter og Venner) */
+/* Snarveier (Mine spor, Private turposter, Venner og ev. Forslag) */
 .profile-shortcuts-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  margin: 8px 16px 0 16px;
+  margin: 12px 16px 0 16px;
+}
+
+.profile-shortcuts-grid.has-4-cols {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 480px) {
+  .profile-shortcuts-grid.has-4-cols {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 360px) {
-  .profile-shortcuts-grid {
+  .profile-shortcuts-grid:not(.has-4-cols) {
     grid-template-columns: 1fr;
   }
 }
@@ -1150,53 +1144,34 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-/* Snarvei-banner for Forslag turposter (kompakt) */
-.profile-suggestions-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 6px 16px 0 16px;
-  padding: 8px 12px;
+.profile-suggestions-card {
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.8));
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  border-radius: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s ease;
-  width: calc(100% - 32px);
+  border-color: rgba(245, 158, 11, 0.35);
 }
 
-.profile-suggestions-banner:hover {
+.profile-suggestions-card:hover {
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(15, 23, 42, 0.9));
   border-color: #f59e0b;
   transform: translateY(-1px);
 }
 
-.profile-suggestions-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.suggestions-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #f8fafc;
-}
-
-.suggestions-count-badge {
+.suggestions-pending-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
   background: #f59e0b;
   color: #0f172a;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 10px;
-}
-
-.suggestions-arrow {
-  font-size: 12px;
-  font-weight: 600;
-  color: #f59e0b;
+  font-size: 9px;
+  font-weight: 800;
+  border-radius: 8px;
+  min-width: 15px;
+  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  box-shadow: 0 0 0 2px #0f172a;
+  animation: pulse 1.8s infinite ease-in-out;
 }
 
 /* Seksjonslinje */

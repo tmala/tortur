@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useFriends, registerPublicUser, searchPublicUsers } from '../composables/useFriends'
+import { mount, flushPromises } from '@vue/test-utils'
+import { useFriends, registerPublicUser, searchPublicUsers, fetchFriendCheckins } from '../composables/useFriends'
+import * as friendsModule from '../composables/useFriends'
 import { useAuth } from '../composables/useAuth'
+import FriendProfileModal from '../components/FriendProfileModal.vue'
 
 describe('useFriends - Friends system and check-in visibility', () => {
   beforeEach(() => {
@@ -380,6 +383,92 @@ describe('useFriends - Friends system and check-in visibility', () => {
     expect(result[0]?.comments?.comm_1).toBeDefined()
     expect(result[0]?.comments?.comm_1?.text).toBe('Bra jobba!')
     expect(result[0]?.userId).toBe('friend_50')
+  })
+
+  it('FriendProfileModal: starts with all check-ins minimized and expands on click', async () => {
+    // Mock useFriends to inject checkins directly, bypassing Firebase
+    const mockCheckins = [
+      {
+        id: 'chk_1',
+        turpostId: 'tp_1',
+        turpostName: 'Storronden',
+        timestamp: '2026-09-01T10:00:00Z',
+        description: 'Flott tur til Storronden!',
+        visibility: 'friends',
+        userId: 'friend_test',
+        userName: 'Fjellturvenn'
+      },
+      {
+        id: 'chk_2',
+        turpostId: 'tp_2',
+        turpostName: 'Rondslottet',
+        timestamp: '2026-09-02T10:00:00Z',
+        description: 'Vindfullt på toppen',
+        visibility: 'friends',
+        userId: 'friend_test',
+        userName: 'Fjellturvenn'
+      }
+    ]
+
+    vi.spyOn(friendsModule, 'useFriends').mockReturnValue({
+      fetchFriendCheckins: vi.fn().mockResolvedValue(mockCheckins),
+      friends: { value: [] } as any,
+      loadFriends: vi.fn(),
+      sendFriendRequest: vi.fn(),
+      acceptFriendRequest: vi.fn(),
+      declineFriendRequest: vi.fn(),
+      removeFriend: vi.fn(),
+      isFriend: vi.fn(),
+      outgoingRequests: { value: [] } as any,
+      incomingRequests: { value: [] } as any,
+      defaultVisibility: { value: 'all' } as any,
+      setDefaultVisibility: vi.fn(),
+      loadDefaultVisibility: vi.fn(),
+      setCheckinVisibility: vi.fn(),
+      pendingSuggestions: { value: [] } as any,
+      loadPendingSuggestions: vi.fn(),
+      approveSuggestion: vi.fn(),
+      rejectSuggestion: vi.fn()
+    } as any)
+
+    const wrapper = mount(FriendProfileModal, {
+      props: {
+        isOpen: true,
+        friend: {
+          userId: 'friend_test',
+          userName: 'Fjellturvenn'
+        },
+        currentUserId: 'me_user'
+      }
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // Som standard skal alle innsjekkinger være minimert (notater skjult)
+    expect(wrapper.text()).not.toContain('Flott tur til Storronden!')
+    expect(wrapper.text()).not.toContain('Vindfullt på toppen')
+
+    // Klikk på den første innsjekkingen for å ekspandere
+    const headerBtns = wrapper.findAll('.checkin-header-btn')
+    expect(headerBtns.length).toBe(2)
+    await headerBtns[0]!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    // Nå skal første notat være synlig (første i lista er chk_2 – nyeste), andre minimert
+    const textAfterExpand = wrapper.text()
+    expect(
+      textAfterExpand.includes('Flott tur til Storronden!') ||
+      textAfterExpand.includes('Vindfullt på toppen')
+    ).toBe(true)
+
+    // Klikk på den ekspanderte knappen igjen for å minimere
+    await headerBtns[0]!.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).not.toContain('Flott tur til Storronden!')
+    expect(wrapper.text()).not.toContain('Vindfullt på toppen')
+
+    wrapper.unmount()
   })
 })
 

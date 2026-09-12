@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import App from '../App.vue'
+import MapView from '../views/MapView.vue'
 import LocationControls from '../components/LocationControls.vue'
 import TurposterPanel from '../components/TurposterPanel.vue'
 import CheckinModal from '../components/CheckinModal.vue'
@@ -654,22 +655,22 @@ describe('UserProfileModal', () => {
     expect(bodyText).toContain('Gavelen')
     expect(bodyText).toContain('Vardetangen')
 
-    // De 3 ferskeste innsjekkingene skal som standard være ekspandert
-    expect(document.body.textContent).toContain('Nyeste tur!')
+    // Alle innsjekkinger skal som standard være minimert (detaljer skjult)
+    expect(document.body.textContent).not.toContain('Nyeste tur!')
 
-    // Klikk for å kollapse det første kortet
+    // Klikk for å ekspandere det første kortet
     const firstCardHeader = document.body.querySelector('.checkin-card-header') as HTMLElement
     expect(firstCardHeader).not.toBeNull()
     firstCardHeader.click()
     await wrapper.vm.$nextTick()
 
-    // Nå skal notatet for første kort være skjult
-    expect(document.body.textContent).not.toContain('Nyeste tur!')
+    // Nå skal notatet for første kort være synlig
+    expect(document.body.textContent).toContain('Nyeste tur!')
 
-    // Klikk igjen for å ekspandere kortet på nytt
+    // Klikk igjen for å minimere kortet på nytt
     firstCardHeader.click()
     await wrapper.vm.$nextTick()
-    expect(document.body.textContent).toContain('Nyeste tur!')
+    expect(document.body.textContent).not.toContain('Nyeste tur!')
 
     // Vardetangen (nyeste) skal komme før Gavelen i DOM
     const currentBody = document.body.textContent || ''
@@ -732,6 +733,156 @@ describe('UserProfileModal', () => {
     const badge = document.body.querySelector('.private-badge-pill')
     expect(badge).not.toBeNull()
   })
+
+  it('emits open-friends, open-saved-tracks, open-my-spots without emitting close', async () => {
+    const sampleUser = {
+      userId: 'user_123',
+      userName: 'Test Bruker',
+      email: 'test@example.com',
+      avatarUrl: '',
+      lastLogin: '2026-09-10T00:00:00Z'
+    }
+
+    const wrapper = mount(UserProfileModal, {
+      props: {
+        isOpen: true,
+        user: sampleUser as any,
+        checkins: [],
+        friendsCount: 3,
+        savedTracksCount: 2,
+        mySpotsCount: 5
+      }
+    })
+
+    const friendsBtn = document.body.querySelector('.profile-friends-card') as HTMLButtonElement
+    expect(friendsBtn).not.toBeNull()
+    friendsBtn.click()
+    expect(wrapper.emitted('open-friends')).toHaveLength(1)
+    expect(wrapper.emitted('close')).toBeUndefined()
+
+    const tracksBtn = document.body.querySelector('.profile-tracks-card') as HTMLButtonElement
+    expect(tracksBtn).not.toBeNull()
+    tracksBtn.click()
+    expect(wrapper.emitted('open-saved-tracks')).toHaveLength(1)
+    expect(wrapper.emitted('close')).toBeUndefined()
+
+    const spotsBtn = document.body.querySelector('.profile-spots-card') as HTMLButtonElement
+    expect(spotsBtn).not.toBeNull()
+    spotsBtn.click()
+    expect(wrapper.emitted('open-my-spots')).toHaveLength(1)
+    expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('renders compact stat badges in header with tooltips and counts', async () => {
+    const sampleUser = {
+      userId: 'user_123',
+      userName: 'Test Bruker',
+      email: 'test@example.com',
+      avatarUrl: '',
+      lastLogin: '2026-09-10T00:00:00Z'
+    }
+
+    const checkins = [
+      {
+        id: 'c_1',
+        userId: 'user_123',
+        userName: 'Test Bruker',
+        userAvatar: '',
+        turpostId: 'post_1',
+        turpostName: 'Fløyen',
+        timestamp: '2026-09-01T10:00:00Z',
+        description: 'Fin tur',
+        imageUrl: ''
+      },
+      {
+        id: 'c_2',
+        userId: 'user_123',
+        userName: 'Test Bruker',
+        userAvatar: '',
+        turpostId: 'post_1',
+        turpostName: 'Fløyen',
+        timestamp: '2026-09-02T10:00:00Z',
+        description: 'Nok en tur',
+        imageUrl: ''
+      },
+      {
+        id: 'c_3',
+        userId: 'user_123',
+        userName: 'Test Bruker',
+        userAvatar: '',
+        turpostId: 'post_2',
+        turpostName: 'Ulriken',
+        timestamp: '2026-09-03T10:00:00Z',
+        description: 'Høy topp',
+        imageUrl: ''
+      }
+    ]
+
+    mount(UserProfileModal, {
+      props: {
+        isOpen: true,
+        user: sampleUser as any,
+        checkins
+      }
+    })
+
+    const trophyBadge = document.body.querySelector('.header-stat-badge.trophy') as HTMLElement
+    expect(trophyBadge).not.toBeNull()
+    expect(trophyBadge.textContent).toContain('3')
+    expect(trophyBadge.getAttribute('title')).toBe('3 innsjekkinger')
+
+    const mountainBadge = document.body.querySelector('.header-stat-badge.mountain') as HTMLElement
+    expect(mountainBadge).not.toBeNull()
+    expect(mountainBadge.textContent).toContain('2')
+    expect(mountainBadge.getAttribute('title')).toBe('2 unike turposter')
+  })
+
+  it('renders "Mine spor" and shows "Forslag" card only for admin with pending suggestions', async () => {
+    const sampleUser = {
+      userId: 'admin_1',
+      userName: 'Admin Bruker',
+      email: 'admin@example.com',
+      avatarUrl: '',
+      lastLogin: '2026-09-10T00:00:00Z'
+    }
+
+    // 1. Admin uten forslag: forslag-knapp vises ikke
+    const wrapperNoSuggestions = mount(UserProfileModal, {
+      props: {
+        isOpen: true,
+        user: sampleUser as any,
+        checkins: [],
+        isAdmin: true,
+        spotSuggestionsCount: 0
+      }
+    })
+
+    expect(document.body.textContent).toContain('Mine spor')
+    expect(document.body.querySelector('.profile-suggestions-card')).toBeNull()
+    wrapperNoSuggestions.unmount()
+    document.body.innerHTML = ''
+
+    // 2. Admin med forslag: forslag-knapp vises med antall nye
+    const wrapperWithSuggestions = mount(UserProfileModal, {
+      props: {
+        isOpen: true,
+        user: sampleUser as any,
+        checkins: [],
+        isAdmin: true,
+        spotSuggestionsCount: 3
+      }
+    })
+
+    const suggestionsCard = document.body.querySelector('.profile-suggestions-card') as HTMLButtonElement
+    expect(suggestionsCard).not.toBeNull()
+    expect(suggestionsCard.textContent).toContain('Forslag')
+    expect(suggestionsCard.textContent).toContain('3 nye')
+
+    suggestionsCard.click()
+    expect(wrapperWithSuggestions.emitted('open-spot-suggestions')).toHaveLength(1)
+    expect(wrapperWithSuggestions.emitted('close')).toBeUndefined()
+    wrapperWithSuggestions.unmount()
+  })
 })
 
 describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Guardamar del Segura)', () => {
@@ -779,11 +930,12 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
       geolocation: mockGeolocation
     })
 
-    const wrapper = mount(App, {
+    const wrapper = mount(MapView, {
       global: {
         plugins: [createPinia()],
         stubs: {
-          MapViewer: true
+          MapViewer: true,
+          RouterView: true
         }
       }
     })
@@ -868,11 +1020,12 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
       geolocation: mockGeolocation
     })
 
-    const wrapper = mount(App, {
+    const wrapper = mount(MapView, {
       global: {
         plugins: [createPinia()],
         stubs: {
-          MapViewer: true
+          MapViewer: true,
+          RouterView: true
         }
       }
     })
@@ -913,7 +1066,7 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
       geolocation: mockGeolocation
     })
 
-    const wrapper = mount(App, {
+    const wrapper = mount(MapView, {
       global: {
         plugins: [createPinia()],
         stubs: {
@@ -922,7 +1075,8 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
             methods: {
               centerOnUser: centerOnUserSpy
             }
-          }
+          },
+          RouterView: true
         }
       }
     })
