@@ -8,11 +8,21 @@ import TurposterPanel from '@/components/TurposterPanel.vue'
 import CheckinModal from '@/components/CheckinModal.vue'
 import TurpostCheckinsModal from '@/components/TurpostCheckinsModal.vue'
 import AdminAddTurpostModal from '@/components/AdminAddTurpostModal.vue'
-import { useGeolocation, calculateDistanceMeters, type GeoLocationState } from '@/composables/useGeolocation'
-import { useTurposter, findKommuneInHierarchy, type TurpostItem, type FylkeInfo, type KommuneInfo } from '@/composables/useTurposter'
+import {
+  useGeolocation,
+  calculateDistanceMeters,
+  type GeoLocationState,
+} from '@/composables/useGeolocation'
+import {
+  useTurposter,
+  findKommuneInHierarchy,
+  type TurpostItem,
+  type FylkeInfo,
+  type KommuneInfo,
+} from '@/composables/useTurposter'
 import { usePrivateTurposter, type SpotSuggestion } from '@/composables/usePrivateTurposter'
 import { useAis } from '@/composables/useAis'
-import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
+import { useAuth, type FirebaseCheckinItem, type CheckinResult } from '@/composables/useAuth'
 import { useFriends } from '@/composables/useFriends'
 import { useGeoDetect } from '@/composables/useGeoDetect'
 import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
@@ -31,7 +41,7 @@ const {
   getCurrentPosition,
   startTracking,
   stopTracking,
-  clearTrack
+  clearTrack,
 } = useGeolocation()
 
 const { detectKommune, isAbroad } = useGeoDetect()
@@ -47,16 +57,11 @@ const {
   setCredentials: setBwCredentials,
   fetchVessels,
   toggleAis,
-  clearError: clearAisError
+  clearError: clearAisError,
 } = useAis()
 
 const { user, isLoggedIn, isAdmin, aisClientId, aisClientSecret, fetchMyCheckins } = useAuth()
-const {
-  registerPublicUser,
-  loadFriends,
-  loadFriendRequests,
-  loadDefaultVisibility
-} = useFriends()
+const { registerPublicUser, loadFriends, loadFriendRequests, loadDefaultVisibility } = useFriends()
 const { needsUpdate, applyUpdate } = useAppUpdate()
 const activeLayer = ref<string>('norgeskart')
 const activeCheckinPost = ref<TurpostItem | null>(null)
@@ -80,16 +85,12 @@ watch(
       await checkAndApplyAbroadLayer(newCoords.lat, newCoords.lng)
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 // Private turposter (my_spots) og innkommende forslag
-const {
-  fetchMySpots,
-  deleteMySpot,
-  fetchMyPrivateCheckins,
-  fetchSpotSuggestions
-} = usePrivateTurposter()
+const { fetchMySpots, deleteMySpot, fetchMyPrivateCheckins, fetchSpotSuggestions } =
+  usePrivateTurposter()
 
 // Admin / Bruker: ny turpost (kart-klikk)
 const adminClickCoords = ref<{ lat: number; lng: number } | null>(null)
@@ -156,7 +157,9 @@ function handleViewSpotOnMap(spot: TurpostItem | SpotSuggestion) {
 }
 
 // Brukerens egne innsjekkinger fra Firebase (både offentlige og private)
-const visitedTurpostIds = computed(() => new Set(appState.myCheckins.map(c => String(c.turpostId))))
+const visitedTurpostIds = computed(
+  () => new Set(appState.myCheckins.map((c) => String(c.turpostId))),
+)
 
 const loadMyCheckins = async () => {
   if (!isLoggedIn.value || !user.value) {
@@ -166,11 +169,11 @@ const loadMyCheckins = async () => {
   try {
     const [publicCheckins, privateCheckins] = await Promise.all([
       fetchMyCheckins(),
-      fetchMyPrivateCheckins(user.value.userId)
+      fetchMyPrivateCheckins(user.value.userId),
     ])
-    const privateCheckinIds = new Set(privateCheckins.map(c => c.id))
+    const privateCheckinIds = new Set(privateCheckins.map((c) => c.id))
     const filteredPublic = publicCheckins.filter(
-      c => !privateCheckinIds.has(c.id) && !String(c.turpostId).startsWith('spot_')
+      (c) => !privateCheckinIds.has(c.id) && !String(c.turpostId).startsWith('spot_'),
     )
     appState.myCheckins = [...filteredPublic, ...privateCheckins]
   } catch (err) {
@@ -199,7 +202,7 @@ watch(
       appState.spotSuggestionsCount = 0
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 const handleOpenCheckin = (post: TurpostItem) => {
@@ -212,20 +215,29 @@ const activeViewCheckinsTab = ref<'public' | 'private' | undefined>(undefined)
 const handleViewCheckins = (
   post: TurpostItem,
   initialTab?: 'public' | 'private',
-  matchingPrivate?: TurpostItem | null
+  matchingPrivate?: TurpostItem | null,
 ) => {
   activeViewCheckinsPost.value = post
   activeViewCheckinsTab.value = initialTab
-  activeMatchingPrivateSpot.value = matchingPrivate || (
-    !post.isPrivate
-      ? (appState.mySpots.find(s => String(s.id) === String(post.id) || (calculateDistanceMeters(s.lat, s.lng, post.lat, post.lng) < 15)) || null)
-      : null
-  )
+  activeMatchingPrivateSpot.value =
+    matchingPrivate ||
+    (!post.isPrivate
+      ? appState.mySpots.find(
+          (s) =>
+            String(s.id) === String(post.id) ||
+            calculateDistanceMeters(s.lat, s.lng, post.lat, post.lng) < 15,
+        ) || null
+      : null)
 }
 
-const handleCheckinSubmitted = (result: any) => {
+const handleCheckinSubmitted = (result: CheckinResult) => {
   if (result && result.turpostId) {
-    appState.myCheckins.push(result)
+    appState.myCheckins.push({
+      ...result,
+      id: result.id || '',
+      userName: result.userName || '',
+      userAvatar: result.userAvatar || '',
+    })
   }
 }
 
@@ -252,10 +264,15 @@ watch(
       }
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
-const lastMapBounds = ref<{ minLat: number; maxLat: number; minLng: number; maxLng: number } | null>(null)
+const lastMapBounds = ref<{
+  minLat: number
+  maxLat: number
+  minLng: number
+  maxLng: number
+} | null>(null)
 const lastMapZoom = ref<number>(13)
 
 // Periodisk oppdatering av AIS-data hvert 30. sekund
@@ -278,7 +295,10 @@ const stopAisPoll = () => {
   }
 }
 
-const handleBoundsChange = (bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }, zoom: number) => {
+const handleBoundsChange = (
+  bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number },
+  zoom: number,
+) => {
   lastMapBounds.value = bounds
   lastMapZoom.value = zoom
   if (isAisToggled.value) {
@@ -328,7 +348,7 @@ const {
   selectKommune,
   selectKommuneByName,
   lookupTurpost,
-  clearSelection
+  clearSelection,
 } = useTurposter()
 
 const mapViewerRef = ref<InstanceType<typeof MapViewer> | null>(null)
@@ -343,7 +363,7 @@ watch(
   (newUid) => {
     trackStore.setUser(newUid)
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 // Bestem hvilke sporpunkter som skal tegnes på kartet:
@@ -397,7 +417,10 @@ const handleToggleTurposter = () => {
 
 const handleSelectFylke = (fylke: FylkeInfo | null) => {
   selectFylke(fylke)
-  if (fylke?.slug === 'utlandet' && (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')) {
+  if (
+    fylke?.slug === 'utlandet' &&
+    (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')
+  ) {
     activeLayer.value = 'standard'
   }
 }
@@ -407,7 +430,10 @@ const handleSelectKommune = (kommune: KommuneInfo | null) => {
     mapViewerRef.value.resetAutoCenter()
   }
   selectKommune(kommune)
-  if (selectedFylke.value?.slug === 'utlandet' && (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')) {
+  if (
+    selectedFylke.value?.slug === 'utlandet' &&
+    (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')
+  ) {
     activeLayer.value = 'standard'
   }
 }
@@ -420,7 +446,10 @@ const handleSelectKommuneByName = async (kommuneName: string) => {
   const result = await selectKommuneByName(kommuneName)
   if (result) {
     isTurposterOpen.value = true
-    if (result.fylke?.slug === 'utlandet' && (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')) {
+    if (
+      result.fylke?.slug === 'utlandet' &&
+      (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')
+    ) {
       activeLayer.value = 'standard'
     }
   }
@@ -436,7 +465,10 @@ const getKommuneInfo = (name: string) => {
 }
 
 const handleFocusPost = (post: TurpostItem) => {
-  if (selectedFylke.value?.slug === 'utlandet' && (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')) {
+  if (
+    selectedFylke.value?.slug === 'utlandet' &&
+    (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')
+  ) {
     activeLayer.value = 'standard'
   }
   if (mapViewerRef.value) {
@@ -450,10 +482,16 @@ const handleViewCheckinOnMap = async (checkin: FirebaseCheckinItem) => {
   }
 
   // 1. Sjekk om det er en privat turpost / spot
-  const isPrivate = checkin.isPrivate || !!checkin.spotId || (checkin.turpostId && checkin.turpostId.startsWith('spot_'))
+  const isPrivate =
+    checkin.isPrivate ||
+    !!checkin.spotId ||
+    (checkin.turpostId && checkin.turpostId.startsWith('spot_'))
   if (isPrivate) {
     const spot = appState.mySpots.find(
-      s => s.id === checkin.spotId || s.id === checkin.turpostId || (checkin.turpostName && s.name.toLowerCase() === checkin.turpostName.toLowerCase())
+      (s) =>
+        s.id === checkin.spotId ||
+        s.id === checkin.turpostId ||
+        (checkin.turpostName && s.name.toLowerCase() === checkin.turpostName.toLowerCase()),
     )
     if (spot) {
       await checkAndApplyAbroadLayer(spot.lat, spot.lng)
@@ -464,8 +502,9 @@ const handleViewCheckinOnMap = async (checkin: FirebaseCheckinItem) => {
 
   // 2. Sjekk om turposten allerede finnes i aktiv kommune (turposter.value)
   const existingInActiveKommune = turposter.value.find(
-    p => (checkin.turpostId && p.id === checkin.turpostId) || 
-         (checkin.turpostName && p.name.toLowerCase() === checkin.turpostName.toLowerCase())
+    (p) =>
+      (checkin.turpostId && p.id === checkin.turpostId) ||
+      (checkin.turpostName && p.name.toLowerCase() === checkin.turpostName.toLowerCase()),
   )
   if (existingInActiveKommune) {
     await checkAndApplyAbroadLayer(existingInActiveKommune.lat, existingInActiveKommune.lng)
@@ -480,7 +519,7 @@ const handleViewCheckinOnMap = async (checkin: FirebaseCheckinItem) => {
     if (found.kommune) {
       await selectKommuneByName(found.kommune)
       await nextTick()
-      const inKommune = turposter.value.find(p => p.id === found.id)
+      const inKommune = turposter.value.find((p) => p.id === found.id)
       setTimeout(() => {
         handleFocusPost(inKommune || found)
       }, 100)
@@ -547,7 +586,7 @@ const loadLocalTurposterForLocation = async (loc: GeoLocationState, showFeedback
     } else if (showFeedback) {
       turError.value = `Fant ingen registrerte turposter for ${geoResult.kommune}. Velg kommune manuelt fra menyen.`
     }
-  } catch (err: any) {
+  } catch (err) {
     console.warn('Kunne ikke finne lokal kommune:', err)
   } finally {
     isLoadingLocalTurposter.value = false
@@ -573,14 +612,11 @@ const handleToggleTracking = () => {
   } else {
     trackStore.clearActiveTrack()
     clearTrack()
-    startTracking(
-      { enableHighAccuracy: true },
-      (newCoords) => {
-        if (mapViewerRef.value && newCoords) {
-          mapViewerRef.value.centerOnUser(true)
-        }
+    startTracking({ enableHighAccuracy: true }, (newCoords) => {
+      if (mapViewerRef.value && newCoords) {
+        mapViewerRef.value.centerOnUser(true)
       }
-    )
+    })
   }
 }
 
@@ -617,7 +653,7 @@ watch(
       await handleViewCheckinOnMap(checkin)
       appState.clearFlyToCheckin()
     }
-  }
+  },
 )
 
 watch(
@@ -627,7 +663,7 @@ watch(
       handleViewSpotOnMap(spot)
       appState.clearFlyToSpot()
     }
-  }
+  },
 )
 
 watch(
@@ -637,7 +673,7 @@ watch(
       handleViewSavedTrack(track)
       appState.clearViewTrack()
     }
-  }
+  },
 )
 
 watch(
@@ -647,7 +683,7 @@ watch(
       handleViewCheckins(val.post, val.tab)
       appState.clearViewCheckins()
     }
-  }
+  },
 )
 
 // Last hierarki og forsøk automatisk å hente brukerens geolokasjon og lokale turposter ved oppstart
@@ -665,15 +701,12 @@ onMounted(async () => {
 })
 
 // Dersom posisjonen blir tilgjengelig litt etter oppstart
-watch(
-  coords,
-  (newCoords) => {
-    if (newCoords && !hasLoadedDefaultTurposter.value && !selectedKommune.value) {
-      hasLoadedDefaultTurposter.value = true
-      loadLocalTurposterForLocation(newCoords, false)
-    }
+watch(coords, (newCoords) => {
+  if (newCoords && !hasLoadedDefaultTurposter.value && !selectedKommune.value) {
+    hasLoadedDefaultTurposter.value = true
+    loadLocalTurposterForLocation(newCoords, false)
   }
-)
+})
 
 onUnmounted(() => {
   stopAisPoll()
@@ -685,7 +718,9 @@ onUnmounted(() => {
     <!-- Banner når brukeren skal klikke i kartet for å legge til turpost -->
     <div v-if="appState.isAddSpotModeActive" class="add-spot-banner">
       <span>📍 Klikk hvor som helst i kartet for å plassere turposten</span>
-      <button class="btn-cancel-add-spot" @click="appState.isAddSpotModeActive = false">✕ Avbryt</button>
+      <button class="btn-cancel-add-spot" @click="appState.isAddSpotModeActive = false">
+        ✕ Avbryt
+      </button>
     </div>
 
     <MapViewer
@@ -807,12 +842,23 @@ onUnmounted(() => {
       :turpost="activeViewCheckinsPost"
       :matching-private-spot="activeMatchingPrivateSpot"
       :is-logged-in="isLoggedIn"
-      :has-visited="activeViewCheckinsPost ? visitedTurpostIds.has(String(activeViewCheckinsPost.id)) : false"
+      :has-visited="
+        activeViewCheckinsPost ? visitedTurpostIds.has(String(activeViewCheckinsPost.id)) : false
+      "
       :current-user-id="user?.userId"
       :user-location="coords"
       :initial-tab="activeViewCheckinsTab"
-      @close="activeViewCheckinsPost = null; activeMatchingPrivateSpot = null; activeViewCheckinsTab = undefined"
-      @open-checkin="(post: TurpostItem) => { activeViewCheckinsPost = null; activeCheckinPost = post }"
+      @close="
+        activeViewCheckinsPost = null;
+        activeMatchingPrivateSpot = null;
+        activeViewCheckinsTab = undefined;
+      "
+      @open-checkin="
+        (post: TurpostItem) => {
+          activeViewCheckinsPost = null
+          activeCheckinPost = post
+        }
+      "
       @private-checkin-deleted="loadMyCheckins"
       @delete-private-spot="handleDeletePrivateSpot"
       @checkin-deleted="loadMyCheckins"
@@ -829,7 +875,10 @@ onUnmounted(() => {
       :user-id="user?.userId"
       :user-name="user?.userName"
       :user-email="user?.email"
-      @close="adminClickCoords = null; appState.isAddSpotModeActive = false"
+      @close="
+        adminClickCoords = null;
+        appState.isAddSpotModeActive = false;
+      "
       @spot-saved="handleSpotSaved"
     />
 

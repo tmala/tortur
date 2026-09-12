@@ -48,9 +48,10 @@ const handleSuggestPublic = async (spot: TurpostItem) => {
       const suggestions = await fetchSpotSuggestions()
       appState.spotSuggestionsCount = suggestions.length
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.warn('[MySpotsView] Kunne ikke foreslå turpost som offentlig:', err)
-    alert('Kunne ikke sende inn forslag: ' + (err?.message || 'Ukjent feil'))
+    const errorMessage = err instanceof Error ? err.message : 'Ukjent feil'
+    alert('Kunne ikke sende inn forslag: ' + errorMessage)
   }
 }
 
