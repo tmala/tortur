@@ -541,3 +541,17 @@ body,
   background: #ef4444;
   color: white;
 }
+
+.btn-popup-borders {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.btn-popup-borders:hover {
+  background: rgba(148, 163, 184, 0.3);
+  color: #ffffff;
+  border-color: rgba(148, 163, 184, 0.6);
+  transform: translateY(-1px);
+}
+

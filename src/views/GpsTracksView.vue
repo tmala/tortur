@@ -51,6 +51,7 @@ const handleToggleTracking = () => {
       :live-track-points="trackPoints"
       :is-tracking="isTracking"
       :is-logged-in="isLoggedIn"
+      :highlighted-track-id="(route.query.trackId as string) || null"
       @close="handleClose"
       @view-track="handleViewTrack"
       @open-live-track-modal="showLiveModal = true"

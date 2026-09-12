@@ -266,7 +266,7 @@ const startAisPoll = () => {
   if (aisPollTimer) return
   aisPollTimer = setInterval(() => {
     if (isAisToggled.value && lastMapBounds.value) {
-      fetchVessels(lastMapBounds.value, lastMapZoom.value)
+      fetchVessels(lastMapBounds.value, lastMapZoom.value, true)
     }
   }, AIS_POLL_INTERVAL_MS)
 }
@@ -290,7 +290,7 @@ const handleToggleAis = () => {
   if (!isAdmin.value) return
   toggleAis()
   if (isAisToggled.value && lastMapBounds.value) {
-    fetchVessels(lastMapBounds.value, lastMapZoom.value)
+    fetchVessels(lastMapBounds.value, lastMapZoom.value, true)
     startAisPoll()
   } else {
     stopAisPoll()
@@ -355,6 +355,31 @@ const displayedTrackPoints = computed(() => {
   }
   return trackPoints.value
 })
+
+const displayedTrackTitle = computed(() => {
+  if (trackStore.activeTrack) {
+    return trackStore.activeTrack.name
+  }
+  if (trackPoints.value.length > 0) {
+    return isTracking.value ? 'Pågående opptak' : 'Aktiv sporlogg'
+  }
+  return ''
+})
+
+const displayedTrackDistance = computed(() => {
+  if (trackStore.activeTrack) {
+    return trackStore.activeTrack.distanceMeters
+  }
+  return undefined
+})
+
+const handleTrackClick = () => {
+  if (trackStore.activeTrack) {
+    router.push({ path: '/gps-spor', query: { trackId: trackStore.activeTrack.id } })
+  } else if (trackPoints.value.length > 0) {
+    router.push({ path: '/gps-spor', query: { tab: 'live' } })
+  }
+}
 
 const handleViewSavedTrack = (track: SavedTrack | null) => {
   if (track && mapViewerRef.value) {
@@ -669,6 +694,8 @@ onUnmounted(() => {
       :active-layer="activeLayer"
       :is-tracking="isTracking"
       :track-points="displayedTrackPoints"
+      :track-name="displayedTrackTitle"
+      :track-distance-meters="displayedTrackDistance"
       :turposter="turposter"
       :private-turposter="appState.mySpots"
       :is-add-spot-active="appState.isAddSpotModeActive"
@@ -691,6 +718,8 @@ onUnmounted(() => {
       @clear-turposter="handleClearAllTurposter"
       @admin-map-click="handleAdminMapClick"
       @delete-private-spot="handleDeletePrivateSpot"
+      @click-track="handleTrackClick"
+      @disable-municipalities="showMunicipalities = false"
     />
 
     <AppHeader

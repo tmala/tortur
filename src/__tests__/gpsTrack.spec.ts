@@ -135,3 +135,33 @@ describe('useGpsTrackStore', () => {
     expect(saved?.firebaseKey).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}_\d{3}Z$/)
   })
 })
+
+describe('SavedTracksPanel highlighting', () => {
+  it('assigns unique track-card id and applies is-highlighted class', async () => {
+    const { mount } = await import('@vue/test-utils')
+    const SavedTracksPanel = (await import('../components/SavedTracksPanel.vue')).default
+    const store = useGpsTrackStore()
+
+    const points: TrackPoint[] = [
+      { lat: 60.3913, lng: 5.3221, timestamp: 1725450000000 }
+    ]
+    const saved = store.saveTrack(points, 'Høydetur')
+    expect(saved).not.toBeNull()
+
+    const wrapper = mount(SavedTracksPanel, {
+      props: {
+        isOpen: true,
+        highlightedTrackId: saved!.id,
+      },
+      attachTo: document.body
+    })
+
+    await wrapper.vm.$nextTick()
+
+    const card = document.querySelector(`#track-card-${saved!.id}`)
+    expect(card).not.toBeNull()
+    expect(card?.classList.contains('is-highlighted')).toBe(true)
+
+    wrapper.unmount()
+  })
+})

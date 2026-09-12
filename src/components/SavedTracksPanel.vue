@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import {
   Route,
   X,
@@ -26,6 +26,7 @@ const props = defineProps<{
   liveTrackPoints?: TrackPoint[]
   isTracking?: boolean
   isLoggedIn?: boolean
+  highlightedTrackId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -107,6 +108,27 @@ const onDragEnd = () => {
   window.removeEventListener('pointercancel', onDragEnd)
 }
 
+const activeHighlightId = ref<string | null>(null)
+let highlightTimer: ReturnType<typeof setTimeout> | null = null
+
+const scrollToHighlightedTrack = () => {
+  const targetId = props.highlightedTrackId || trackStore.activeTrackId
+  if (!targetId) return
+
+  activeHighlightId.value = targetId
+  if (highlightTimer) clearTimeout(highlightTimer)
+  highlightTimer = setTimeout(() => {
+    activeHighlightId.value = null
+  }, 2500)
+
+  nextTick(() => {
+    const el = document.getElementById(`track-card-${targetId}`)
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  })
+}
+
 watch(
   () => props.isOpen,
   (open) => {
@@ -115,6 +137,16 @@ watch(
       editingTrackId.value = null
       trackToDelete.value = null
       isSavingLiveTrack.value = false
+      scrollToHighlightedTrack()
+    }
+  }
+)
+
+watch(
+  () => props.highlightedTrackId,
+  (newId) => {
+    if (newId && props.isOpen) {
+      scrollToHighlightedTrack()
     }
   }
 )
@@ -127,9 +159,15 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  if (props.isOpen) {
+    scrollToHighlightedTrack()
+  }
 })
 
 onUnmounted(() => {
+  if (highlightTimer) {
+    clearTimeout(highlightTimer)
+  }
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('pointermove', onDragMove)
   window.removeEventListener('pointerup', onDragEnd)
@@ -391,9 +429,13 @@ const handleConfirmSaveLiveTrack = () => {
         <!-- Spor-kort -->
         <div
           v-for="track in trackStore.savedTracks"
+          :id="`track-card-${track.id}`"
           :key="track.id"
           class="track-card"
-          :class="{ 'is-active-on-map': trackStore.activeTrackId === track.id }"
+          :class="{
+            'is-active-on-map': trackStore.activeTrackId === track.id,
+            'is-highlighted': activeHighlightId === track.id
+          }"
         >
           <!-- Topprad: Tittel og rediger-ikon -->
           <div class="track-card-header">
@@ -1003,6 +1045,20 @@ const handleConfirmSaveLiveTrack = () => {
   border-color: #f97316;
   background: rgba(249, 115, 22, 0.08);
   box-shadow: 0 0 12px rgba(249, 115, 22, 0.15);
+}
+
+.track-card.is-highlighted {
+  animation: track-card-pulse 1.2s ease-in-out 2;
+}
+
+@keyframes track-card-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.45), 0 0 20px rgba(249, 115, 22, 0.4);
+    border-color: #f97316;
+  }
 }
 
 .track-card-header {

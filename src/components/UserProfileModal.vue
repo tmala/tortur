@@ -141,9 +141,11 @@ const handleForceRefresh = async () => {
   } catch (err) {
     console.warn('Kunne ikke oppdatere cache fullstendig:', err)
   } finally {
-    // 3. Tving en full reload fra serveren med cache-busting parameter
-    const baseUrl = window.location.origin + window.location.pathname
-    window.location.replace(`${baseUrl}?refresh=${Date.now()}`)
+    // 3. Tving en full reload fra serveren til appens rot (/tortur/) med cache-busting parameter
+    const appBase = import.meta.env.BASE_URL || '/tortur/'
+    const targetUrl = new URL(appBase, window.location.origin)
+    targetUrl.searchParams.set('refresh', String(Date.now()))
+    window.location.replace(targetUrl.href)
   }
 }
 

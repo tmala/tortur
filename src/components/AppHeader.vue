@@ -20,6 +20,7 @@ import {
   RefreshCw,
 } from 'lucide-vue-next'
 import AuthPanel from './AuthPanel.vue'
+import AboutAppModal from './AboutAppModal.vue'
 
 const props = defineProps<{
   activeLayer: string
@@ -383,12 +384,15 @@ const handleInstallClick = async () => {
 
           <!-- Kommunegrenser-knapp -->
           <button
-            class="icon-btn"
+            class="btn-municipalities"
             :class="{ active: showMunicipalities }"
             @click="emit('toggle-municipalities')"
             title="Slå av/på visning av kommunegrenser"
+            aria-label="Slå av eller på visning av kommunegrenser"
           >
-            <MapIcon :size="18" />
+            <MapIcon :size="16" class="map-icon" />
+            <span v-if="showMunicipalities" class="btn-municipalities-text">Grenser (På)</span>
+            <span v-else class="btn-municipalities-text">Grenser</span>
           </button>
 
           <!-- Kartlag-knapp -->
@@ -538,59 +542,8 @@ const handleInstallClick = async () => {
       </div>
     </transition>
 
-    <!-- Info-modal -->
-    <transition name="fade-slide">
-      <div v-if="showInfoModal" class="info-modal glass-panel">
-        <div class="layer-modal-header">
-          <h3>Om kartappen</h3>
-          <button class="btn-close" @click="showInfoModal = false">✕</button>
-        </div>
-        <div class="info-content">
-          <p>
-            Dette er en <strong>Progressive Web App (PWA)</strong> med åpne kartdata fra
-            <strong>OpenStreetMap</strong> og <strong>Kartverket</strong>.
-          </p>
-          <div class="info-feature-list">
-            <div class="info-feature-item">
-              <span class="bullet">📍</span>
-              <span><strong>Finn min posisjon:</strong> Viser hvor du er og sentrerer kartet.</span>
-            </div>
-            <div class="info-feature-item">
-              <span class="bullet">🧭</span>
-              <span><strong>Følg meg:</strong> Sporer bevegelsene dine fortløpende.</span>
-            </div>
-            <div class="info-feature-item">
-              <span class="bullet">🗺️</span>
-              <span
-                ><strong>Klikk i kartet:</strong> Slå på kommunegrenser og klikk direkte på en
-                kommune i kartet for å hente turpostene der.</span
-              >
-            </div>
-            <div class="info-feature-item">
-              <span class="bullet">⛰️</span>
-              <span
-                ><strong>Turposter i Norge:</strong> Utforsk over 15 000 turposter sortert etter
-                fylke og kommune.</span
-              >
-            </div>
-            <div class="info-feature-item">
-              <span class="bullet">⛵</span>
-              <span
-                ><strong>Sjøkart:</strong> Offisielt norsk sjøkart fra Kartverket (med dybder og
-                fyrlykter) og globalt OpenSeaMap.</span
-              >
-            </div>
-            <div class="info-feature-item">
-              <span class="bullet">⚡</span>
-              <span
-                ><strong>PWA Offline Cache:</strong> Kan installeres på mobilen eller
-                skrivebordet.</span
-              >
-            </div>
-          </div>
-        </div>
-      </div>
-    </transition>
+    <!-- Info-modal («Om appen») -->
+    <AboutAppModal :is-open="showInfoModal" @close="showInfoModal = false" />
   </div>
 </template>
 
@@ -823,7 +776,6 @@ const handleInstallClick = async () => {
   }
 
   .layer-modal,
-  .info-modal,
   .ais-modal {
     max-width: calc(100vw - 20px);
     max-height: calc(
@@ -931,6 +883,38 @@ const handleInstallClick = async () => {
   background: rgba(245, 158, 11, 0.2);
   border-color: #f59e0b;
   color: #fde68a;
+}
+
+.btn-municipalities {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-municipalities:hover {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.btn-municipalities.active {
+  background: linear-gradient(135deg, #0284c7, #0284c7);
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+}
+
+.map-icon {
+  flex-shrink: 0;
 }
 
 /* AIS Modal */
@@ -1067,9 +1051,8 @@ const handleInstallClick = async () => {
   cursor: wait;
 }
 
-/* Lag- og infomodaler */
-.layer-modal,
-.info-modal {
+/* Lagmodal */
+.layer-modal {
   position: relative;
   width: 100%;
   max-width: 380px;
@@ -1168,26 +1151,6 @@ const handleInstallClick = async () => {
   color: #38bdf8;
   flex-shrink: 0;
   margin-left: 8px;
-}
-
-.info-content {
-  font-size: 13px;
-  color: #cbd5e1;
-  line-height: 1.5;
-}
-
-.info-feature-list {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.info-feature-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12px;
 }
 
 /* Aksjonsknapper */

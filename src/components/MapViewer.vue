@@ -26,6 +26,8 @@ const props = defineProps<{
   visitedTurpostIds?: Set<string>
   isAdmin?: boolean
   trackPoints?: TrackPoint[]
+  trackName?: string
+  trackDistanceMeters?: number
   privateTurposter?: TurpostItem[]
   isAddSpotActive?: boolean
 }>()
@@ -42,6 +44,8 @@ const emit = defineEmits<{
   (e: 'clear-turposter'): void
   (e: 'admin-map-click', coords: { lat: number; lng: number }): void
   (e: 'delete-private-spot', spotId: string): void
+  (e: 'click-track'): void
+  (e: 'disable-municipalities'): void
 }>()
 
 const mapContainer = ref<HTMLElement | null>(null)
@@ -727,11 +731,12 @@ const openKommunePopup = (name: string, latlng: L.LatLng) => {
         📍 ${name} kommune
       </h4>
       ${fylkeText ? `<div style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;">${fylkeText} ${countText ? `&bull; ${countText}` : ''}</div>` : ''}
-      <div style="margin-top: 10px;">
+      <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">
         ${isCurrentlySelected 
           ? `<button id="btn-popup-toggle" class="btn-popup-toggle btn-popup-hide">✕ Skjul turposter</button>`
           : `<button id="btn-popup-toggle" class="btn-popup-toggle btn-popup-show">⛰️ Vis turposter for ${name}</button>`
         }
+        <button id="btn-popup-disable-borders" class="btn-popup-toggle btn-popup-borders">🗺️ Deaktiver kommunegrenser</button>
       </div>
     </div>
   `
@@ -752,6 +757,14 @@ const openKommunePopup = (name: string, latlng: L.LatLng) => {
       } else {
         emit('select-kommune-by-name', name)
       }
+      map?.closePopup(popup)
+    })
+  }
+
+  const btnBorders = popupDiv.querySelector('#btn-popup-disable-borders')
+  if (btnBorders) {
+    btnBorders.addEventListener('click', () => {
+      emit('disable-municipalities')
       map?.closePopup(popup)
     })
   }
@@ -822,6 +835,31 @@ const centerOnUser = (animate = true, zoomLevel?: number) => {
 
 let trackPolyline: L.Polyline | null = null
 let trackBgPolyline: L.Polyline | null = null
+let trackHitPolyline: L.Polyline | null = null
+
+const escapeTrackHtml = (str: string): string => {
+  return str.replace(/[&<>"']/g, (m) => {
+    switch (m) {
+      case '&': return '&amp;'
+      case '<': return '&lt;'
+      case '>': return '&gt;'
+      case '"': return '&quot;'
+      case "'": return '&#39;'
+      default: return m
+    }
+  })
+}
+
+const getTrackTooltipContent = () => {
+  const name = props.trackName || 'GPS-spor'
+  const distStr = props.trackDistanceMeters ? ` (${formatDistance(props.trackDistanceMeters)})` : ''
+  return `<div class="track-map-tooltip"><strong>${escapeTrackHtml(name)}${distStr}</strong><small>Klikk for å åpne sporinfo</small></div>`
+}
+
+const onTrackClick = (e: L.LeafletMouseEvent) => {
+  L.DomEvent.stopPropagation(e)
+  emit('click-track')
+}
 
 const updateTrackLayer = () => {
   if (!map) return
@@ -835,18 +873,35 @@ const updateTrackLayer = () => {
       trackBgPolyline.remove()
       trackBgPolyline = null
     }
+    if (trackHitPolyline) {
+      trackHitPolyline.remove()
+      trackHitPolyline = null
+    }
     return
   }
 
   const latlngs = points.map(p => [p.lat, p.lng] as [number, number])
 
-  if (!trackPolyline || !trackBgPolyline) {
+  if (!trackPolyline || !trackBgPolyline || !trackHitPolyline) {
+    // Usynlig bred treffsone (24px) for enkel klikk/trykk på mobil og desktop
+    trackHitPolyline = L.polyline(latlngs, {
+      color: '#000000',
+      weight: 24,
+      opacity: 0,
+      lineCap: 'round',
+      lineJoin: 'round',
+      className: 'track-interactive-line',
+      interactive: true,
+    }).addTo(map)
+
     trackBgPolyline = L.polyline(latlngs, {
       color: '#0f172a',
       weight: 6,
       opacity: 0.55,
       lineCap: 'round',
-      lineJoin: 'round'
+      lineJoin: 'round',
+      className: 'track-interactive-line',
+      interactive: true,
     }).addTo(map)
 
     trackPolyline = L.polyline(latlngs, {
@@ -854,11 +909,25 @@ const updateTrackLayer = () => {
       weight: 3.5,
       opacity: 0.95,
       lineCap: 'round',
-      lineJoin: 'round'
+      lineJoin: 'round',
+      className: 'track-interactive-line',
+      interactive: true,
     }).addTo(map)
+
+    trackHitPolyline.on('click', onTrackClick)
+    trackBgPolyline.on('click', onTrackClick)
+    trackPolyline.on('click', onTrackClick)
+
+    trackHitPolyline.bindTooltip(getTrackTooltipContent(), {
+      sticky: true,
+      className: 'track-map-tooltip-wrap',
+      direction: 'top',
+    })
   } else {
+    trackHitPolyline.setLatLngs(latlngs)
     trackBgPolyline.setLatLngs(latlngs)
     trackPolyline.setLatLngs(latlngs)
+    trackHitPolyline.setTooltipContent(getTrackTooltipContent())
   }
 }
 
@@ -868,6 +937,15 @@ watch(
     updateTrackLayer()
   },
   { deep: true }
+)
+
+watch(
+  () => [props.trackName, props.trackDistanceMeters],
+  () => {
+    if (trackHitPolyline) {
+      trackHitPolyline.setTooltipContent(getTrackTooltipContent())
+    }
+  }
 )
 
 const clearSpotSuggestion = () => {
@@ -1269,6 +1347,10 @@ onUnmounted(() => {
     trackBgPolyline.remove()
     trackBgPolyline = null
   }
+  if (trackHitPolyline) {
+    trackHitPolyline.remove()
+    trackHitPolyline = null
+  }
   if (map) {
     map.remove()
     map = null
@@ -1321,5 +1403,41 @@ onUnmounted(() => {
   z-index: 1000;
   box-shadow: 0 4px 16px rgba(0,0,0,0.25);
   white-space: nowrap;
+}
+
+:deep(.track-interactive-line) {
+  cursor: pointer !important;
+}
+
+:deep(.track-map-tooltip-wrap) {
+  background: rgba(15, 23, 42, 0.94) !important;
+  border: 1px solid rgba(249, 115, 22, 0.6) !important;
+  border-radius: 10px !important;
+  padding: 6px 12px !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(8px) !important;
+  color: #f8fafc !important;
+}
+
+:deep(.track-map-tooltip-wrap::before) {
+  border-top-color: rgba(249, 115, 22, 0.6) !important;
+}
+
+:deep(.track-map-tooltip) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: inherit;
+}
+
+:deep(.track-map-tooltip strong) {
+  font-size: 12px;
+  color: #f8fafc;
+}
+
+:deep(.track-map-tooltip small) {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 2px;
 }
 </style>

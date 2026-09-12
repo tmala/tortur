@@ -15,6 +15,41 @@ export interface AisVessel {
   updatedAt: string
 }
 
+export interface AisMapBounds {
+  minLat: number
+  maxLat: number
+  minLng: number
+  maxLng: number
+}
+
+/**
+ * Utvider kartgrensene med en sikkerhetsbuffer (standard 40% = 0.4 i alle fire retninger).
+ * Dette gjør at brukeren kan panorere i nærområdet uten å måtte hente nye data for hver bevegelse.
+ */
+export function expandBounds(bounds: AisMapBounds, bufferRatio = 0.4): AisMapBounds {
+  const latSpan = Math.max(bounds.maxLat - bounds.minLat, 0.001)
+  const lngSpan = Math.max(bounds.maxLng - bounds.minLng, 0.001)
+
+  return {
+    minLat: bounds.minLat - latSpan * bufferRatio,
+    maxLat: bounds.maxLat + latSpan * bufferRatio,
+    minLng: bounds.minLng - lngSpan * bufferRatio,
+    maxLng: bounds.maxLng + lngSpan * bufferRatio,
+  }
+}
+
+/**
+ * Sjekker om indre kartgrenser (inner) er fullstendig inneholdt i ytre kartgrenser (outer).
+ */
+export function isBoundsContained(inner: AisMapBounds, outer: AisMapBounds): boolean {
+  return (
+    inner.minLat >= outer.minLat &&
+    inner.maxLat <= outer.maxLat &&
+    inner.minLng >= outer.minLng &&
+    inner.maxLng <= outer.maxLng
+  )
+}
+
 export interface BarentsWatchCredentials {
   clientId: string
   clientSecret: string
@@ -27,6 +62,7 @@ export function useAis() {
   const isZoomSufficient = ref(false)
   const currentZoom = ref(13)
   const vessels = ref<AisVessel[]>([])
+  const cachedFetchBounds = ref<AisMapBounds | null>(null)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   
@@ -52,6 +88,7 @@ export function useAis() {
       clientSecret: clientSecret.trim()
     }
     error.value = null
+    cachedFetchBounds.value = null
     if (clientId.trim() && clientSecret.trim()) {
       localStorage.setItem('bw_client_id', clientId.trim())
       localStorage.setItem('bw_client_secret', clientSecret.trim())
@@ -173,32 +210,47 @@ export function useAis() {
     }))
   }
 
-  const fetchVessels = async (bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }, zoom: number) => {
+  const fetchVessels = async (bounds: AisMapBounds, zoom: number, force = false) => {
     currentZoom.value = zoom
     isZoomSufficient.value = zoom >= MIN_ZOOM_FOR_AIS
 
     if (!isEnabled.value || !isZoomSufficient.value) {
       vessels.value = []
+      cachedFetchBounds.value = null
+      return
+    }
+
+    // Hvis vi ikke tvinger oppdatering (force) og kartutsnittet fremdeles er fullstendig
+    // innenfor det forrige bufrede området, unngår vi unødige nettverkskall.
+    if (!force && cachedFetchBounds.value && isBoundsContained(bounds, cachedFetchBounds.value)) {
       return
     }
 
     isLoading.value = true
 
+    // Beregn utvidet område med 40% sikkerhetsbuffer i alle retninger
+    const bufferedBounds = expandBounds(bounds, 0.4)
+
     try {
       if (hasCredentials.value) {
         const token = await getOAuthToken()
         if (token) {
-          // BarentsWatch GeoJSON polygon for bounding box
+          // BarentsWatch GeoJSON polygon og bounding box for det bufrede området
           const polygon = {
             type: 'Polygon',
             coordinates: [[
-              [bounds.minLng, bounds.minLat],
-              [bounds.maxLng, bounds.minLat],
-              [bounds.maxLng, bounds.maxLat],
-              [bounds.minLng, bounds.maxLat],
-              [bounds.minLng, bounds.minLat]
+              [bufferedBounds.minLng, bufferedBounds.minLat],
+              [bufferedBounds.maxLng, bufferedBounds.minLat],
+              [bufferedBounds.maxLng, bufferedBounds.maxLat],
+              [bufferedBounds.minLng, bufferedBounds.maxLat],
+              [bufferedBounds.minLng, bufferedBounds.minLat]
             ]]
           }
+
+          const requestBody = JSON.stringify({
+            bounds: bufferedBounds,
+            ...polygon
+          })
 
           const aisEndpoints = import.meta.env.DEV
             ? ['/tortur/api/bw-ais/v1/latest/combined']
@@ -215,7 +267,7 @@ export function useAis() {
                   'Authorization': `Bearer ${token}`,
                   'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(polygon)
+                body: requestBody
               })
 
               if (res.ok) {
@@ -288,7 +340,20 @@ export function useAis() {
                   return { typeName, cat }
                 }
 
-                vessels.value = (Array.isArray(data) ? data : []).map((item: any) => {
+                // Klient-side sikkerhetsfilter mot det bufrede kartutsnittet
+                const rawList = (Array.isArray(data) ? data : []).filter((item: any) => {
+                  const lat = item.latitude
+                  const lng = item.longitude
+                  if (typeof lat !== 'number' || typeof lng !== 'number') return false
+                  return (
+                    lat >= bufferedBounds.minLat &&
+                    lat <= bufferedBounds.maxLat &&
+                    lng >= bufferedBounds.minLng &&
+                    lng <= bufferedBounds.maxLng
+                  )
+                })
+
+                vessels.value = rawList.map((item: any) => {
                   const typeCode = item.shipType || 0
                   const rawName = item.name ? item.name.trim() : ''
                   const { typeName, cat } = getShipTypeInfo(typeCode, item.shipTypeName, rawName)
@@ -327,6 +392,7 @@ export function useAis() {
                     updatedAt
                   }
                 })
+                cachedFetchBounds.value = bufferedBounds
                 error.value = null
                 return
               }
@@ -338,10 +404,12 @@ export function useAis() {
       }
 
       // Fallback / Live demo stream hvis credentials mangler eller ved feil
-      vessels.value = getSimulatedVessels(bounds)
+      vessels.value = getSimulatedVessels(bufferedBounds)
+      cachedFetchBounds.value = bufferedBounds
     } catch (err: any) {
       console.warn('AIS fetch warning, using demo fleet:', err)
-      vessels.value = getSimulatedVessels(bounds)
+      vessels.value = getSimulatedVessels(bufferedBounds)
+      cachedFetchBounds.value = bufferedBounds
     } finally {
       isLoading.value = false
     }
@@ -349,6 +417,7 @@ export function useAis() {
 
   const toggleAis = () => {
     isEnabled.value = !isEnabled.value
+    cachedFetchBounds.value = null
     if (!isEnabled.value) {
       vessels.value = []
       error.value = null
@@ -361,6 +430,7 @@ export function useAis() {
     minZoomForAis: MIN_ZOOM_FOR_AIS,
     currentZoom,
     vessels,
+    cachedFetchBounds,
     isLoading,
     error,
     credentials,

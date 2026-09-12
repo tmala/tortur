@@ -9,6 +9,101 @@ import { readFileSync } from 'node:fs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
 
+function barentsWatchAisDevPlugin() {
+  let cachedAisData: any[] | null = null
+  let cachedAisTime = 0
+
+  return {
+    name: 'bw-ais-dev-filter',
+    configureServer(server: any) {
+      server.middlewares.use(async (req: any, res: any, next: any) => {
+        if (req.url && req.url.startsWith('/tortur/api/bw-ais/v1/latest/combined') && req.method === 'POST') {
+          let bodyStr = ''
+          req.on('data', (chunk: any) => {
+            bodyStr += chunk
+          })
+          req.on('end', async () => {
+            try {
+              let bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null = null
+              try {
+                const parsed = JSON.parse(bodyStr)
+                if (parsed.bounds) {
+                  bounds = parsed.bounds
+                } else if (parsed.coordinates && Array.isArray(parsed.coordinates[0])) {
+                  const pts = parsed.coordinates[0]
+                  bounds = {
+                    minLng: Math.min(...pts.map((p: any) => p[0])),
+                    maxLng: Math.max(...pts.map((p: any) => p[0])),
+                    minLat: Math.min(...pts.map((p: any) => p[1])),
+                    maxLat: Math.max(...pts.map((p: any) => p[1])),
+                  }
+                }
+              } catch {
+                // Ignorer JSON parsefeil
+              }
+
+              const authHeader = req.headers['authorization']
+              if (!authHeader) {
+                res.statusCode = 401
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ error: 'Mangler Authorization header' }))
+                return
+              }
+
+              const now = Date.now()
+              const wasCached = !!cachedAisData && now - cachedAisTime <= 25000
+              if (!wasCached) {
+                const bwRes = await fetch('https://live.ais.barentswatch.no/v1/latest/combined', {
+                  headers: {
+                    Authorization: authHeader,
+                    Accept: 'application/json',
+                  },
+                })
+                if (!bwRes.ok) {
+                  res.statusCode = bwRes.status
+                  const errText = await bwRes.text()
+                  res.setHeader('Content-Type', 'application/json')
+                  res.end(errText)
+                  return
+                }
+                cachedAisData = await bwRes.json()
+                cachedAisTime = now
+              }
+
+              let filtered = cachedAisData || []
+              if (bounds) {
+                const b = bounds
+                filtered = filtered.filter((ship: any) => {
+                  return (
+                    typeof ship.latitude === 'number' &&
+                    typeof ship.longitude === 'number' &&
+                    ship.latitude >= b.minLat &&
+                    ship.latitude <= b.maxLat &&
+                    ship.longitude >= b.minLng &&
+                    ship.longitude <= b.maxLng
+                  )
+                })
+              }
+
+              res.statusCode = 200
+              res.setHeader('Content-Type', 'application/json')
+              res.setHeader('X-AIS-Cache', wasCached ? 'HIT' : 'MISS')
+              res.setHeader('X-AIS-Count', String(filtered.length))
+              res.end(JSON.stringify(filtered))
+            } catch (err: any) {
+              res.statusCode = 502
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: err.message || 'Feil under proxying til BarentsWatch' }))
+            }
+          })
+          return
+        }
+        next()
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   base: '/tortur/',
@@ -20,6 +115,7 @@ export default defineConfig({
     vue(),
     vueJsx(),
     vueDevTools(),
+    barentsWatchAisDevPlugin(),
     VitePWA({
       registerType: 'prompt',
       devOptions: {

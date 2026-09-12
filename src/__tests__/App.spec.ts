@@ -1118,5 +1118,33 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
 
     expect(centerOnUserSpy).toHaveBeenCalledWith(true, 15)
   })
+
+  it('deaktiverer kommunegrenser når MapViewer emitter disable-municipalities', async () => {
+    const wrapper = mount(MapView, {
+      global: {
+        plugins: [createPinia()],
+        stubs: {
+          MapViewer: true,
+          AppHeader: true,
+          RouterView: true
+        }
+      }
+    })
+
+    // Slå på kommunegrenser via AppHeader emit
+    const appHeader = wrapper.findComponent({ name: 'AppHeader' })
+    appHeader.vm.$emit('toggle-municipalities')
+    await wrapper.vm.$nextTick()
+
+    const mapViewer = wrapper.findComponent({ name: 'MapViewer' })
+    expect(mapViewer.props('showMunicipalities')).toBe(true)
+
+    // Deaktiver via MapViewer emit (slik popupen gjør)
+    mapViewer.vm.$emit('disable-municipalities')
+    await wrapper.vm.$nextTick()
+
+    expect(mapViewer.props('showMunicipalities')).toBe(false)
+  })
 })
+
 
