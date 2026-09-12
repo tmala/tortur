@@ -11,6 +11,17 @@ import {
 import type { TurpostItem } from '@/composables/useTurposter'
 import type { AisVessel } from '@/composables/useAis'
 
+import { createTileLayers } from '@/utils/mapTileLayers'
+import {
+  createUserIcon,
+  createTurpostIcon,
+  createPrivateTurpostIcon,
+  createSuggestionTurpostIcon
+} from '@/utils/mapIcons'
+import { useMapAisLayer } from '@/composables/map/useMapAisLayer'
+import { useMapTrackLayer } from '@/composables/map/useMapTrackLayer'
+import { useMapMunicipalitiesLayer } from '@/composables/map/useMapMunicipalitiesLayer'
+
 const props = defineProps<{
   userLocation: GeoLocationState | null
   activeLayer: string
@@ -56,147 +67,27 @@ let currentTileLayer: L.TileLayer | null = null
 let currentOverlayLayer: L.TileLayer | null = null
 let turpostsLayerGroup: L.LayerGroup | null = null
 let privateTurpostsLayerGroup: L.LayerGroup | null = null
-let vesselsLayerGroup: L.LayerGroup | null = null
-let geoJsonLayer: L.GeoJSON | null = null
-let geoJsonData: any = null
 let suggestionMarker: L.Marker | null = null
 const markerMap = new Map<string, L.Marker>()
 
-// Definisjoner av 100% gratis kartlag uten API-nøkkel
-const tileLayers: Record<string, { url: string; overlayUrl?: string; attribution: string; maxZoom: number; subdomains?: string }> = {
-  standard: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> bidragsytere',
-    maxZoom: 19,
-    subdomains: 'abc'
-  },
-  norgeskart: {
-    url: 'https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png',
-    attribution: '&copy; <a href="https://www.kartverket.no" target="_blank">Kartverket</a>',
-    maxZoom: 18
-  },
-  kartverket_sjokart: {
-    url: 'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png',
-    attribution: '&copy; <a href="https://www.kartverket.no" target="_blank">Kartverket Sjødivisjonen</a>',
-    maxZoom: 18
-  },
-  tur: {
-    url: 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.cyclosm.org" target="_blank">CyclOSM</a> | Kartdata: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
-    maxZoom: 18,
-    subdomains: 'abc'
-  },
-  topo: {
-    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: 'Kartdata: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>, SRTM | Visning: &copy; <a href="https://opentopomap.org" target="_blank">OpenTopoMap</a>',
-    maxZoom: 17,
-    subdomains: 'abc'
-  },
-  seamap: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    overlayUrl: 'https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> | Sjømerker: &copy; <a href="http://www.openseamap.org" target="_blank">OpenSeaMap</a>',
-    maxZoom: 18,
-    subdomains: 'abc'
-  },
-  satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-    maxZoom: 19
-  },
-  google_streets: {
-    url: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-    attribution: '&copy; <a href="https://maps.google.com" target="_blank">Google Maps</a>',
-    maxZoom: 20,
-    subdomains: '0123'
-  },
-  google_hybrid: {
-    url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-    attribution: '&copy; <a href="https://maps.google.com" target="_blank">Google Maps</a>',
-    maxZoom: 20,
-    subdomains: '0123'
-  },
-  google_terrain: {
-    url: 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
-    attribution: '&copy; <a href="https://maps.google.com" target="_blank">Google Maps</a>',
-    maxZoom: 20,
-    subdomains: '0123'
+const aisLayer = useMapAisLayer(() => map)
+const trackLayer = useMapTrackLayer(
+  () => map,
+  () => emit('click-track')
+)
+const municipalitiesLayer = useMapMunicipalitiesLayer(
+  () => map,
+  {
+    getKommuneInfo: props.getKommuneInfo,
+    getSelectedKommuneName: () => props.selectedKommuneName,
+    onClearTurposter: () => emit('clear-turposter'),
+    onSelectKommuneByName: (name: string) => emit('select-kommune-by-name', name),
+    onDisableMunicipalities: () => emit('disable-municipalities')
   }
-}
-
-const createUserIcon = (heading: number | null) => {
-  const headingStyle = heading !== null 
-    ? `transform: rotate(${heading}deg); display: block;` 
-    : 'display: none;'
-
-  return L.divIcon({
-    className: 'custom-user-pin',
-    html: `
-      <div class="user-location-marker">
-        <div class="pulse-ring"></div>
-        <div class="marker-core"></div>
-        <div class="heading-indicator" style="${headingStyle}"></div>
-      </div>
-    `,
-    iconSize: [44, 44],
-    iconAnchor: [22, 22]
-  })
-}
-
-const createTurpostIcon = (isVisited: boolean = false) => {
-  return L.divIcon({
-    className: 'custom-turpost-pin',
-    html: `
-      <div class="turpost-pin-marker ${isVisited ? 'is-visited' : 'is-unvisited'}">
-        <div class="turpost-pin-icon">
-          <span>${isVisited ? '✓' : '⛰️'}</span>
-        </div>
-      </div>
-    `,
-    iconSize: [32, 38],
-    iconAnchor: [16, 36],
-    popupAnchor: [0, -32]
-  })
-}
-
-const createPrivateTurpostIcon = (isVisited: boolean = false) => {
-  return L.divIcon({
-    className: 'custom-turpost-pin',
-    html: `
-      <div class="turpost-pin-marker is-private ${isVisited ? 'is-visited' : 'is-unvisited'}">
-        <div class="turpost-pin-icon">
-          <span>${isVisited ? '★' : '⭐'}</span>
-        </div>
-      </div>
-    `,
-    iconSize: [32, 38],
-    iconAnchor: [16, 36],
-    popupAnchor: [0, -32]
-  })
-}
-
-const createSuggestionTurpostIcon = () => {
-  return L.divIcon({
-    className: 'custom-turpost-pin suggestion-pin',
-    html: `
-      <div class="turpost-pin-marker is-suggestion">
-        <div class="suggestion-pulse"></div>
-        <div class="turpost-pin-icon">
-          <span>📋</span>
-        </div>
-      </div>
-    `,
-    iconSize: [36, 42],
-    iconAnchor: [18, 40],
-    popupAnchor: [0, -36]
-  })
-}
+)
 
 const switchLayer = (layerKey: string) => {
   if (!map) return
-
-  const config = tileLayers[layerKey] ?? tileLayers.standard!
-  if (!config) return
 
   if (currentTileLayer) {
     map.removeLayer(currentTileLayer)
@@ -208,22 +99,10 @@ const switchLayer = (layerKey: string) => {
     currentOverlayLayer = null
   }
 
-  currentTileLayer = L.tileLayer(config.url, {
-    attribution: config.attribution,
-    maxZoom: config.maxZoom,
-    subdomains: config.subdomains || 'abc',
-    updateWhenIdle: true,
-    updateWhenZooming: false,
-    keepBuffer: 2
-  }).addTo(map)
-
-  if (config.overlayUrl) {
-    currentOverlayLayer = L.tileLayer(config.overlayUrl, {
-      maxZoom: config.maxZoom,
-      updateWhenIdle: true,
-      updateWhenZooming: false,
-      keepBuffer: 2
-    }).addTo(map)
+  const { baseLayer, overlayLayer } = createTileLayers(layerKey)
+  currentTileLayer = baseLayer.addTo(map)
+  if (overlayLayer) {
+    currentOverlayLayer = overlayLayer.addTo(map)
   }
 }
 
@@ -676,142 +555,6 @@ const updatePrivateTurpostMarkers = (posts: TurpostItem[]) => {
   })
 }
 
-// Kommunegrenser GeoJSON håndtering
-const loadMunicipalitiesGeoJson = async () => {
-  if (geoJsonData) return
-  try {
-    const res = await fetch(`${import.meta.env.BASE_URL}data/kommuner.geojson`)
-    if (!res.ok) return
-    geoJsonData = await res.json()
-    renderMunicipalitiesLayer()
-  } catch (err) {
-    console.warn('Kunne ikke laste kommunegrenser:', err)
-  }
-}
-
-const getKommuneStyle = (feature: any) => {
-  const name = feature?.properties?.kommunenavn || feature?.properties?.name || ''
-  const isSelected = props.selectedKommuneName && 
-    name.toLowerCase() === props.selectedKommuneName.toLowerCase()
-
-  if (isSelected) {
-    return {
-      color: '#10b981',
-      weight: 3,
-      opacity: 0.9,
-      fillColor: '#10b981',
-      fillOpacity: 0.14
-    }
-  }
-
-  return {
-    color: '#0284c7',
-    weight: 1.5,
-    opacity: 0.45,
-    fillColor: '#0284c7',
-    fillOpacity: 0.02
-  }
-}
-
-const openKommunePopup = (name: string, latlng: L.LatLng) => {
-  if (!map) return
-
-  const info = props.getKommuneInfo ? props.getKommuneInfo(name) : null
-  const isCurrentlySelected = props.selectedKommuneName && 
-    props.selectedKommuneName.toLowerCase() === name.toLowerCase()
-
-  const countText = info ? `${info.count} turposter registrert` : ''
-  const fylkeText = info ? `${info.fylkeName}` : ''
-
-  const popupDiv = document.createElement('div')
-  popupDiv.className = 'kommune-action-popup'
-  popupDiv.innerHTML = `
-    <div style="font-family: inherit; font-size: 13px; color: #f8fafc; min-width: 200px;">
-      <h4 style="font-size: 15px; font-weight: 700; margin: 0 0 4px 0; color: #38bdf8;">
-        📍 ${name} kommune
-      </h4>
-      ${fylkeText ? `<div style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;">${fylkeText} ${countText ? `&bull; ${countText}` : ''}</div>` : ''}
-      <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">
-        ${isCurrentlySelected 
-          ? `<button id="btn-popup-toggle" class="btn-popup-toggle btn-popup-hide">✕ Skjul turposter</button>`
-          : `<button id="btn-popup-toggle" class="btn-popup-toggle btn-popup-show">⛰️ Vis turposter for ${name}</button>`
-        }
-        <button id="btn-popup-disable-borders" class="btn-popup-toggle btn-popup-borders">🗺️ Deaktiver kommunegrenser</button>
-      </div>
-    </div>
-  `
-
-  const popup = L.popup({
-    className: 'custom-kommune-dialog',
-    offset: [0, -10]
-  })
-    .setLatLng(latlng)
-    .setContent(popupDiv)
-    .openOn(map)
-
-  const btn = popupDiv.querySelector('#btn-popup-toggle')
-  if (btn) {
-    btn.addEventListener('click', () => {
-      if (isCurrentlySelected) {
-        emit('clear-turposter')
-      } else {
-        emit('select-kommune-by-name', name)
-      }
-      map?.closePopup(popup)
-    })
-  }
-
-  const btnBorders = popupDiv.querySelector('#btn-popup-disable-borders')
-  if (btnBorders) {
-    btnBorders.addEventListener('click', () => {
-      emit('disable-municipalities')
-      map?.closePopup(popup)
-    })
-  }
-}
-
-const renderMunicipalitiesLayer = () => {
-  if (!map || !geoJsonData) return
-
-  if (geoJsonLayer) {
-    map.removeLayer(geoJsonLayer)
-    geoJsonLayer = null
-  }
-
-  if (!props.showMunicipalities) return
-
-  geoJsonLayer = L.geoJSON(geoJsonData, {
-    style: getKommuneStyle,
-    onEachFeature: (feature, layer) => {
-      const name = feature.properties?.kommunenavn || feature.properties?.name || 'Kommune'
-
-      layer.on({
-        mouseover: (e) => {
-          const targetLayer = e.target
-          targetLayer.setStyle({
-            color: '#38bdf8',
-            weight: 2.5,
-            opacity: 0.9,
-            fillColor: '#38bdf8',
-            fillOpacity: 0.1
-          })
-          targetLayer.bringToFront()
-        },
-        mouseout: (e) => {
-          if (geoJsonLayer) {
-            geoJsonLayer.resetStyle(e.target)
-          }
-        },
-        click: (e) => {
-          openKommunePopup(name, e.latlng)
-        }
-      })
-    }
-  }).addTo(map)
-
-  geoJsonLayer.bringToBack()
-}
-
 const isAutoCenter = ref(true)
 const hasInitiallyCenteredOnUser = ref(false)
 
@@ -833,108 +576,10 @@ const centerOnUser = (animate = true, zoomLevel?: number) => {
   }
 }
 
-let trackPolyline: L.Polyline | null = null
-let trackBgPolyline: L.Polyline | null = null
-let trackHitPolyline: L.Polyline | null = null
-
-const escapeTrackHtml = (str: string): string => {
-  return str.replace(/[&<>"']/g, (m) => {
-    switch (m) {
-      case '&': return '&amp;'
-      case '<': return '&lt;'
-      case '>': return '&gt;'
-      case '"': return '&quot;'
-      case "'": return '&#39;'
-      default: return m
-    }
-  })
-}
-
-const getTrackTooltipContent = () => {
-  const name = props.trackName || 'GPS-spor'
-  const distStr = props.trackDistanceMeters ? ` (${formatDistance(props.trackDistanceMeters)})` : ''
-  return `<div class="track-map-tooltip"><strong>${escapeTrackHtml(name)}${distStr}</strong><small>Klikk for å åpne sporinfo</small></div>`
-}
-
-const onTrackClick = (e: L.LeafletMouseEvent) => {
-  L.DomEvent.stopPropagation(e)
-  emit('click-track')
-}
-
-const updateTrackLayer = () => {
-  if (!map) return
-  const points = props.trackPoints || []
-  if (points.length < 2) {
-    if (trackPolyline) {
-      trackPolyline.remove()
-      trackPolyline = null
-    }
-    if (trackBgPolyline) {
-      trackBgPolyline.remove()
-      trackBgPolyline = null
-    }
-    if (trackHitPolyline) {
-      trackHitPolyline.remove()
-      trackHitPolyline = null
-    }
-    return
-  }
-
-  const latlngs = points.map(p => [p.lat, p.lng] as [number, number])
-
-  if (!trackPolyline || !trackBgPolyline || !trackHitPolyline) {
-    // Usynlig bred treffsone (24px) for enkel klikk/trykk på mobil og desktop
-    trackHitPolyline = L.polyline(latlngs, {
-      color: '#000000',
-      weight: 24,
-      opacity: 0,
-      lineCap: 'round',
-      lineJoin: 'round',
-      className: 'track-interactive-line',
-      interactive: true,
-    }).addTo(map)
-
-    trackBgPolyline = L.polyline(latlngs, {
-      color: '#0f172a',
-      weight: 6,
-      opacity: 0.55,
-      lineCap: 'round',
-      lineJoin: 'round',
-      className: 'track-interactive-line',
-      interactive: true,
-    }).addTo(map)
-
-    trackPolyline = L.polyline(latlngs, {
-      color: '#f97316',
-      weight: 3.5,
-      opacity: 0.95,
-      lineCap: 'round',
-      lineJoin: 'round',
-      className: 'track-interactive-line',
-      interactive: true,
-    }).addTo(map)
-
-    trackHitPolyline.on('click', onTrackClick)
-    trackBgPolyline.on('click', onTrackClick)
-    trackPolyline.on('click', onTrackClick)
-
-    trackHitPolyline.bindTooltip(getTrackTooltipContent(), {
-      sticky: true,
-      className: 'track-map-tooltip-wrap',
-      direction: 'top',
-    })
-  } else {
-    trackHitPolyline.setLatLngs(latlngs)
-    trackBgPolyline.setLatLngs(latlngs)
-    trackPolyline.setLatLngs(latlngs)
-    trackHitPolyline.setTooltipContent(getTrackTooltipContent())
-  }
-}
-
 watch(
   () => props.trackPoints,
-  () => {
-    updateTrackLayer()
+  (points) => {
+    trackLayer.updateTrackLayer(points, props.trackName, props.trackDistanceMeters)
   },
   { deep: true }
 )
@@ -942,9 +587,7 @@ watch(
 watch(
   () => [props.trackName, props.trackDistanceMeters],
   () => {
-    if (trackHitPolyline) {
-      trackHitPolyline.setTooltipContent(getTrackTooltipContent())
-    }
+    trackLayer.updateTooltip(props.trackName, props.trackDistanceMeters)
   }
 )
 
@@ -991,18 +634,7 @@ const panToCoordinate = (lat: number, lng: number, zoomLevel?: number) => {
 }
 
 const zoomToTrack = (points?: TrackPoint[]) => {
-  if (!map) return
-  const pts = points || props.trackPoints || []
-  if (pts.length < 2) return
-  const latlngs = pts.map(p => [p.lat, p.lng] as [number, number])
-  const bounds = L.latLngBounds(latlngs)
-  if (bounds.isValid()) {
-    map.fitBounds(bounds, {
-      padding: [60, 60],
-      maxZoom: 16,
-      animate: true
-    })
-  }
+  trackLayer.zoomToTrack(points || props.trackPoints)
 }
 
 const showSpotSuggestion = (spot: {
@@ -1097,88 +729,6 @@ watch(
   }
 )
 
-const createVesselIcon = (vessel: AisVessel) => {
-  let color = '#38bdf8' // Blue passenger / ferry
-  if (vessel.shipCategory === 'cargo') color = '#22c55e' // Green cargo
-  else if (vessel.shipCategory === 'tanker') color = '#eab308' // Yellow/Gold tanker
-  else if (vessel.shipCategory === 'tug') color = '#f97316' // Orange tug
-  else if (vessel.shipCategory === 'rescue') color = '#ef4444' // Red rescue/coast guard
-  else if (vessel.shipCategory === 'fishing') color = '#a855f7' // Purple fishing vessel
-  else if (vessel.shipCategory === 'military') color = '#4d7c0f' // Olive green military
-  else if (vessel.shipCategory === 'other') color = '#94a3b8'
-
-  const rot = vessel.heading ?? vessel.cog ?? 0
-
-  return L.divIcon({
-    className: 'custom-vessel-pin',
-    html: `
-      <div style="position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transform: rotate(${rot}deg); transition: transform 0.3s ease;">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="${color}" stroke="#0f172a" stroke-width="1.5">
-          <path d="M12 2 L19 19 L12 16 L5 19 Z" />
-        </svg>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16]
-  })
-}
-
-const updateVesselMarkers = (ships: AisVessel[] | undefined) => {
-  if (!map || !vesselsLayerGroup) return
-  vesselsLayerGroup.clearLayers()
-  if (!props.isAisToggled || !props.isZoomSufficient || !ships || ships.length === 0) {
-    return
-  }
-
-  const categoryLabels: Record<string, string> = {
-    passenger: 'Passasjerskip / Ferge',
-    cargo: 'Lasteskip',
-    tanker: 'Tankskip',
-    tug: 'Slepebåt / Arbeidsfartøy',
-    rescue: 'Redning / Kystvakt',
-    fishing: 'Fiskefartøy',
-    military: 'Militært fartøy (Marine)',
-    other: 'Fartøy'
-  }
-
-  ships.forEach((ship) => {
-    const marker = L.marker([ship.lat, ship.lng], {
-      icon: createVesselIcon(ship),
-      zIndexOffset: 800
-    })
-
-    const isMilitary = ship.shipCategory === 'military'
-    const shipEmoji = isMilitary ? '🛡️' : '🚢'
-    const nameColor = isMilitary ? '#86efac' : '#38bdf8'
-
-    marker.bindPopup(`
-      <div style="font-family: inherit; font-size: 13px; color: #f8fafc; line-height: 1.4; min-width: 200px;">
-        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-          <span style="font-size: 16px;">${shipEmoji}</span>
-          <strong style="color: ${nameColor}; font-size: 14px;">${ship.name}</strong>
-        </div>
-        <div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px;">
-          ${ship.shipType || categoryLabels[ship.shipCategory] || 'Fartøy'} &bull; MMSI: ${ship.mmsi}
-        </div>
-        <div style="background: rgba(15, 23, 42, 0.6); padding: 6px 8px; border-radius: 6px; font-size: 12px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 3px;">
-          <div>💨 <strong>Fart:</strong> ${ship.sog.toFixed(1)} knop</div>
-          <div>🧭 <strong>Kurs:</strong> ${Math.round(ship.cog)}°</div>
-          ${ship.navStatus ? `<div>⚓ <strong>Status:</strong> ${ship.navStatus}</div>` : ''}
-          ${ship.destination ? `<div>📍 <strong>Destinasjon:</strong> ${ship.destination}</div>` : ''}
-        </div>
-        <div style="font-size: 10px; color: #64748b; text-align: right;">
-          Oppdatert: ${ship.updatedAt}
-        </div>
-      </div>
-    `, {
-      className: 'custom-turpost-popup'
-    })
-
-    vesselsLayerGroup!.addLayer(marker)
-  })
-}
-
 watch(
   () => props.activeLayer,
   (newLayer) => {
@@ -1224,7 +774,7 @@ watch(
 watch(
   () => [props.vessels, props.isAisToggled, props.isZoomSufficient],
   () => {
-    updateVesselMarkers(props.vessels)
+    aisLayer.updateVesselMarkers(props.vessels, props.isAisToggled, props.isZoomSufficient)
   },
   { deep: true }
 )
@@ -1233,12 +783,9 @@ watch(
   () => [props.showMunicipalities, props.selectedKommuneName],
   () => {
     if (props.showMunicipalities) {
-      loadMunicipalitiesGeoJson().then(() => {
-        renderMunicipalitiesLayer()
-      })
-    } else if (geoJsonLayer && map) {
-      map.removeLayer(geoJsonLayer)
-      geoJsonLayer = null
+      municipalitiesLayer.loadMunicipalitiesGeoJson(true)
+    } else {
+      municipalitiesLayer.renderMunicipalitiesLayer(false)
     }
   }
 )
@@ -1263,7 +810,7 @@ onMounted(() => {
 
   turpostsLayerGroup = L.layerGroup().addTo(map)
   privateTurpostsLayerGroup = L.layerGroup().addTo(map)
-  vesselsLayerGroup = L.layerGroup().addTo(map)
+  aisLayer.initLayer()
 
   if (props.userLocation) {
     hasInitiallyCenteredOnUser.value = true
@@ -1280,14 +827,14 @@ onMounted(() => {
   }
 
   if (props.vessels && props.vessels.length > 0) {
-    updateVesselMarkers(props.vessels)
+    aisLayer.updateVesselMarkers(props.vessels, props.isAisToggled, props.isZoomSufficient)
   }
 
   if (props.showMunicipalities) {
-    loadMunicipalitiesGeoJson()
+    municipalitiesLayer.loadMunicipalitiesGeoJson(true)
   }
 
-  updateTrackLayer()
+  trackLayer.updateTrackLayer(props.trackPoints, props.trackName, props.trackDistanceMeters)
 
   map.on('dragstart', () => {
     isAutoCenter.value = false
@@ -1339,18 +886,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (trackPolyline) {
-    trackPolyline.remove()
-    trackPolyline = null
-  }
-  if (trackBgPolyline) {
-    trackBgPolyline.remove()
-    trackBgPolyline = null
-  }
-  if (trackHitPolyline) {
-    trackHitPolyline.remove()
-    trackHitPolyline = null
-  }
+  trackLayer.cleanup()
+  aisLayer.cleanup()
+  municipalitiesLayer.cleanup()
   if (map) {
     map.remove()
     map = null
