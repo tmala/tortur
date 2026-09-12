@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import MapViewer from '@/components/MapViewer.vue'
+import AppHeader from '@/components/AppHeader.vue'
 import LocationControls from '@/components/LocationControls.vue'
 import TurposterPanel from '@/components/TurposterPanel.vue'
 import CheckinModal from '@/components/CheckinModal.vue'
@@ -692,14 +693,8 @@ onUnmounted(() => {
       @delete-private-spot="handleDeletePrivateSpot"
     />
 
-    <LocationControls
-      :user-location="coords"
-      :is-locating="isLocating"
-      :is-tracking="isTracking"
-      :has-track="trackPoints.length > 0"
-      :error="geoError || turError || aisError"
+    <AppHeader
       :active-layer="activeLayer"
-      :center-coords="centerCoords"
       :is-turposter-open="isTurposterOpen"
       :active-kommune-name="selectedKommune ? selectedKommune.name : null"
       :turpost-count="turposter.length"
@@ -713,6 +708,9 @@ onUnmounted(() => {
       :is-logged-in="isLoggedIn"
       :is-admin="isAdmin"
       :is-loading-local-turposter="isLoadingLocalTurposter"
+      :is-locating="isLocating"
+      :is-tracking="isTracking"
+      :has-track="trackPoints.length > 0"
       :saved-tracks-count="trackStore.savedTracks.length"
       :is-saved-tracks-open="false"
       :needs-update="needsUpdate"
@@ -721,19 +719,26 @@ onUnmounted(() => {
       :is-add-spot-mode-active="appState.isAddSpotModeActive"
       @locate="handleLocate"
       @toggle-tracking="handleToggleTracking"
-      @clear-track="clearTrack"
       @open-track-modal="router?.push('/gps-spor?tab=live')"
       @open-saved-tracks="router?.push('/gps-spor')"
       @open-my-spots="router?.push('/mine-turposter')"
       @toggle-add-spot-mode="appState.isAddSpotModeActive = !appState.isAddSpotModeActive"
       @change-layer="handleChangeLayer"
-      @clear-error="handleClearError"
       @toggle-turposter="handleToggleTurposter"
       @toggle-municipalities="showMunicipalities = !showMunicipalities"
       @toggle-ais="handleToggleAis"
       @show-local-turposter="handleShowLocalTurposter"
       @open-profile="router?.push('/profil')"
       @apply-update="applyUpdate"
+    />
+
+    <LocationControls
+      :user-location="coords"
+      :center-coords="centerCoords"
+      :error="geoError || turError || aisError"
+      :is-locating="isLocating"
+      @locate="handleLocate"
+      @clear-error="handleClearError"
     />
 
     <TurposterPanel

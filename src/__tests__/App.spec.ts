@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import App from '../App.vue'
 import MapView from '../views/MapView.vue'
+import AppHeader from '../components/AppHeader.vue'
 import LocationControls from '../components/LocationControls.vue'
 import TurposterPanel from '../components/TurposterPanel.vue'
 import CheckinModal from '../components/CheckinModal.vue'
@@ -13,21 +14,18 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-describe('LocationControls', () => {
+describe('AppHeader', () => {
   it('renders application title and toggles menu properly', async () => {
-    const wrapper = mount(LocationControls, {
+    const wrapper = mount(AppHeader, {
       props: {
-        userLocation: null,
         isLocating: false,
         isTracking: false,
-        error: null,
         activeLayer: 'standard',
-        centerCoords: { lat: 60.3913, lng: 5.3221, zoom: 13 },
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,
-        showMunicipalities: true
-      }
+        showMunicipalities: true,
+      },
     })
 
     expect(wrapper.text()).toContain('TorTur')
@@ -48,21 +46,18 @@ describe('LocationControls', () => {
   })
 
   it('hides AIS controls for non-admin users and shows them for admin', async () => {
-    const wrapper = mount(LocationControls, {
+    const wrapper = mount(AppHeader, {
       props: {
-        userLocation: null,
         isLocating: false,
         isTracking: false,
-        error: null,
         activeLayer: 'standard',
-        centerCoords: null,
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,
         showMunicipalities: true,
         isLoggedIn: true,
-        isAdmin: false
-      }
+        isAdmin: false,
+      },
     })
 
     // Open menu
@@ -77,20 +72,17 @@ describe('LocationControls', () => {
   })
 
   it('does not show Google map layers when user is not logged in', async () => {
-    const wrapper = mount(LocationControls, {
+    const wrapper = mount(AppHeader, {
       props: {
-        userLocation: null,
         isLocating: false,
         isTracking: false,
-        error: null,
         activeLayer: 'standard',
-        centerCoords: null,
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,
         showMunicipalities: true,
-        isLoggedIn: false
-      }
+        isLoggedIn: false,
+      },
     })
 
     await wrapper.find('.brand-badge-btn').trigger('click')
@@ -103,20 +95,17 @@ describe('LocationControls', () => {
   })
 
   it('shows Google map layers when user is logged in', async () => {
-    const wrapper = mount(LocationControls, {
+    const wrapper = mount(AppHeader, {
       props: {
-        userLocation: null,
         isLocating: false,
         isTracking: false,
-        error: null,
         activeLayer: 'standard',
-        centerCoords: null,
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,
         showMunicipalities: true,
-        isLoggedIn: true
-      }
+        isLoggedIn: true,
+      },
     })
 
     await wrapper.find('.brand-badge-btn').trigger('click')
@@ -128,27 +117,24 @@ describe('LocationControls', () => {
   })
 
   it('renders map layers in ascending order of sortnum', async () => {
-    const wrapper = mount(LocationControls, {
+    const wrapper = mount(AppHeader, {
       props: {
-        userLocation: null,
         isLocating: false,
         isTracking: false,
-        error: null,
         activeLayer: 'standard',
-        centerCoords: null,
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,
         showMunicipalities: true,
-        isLoggedIn: false
-      }
+        isLoggedIn: false,
+      },
     })
 
     await wrapper.find('.brand-badge-btn').trigger('click')
     await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
 
     const layerItems = wrapper.findAll('.layer-item .layer-name')
-    const layerNames = layerItems.map(item => item.text())
+    const layerNames = layerItems.map((item) => item.text())
 
     // Sjekk at kartlagene sorteres etter sortnum (Norgeskart 10, Topo 20, Standard OSM 30)
     expect(layerNames[0]).toBe('Kartverket Norgeskart')
@@ -157,19 +143,16 @@ describe('LocationControls', () => {
   })
 
   it('emits locate event when clicking locate button in menu', async () => {
-    const wrapper = mount(LocationControls, {
+    const wrapper = mount(AppHeader, {
       props: {
-        userLocation: null,
         isLocating: false,
         isTracking: false,
-        error: null,
         activeLayer: 'standard',
-        centerCoords: null,
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,
-        showMunicipalities: true
-      }
+        showMunicipalities: true,
+      },
     })
 
     await wrapper.find('.brand-badge-btn').trigger('click')
@@ -180,19 +163,16 @@ describe('LocationControls', () => {
   })
 
   it('emits toggle-turposter when clicking turposter button in menu', async () => {
-    const wrapper = mount(LocationControls, {
+    const wrapper = mount(AppHeader, {
       props: {
-        userLocation: null,
         isLocating: false,
         isTracking: false,
-        error: null,
         activeLayer: 'standard',
-        centerCoords: null,
         isTurposterOpen: false,
         activeKommuneName: 'Luster',
         turpostCount: 412,
-        showMunicipalities: true
-      }
+        showMunicipalities: true,
+      },
     })
 
     await wrapper.find('.brand-badge-btn').trigger('click')
@@ -205,19 +185,16 @@ describe('LocationControls', () => {
   })
 
   it('emits toggle-municipalities when clicking boundary button in menu', async () => {
-    const wrapper = mount(LocationControls, {
+    const wrapper = mount(AppHeader, {
       props: {
-        userLocation: null,
         isLocating: false,
         isTracking: false,
-        error: null,
         activeLayer: 'standard',
-        centerCoords: null,
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,
-        showMunicipalities: true
-      }
+        showMunicipalities: true,
+      },
     })
 
     await wrapper.find('.brand-badge-btn').trigger('click')
@@ -225,6 +202,61 @@ describe('LocationControls', () => {
     await boundaryBtn.trigger('click')
 
     expect(wrapper.emitted('toggle-municipalities')).toBeTruthy()
+  })
+})
+
+describe('LocationControls', () => {
+  it('renders user location coordinates and accuracy badge', () => {
+    const wrapper = mount(LocationControls, {
+      props: {
+        userLocation: {
+          lat: 60.3913,
+          lng: 5.3221,
+          accuracy: 12,
+          altitude: null,
+          speed: null,
+          heading: null,
+          timestamp: Date.now(),
+        },
+        centerCoords: null,
+        error: null,
+      },
+    })
+
+    expect(wrapper.text()).toContain('60.3913°')
+    expect(wrapper.text()).toContain('5.3221°')
+    expect(wrapper.text()).toContain('±12m')
+  })
+
+  it('renders center coords when userLocation is null', () => {
+    const wrapper = mount(LocationControls, {
+      props: {
+        userLocation: null,
+        centerCoords: { lat: 59.9139, lng: 10.7522, zoom: 12 },
+        error: null,
+      },
+    })
+
+    expect(wrapper.text()).toContain('Senter: 59.9139°, 10.7522° (Zoom 12)')
+  })
+
+  it('renders error banner and emits locate and clear-error', async () => {
+    const wrapper = mount(LocationControls, {
+      props: {
+        userLocation: null,
+        centerCoords: null,
+        error: 'Posisjon utilgjengelig',
+      },
+    })
+
+    expect(wrapper.find('.error-banner').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Posisjon utilgjengelig')
+
+    await wrapper.find('.btn-retry').trigger('click')
+    expect(wrapper.emitted('locate')).toBeTruthy()
+
+    await wrapper.find('.btn-dismiss').trigger('click')
+    expect(wrapper.emitted('clear-error')).toBeTruthy()
   })
 })
 
@@ -944,10 +976,10 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
     await flushPromises()
     await wrapper.vm.$nextTick()
 
-    // Sjekk at LocationControls mottar activeLayer='standard' (Standard OpenStreetMap)
-    const locationControls = wrapper.findComponent(LocationControls)
-    expect(locationControls.exists()).toBe(true)
-    expect(locationControls.props('activeLayer')).toBe('standard')
+    // Sjekk at AppHeader mottar activeLayer='standard' (Standard OpenStreetMap)
+    const appHeader = wrapper.findComponent(AppHeader)
+    expect(appHeader.exists()).toBe(true)
+    expect(appHeader.props('activeLayer')).toBe('standard')
   })
 
   it('beholder Norgeskart når brukeren befinner seg i Norge (f.eks. Bergen)', async () => {
@@ -1033,10 +1065,10 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
     await flushPromises()
     await wrapper.vm.$nextTick()
 
-    const locationControls = wrapper.findComponent(LocationControls)
-    expect(locationControls.exists()).toBe(true)
+    const appHeader = wrapper.findComponent(AppHeader)
+    expect(appHeader.exists()).toBe(true)
     // For posisjon i Norge forblir kartet på norgeskart
-    expect(locationControls.props('activeLayer')).toBe('norgeskart')
+    expect(appHeader.props('activeLayer')).toBe('norgeskart')
   })
 
   it('sentrerer kartet på brukerens posisjon så snart den blir funnet', async () => {
