@@ -23,13 +23,10 @@ return [
     'sheet_system'   => 'SystemKonfigurasjon',
     'sheet_innsjekk' => 'TurpostInnsjekk',
 
-    // Bildelagring for innsjekkinger:
-    //   'auto'  (standard): Prøver Google Drive først. Hvis Service Account mangler kvote
-    //                       (vanlig på @gmail.com-kontoer), lagres bildet automatisk lokalt på webserveren.
-    //   'local':            Lagrer alltid direkte på webserveren (raskest, krever ingen Drive-kvote).
-    //   'drive':            Tvinger Google Drive (krever Google Workspace / Shared Drive med kvote).
-    'storage_driver' => 'auto',
-
-    // Valgfri egendefinert base-URL til API-et (hvis den ikke detekteres automatisk):
-    // 'base_url' => 'https://trillebar.no/tortur/api',
+    // Google Apps Script Web App URL for bildelagring på Google Drive:
+    // All bildelagring og -sletting håndteres trygt via Google Apps Script (DriveApp)
+    // som kjører i din personlige Google-kontos kontekst (med din 15 GB lagringskvote).
+    // Publiser scripts/appscript/appscript.js som Web App og lim inn URL-en her.
+    // (Kan alternativt legges inn i fanen 'SystemKonfigurasjon' som APPSCRIPT_URL).
+    'appscript_url' => 'https://script.google.com/macros/s/<deployment-id>/exec',
 ];

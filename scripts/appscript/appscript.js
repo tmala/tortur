@@ -1,5 +1,5 @@
 // =============================================================================
-// TorTur – Google Apps Script Backend v12
+// TorTur – Google Apps Script Backend v13
 // =============================================================================
 // Instruksjoner:
 //  1. Gå til Google Regneark → Extensions → Apps Script
@@ -102,6 +102,14 @@ function doPost(e) {
 
     if (action === 'update_checkin' || action === 'update_checkin_image') {
       return handleUpdateCheckin(body)
+    }
+
+    if (action === 'upload_image' || action === 'uploadimage') {
+      return handleUploadImageOnly(body)
+    }
+
+    if (action === 'delete_image' || action === 'deleteimage') {
+      return handleDeleteImageOnly(body)
     }
 
     if (action === 'getconfig' || action === 'config') {
@@ -685,6 +693,34 @@ function getSystemConfig(ss) {
     Logger.log('Feil ved lesing av systemkonfigurasjon: ' + err.message)
   }
   return config
+}
+
+// =============================================================================
+// handleUploadImageOnly
+// Enkelt endepunkt for PHP-backend til å laste opp bilde til brukerens Google Drive
+// uten Service Account 0-byte kvoteproblem.
+// =============================================================================
+function handleUploadImageOnly(body) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID)
+  var turpostId = (body.turpostId || 'ukjent').toString().trim()
+  if (!body.image || !body.image.base64) {
+    return jsonResponse({ success: false, error: 'Mangler bildedata (image.base64).' })
+  }
+  var imageUrl = uploadCheckinImage(ss, turpostId, body.image)
+  if (!imageUrl) {
+    return jsonResponse({ success: false, error: 'Kunne ikke laste opp bilde til Google Drive.' })
+  }
+  return jsonResponse({ success: true, imageUrl: imageUrl })
+}
+
+function handleDeleteImageOnly(body) {
+  var imageUrl = body.imageUrl || ''
+  var fileId = body.fileId || extractDriveFileId(imageUrl)
+  if (fileId) {
+    deleteDriveFile(fileId)
+    return jsonResponse({ success: true })
+  }
+  return jsonResponse({ success: false, error: 'Ingen gyldig fileId eller imageUrl funnet.' })
 }
 
 // =============================================================================

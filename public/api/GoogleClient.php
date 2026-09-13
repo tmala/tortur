@@ -4,9 +4,9 @@
  *
  * Frittstående, lettvekt Google API-klient i ren PHP (uten Composer-avhengigheter).
  * Bruker OpenSSL og cURL for:
- *   1. Google OAuth2 Service Account JWT-autentisering (Sheets og Drive).
+ *   1. Google OAuth2 Service Account JWT-autentisering (Sheets).
  *   2. Google Sheets API v4 (lesing, oppdatering, appending, radsletting).
- *   3. Google Drive API v3 (opplasting av turbilder, mapper, sletting).
+ *   3. Google Apps Script Drive-proxy (opplasting og sletting av turbilder på Google Drive).
  *   4. Google Identity Services ID-token-validering mot tokeninfo.
  */
 
@@ -96,7 +96,7 @@ class GoogleClient {
         $header = ['alg' => 'RS256', 'typ' => 'JWT'];
         $claims = [
             'iss' => $this->serviceAccount['client_email'],
-            'scope' => 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive',
+            'scope' => 'https://www.googleapis.com/auth/spreadsheets',
             'aud' => 'https://oauth2.googleapis.com/token',
             'iat' => $now,
             'exp' => $now + 3600
@@ -228,142 +228,83 @@ class GoogleClient {
     }
 
     // =========================================================================
-    // Google Drive API v3
+    // Google Drive via Google Apps Script (Drive-proxy)
     // =========================================================================
 
     /**
-     * Finner eller oppretter en undermappe for turposten under baseFolderId.
+     * Laster opp et bilde til Google Drive via Google Apps Script (Drive-proxy).
+     * Dette omgår Service Account 0-byte kvotebegrensning på personlige Google-kontoer,
+     * fordi Apps Script kjører under brukerens egen Google-konto og eier filen.
      */
-    public function ensureDriveFolder(string $folderName, ?string $baseFolderId = null): string {
-        $query = "name = '" . addslashes($folderName) . "' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
-        if ($baseFolderId) {
-            $query .= " and '" . addslashes($baseFolderId) . "' in parents";
-        }
-        $url = "https://www.googleapis.com/drive/v3/files?q=" . urlencode($query) . "&fields=files(id,name)";
-        $res = $this->apiCall('GET', $url);
+    public function uploadImageViaAppsScript(string $appsScriptUrl, string $turpostId, array $imageObj): string {
+        $payload = json_encode([
+            'action'    => 'upload_image',
+            'turpostId' => $turpostId,
+            'image'     => $imageObj
+        ]);
 
-        if (!empty($res['files'][0]['id'])) {
-            return $res['files'][0]['id'];
-        }
-
-        // Mappen fantes ikke – opprett den
-        $createUrl = "https://www.googleapis.com/drive/v3/files";
-        $metadata = [
-            'name' => $folderName,
-            'mimeType' => 'application/vnd.google-apps.folder'
-        ];
-        if ($baseFolderId) {
-            $metadata['parents'] = [$baseFolderId];
-        }
-        $created = $this->apiCall('POST', $createUrl, $metadata);
-        $folderId = $created['id'] ?? '';
-
-        if ($folderId) {
-            // Gi lesetilgang til alle med lenke
-            $this->setDrivePublicPermission($folderId);
-        }
-
-        return $folderId;
-    }
-
-    /**
-     * Laster opp et bilde til Google Drive via multipart upload og returnerer lh3-bilde-URL.
-     */
-    public function uploadImage(string $turpostId, array $imageObj, ?string $baseFolderId = null): string {
-        $base64 = $imageObj['base64'] ?? '';
-        if (str_contains($base64, ',')) {
-            $base64 = explode(',', $base64, 2)[1];
-        }
-        $binary = base64_decode($base64);
-        if (!$binary) {
-            return '';
-        }
-
-        $mimeType = $imageObj['mimeType'] ?? 'image/jpeg';
-        $ext = str_contains($mimeType, 'png') ? '.png' : (str_contains($mimeType, 'webp') ? '.webp' : '.jpg');
-        $fileName = $imageObj['fileName'] ?? ('innsjekk_' . round(microtime(true) * 1000) . $ext);
-
-        $targetFolderId = $this->ensureDriveFolder(strval($turpostId), $baseFolderId);
-
-        $metadata = [
-            'name' => $fileName,
-            'parents' => [$targetFolderId]
-        ];
-
-        $boundary = '-------314159265358979323846';
-        $delimiter = "\r\n--" . $boundary . "\r\n";
-        $closeDelimiter = "\r\n--" . $boundary . "--";
-
-        $multipartBody = $delimiter
-            . "Content-Type: application/json; charset=UTF-8\r\n\r\n"
-            . json_encode($metadata)
-            . $delimiter
-            . "Content-Type: " . $mimeType . "\r\n"
-            . "Content-Transfer-Encoding: binary\r\n\r\n"
-            . $binary
-            . $closeDelimiter;
-
-        $token = $this->getAccessToken();
-        $uploadUrl = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
-
-        $ch = curl_init($uploadUrl);
+        $ch = curl_init($appsScriptUrl);
         curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $multipartBody,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'Authorization: Bearer ' . $token,
-                'Content-Type: multipart/related; boundary=' . $boundary,
-                'Content-Length: ' . strlen($multipartBody)
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json'
             ],
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_TIMEOUT        => 45,
             CURLOPT_SSL_VERIFYPEER => true
         ]);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        $json = json_decode($response, true);
-        if ($httpCode !== 200 || empty($json['id'])) {
-            $err = $json['error']['message'] ?? "HTTP $httpCode: $response";
-            error_log("[GoogleDrive] Opplasting feilet: $err");
+        if ($httpCode !== 200 || !$response) {
+            error_log("[AppsScriptProxy] Opplasting feilet. HTTP $httpCode: $response");
             return '';
         }
 
-        $fileId = $json['id'];
-        $this->setDrivePublicPermission($fileId);
+        $json = json_decode($response, true);
+        if (empty($json['success']) || empty($json['imageUrl'])) {
+            $err = $json['error'] ?? "HTTP $httpCode: $response";
+            error_log("[AppsScriptProxy] Apps Script feilet: $err");
+            return '';
+        }
 
-        return "https://lh3.googleusercontent.com/d/{$fileId}";
+        return $json['imageUrl'];
     }
 
     /**
-     * Sletter en fil fra Google Drive (trasher den).
+     * Sletter et bilde via Apps Script Drive-proxy.
      */
-    public function deleteDriveFile(string $fileId): bool {
-        if (!$fileId) return false;
-        $url = "https://www.googleapis.com/drive/v3/files/{$fileId}";
-        try {
-            $this->apiCall('DELETE', $url);
-            return true;
-        } catch (Exception $e) {
+    public function deleteImageViaAppsScript(string $appsScriptUrl, string $imageUrl): bool {
+        $payload = json_encode([
+            'action'   => 'delete_image',
+            'imageUrl' => $imageUrl
+        ]);
+
+        $ch = curl_init($appsScriptUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json'
+            ],
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_SSL_VERIFYPEER => true
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
             return false;
         }
-    }
 
-    /**
-     * Gir lesetilgang for alle med lenken (slik at lh3-bilde-URL fungerer).
-     */
-    public function setDrivePublicPermission(string $fileOrFolderId): void {
-        $url = "https://www.googleapis.com/drive/v3/files/{$fileOrFolderId}/permissions";
-        $body = [
-            'role' => 'reader',
-            'type' => 'anyone'
-        ];
-        try {
-            $this->apiCall('POST', $url, $body);
-        } catch (Exception $e) {
-            // Ignorer feil dersom tillatelse allerede finnes
-        }
+        $json = json_decode($response, true);
+        return !empty($json['success']);
     }
 
     // =========================================================================
