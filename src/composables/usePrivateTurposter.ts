@@ -466,12 +466,12 @@ export function usePrivateTurposter() {
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/my_spots_checkins/${encodeURIComponent(String(params.post.id))}/${checkinId}.json`
     const visUrl = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(checkinId)}.json`
     const [res] = await Promise.all([
-      fetch(url, {
+      fetchFirebase(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(checkinItem)
       }),
-      fetch(visUrl, {
+      fetchFirebase(visUrl, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(visibility)
@@ -489,9 +489,9 @@ export function usePrivateTurposter() {
       const cleanupUserUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/checkins/${checkinId}.json`
       const cleanupLegacyUserUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/${checkinId}.json`
       await Promise.all([
-        fetch(cleanupTurpostUrl, { method: 'DELETE' }),
-        fetch(cleanupUserUrl, { method: 'DELETE' }),
-        fetch(cleanupLegacyUserUrl, { method: 'DELETE' }).catch(() => {})
+        fetchFirebase(cleanupTurpostUrl, { method: 'DELETE' }),
+        fetchFirebase(cleanupUserUrl, { method: 'DELETE' }),
+        fetchFirebase(cleanupLegacyUserUrl, { method: 'DELETE' }).catch(() => {})
       ])
     } catch {
       // Ignorer eventuelle nettverksfeil ved opprydding
