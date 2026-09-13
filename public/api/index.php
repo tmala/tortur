@@ -43,7 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $diag['config']['spreadsheet_id'] = (!empty($ssId) && $ssId !== 'FYLL_INN_DIN_SPREADSHEET_ID_HER') ? 'configured' : 'missing_or_default';
         $diag['config']['service_account_file'] = file_exists($saFile) ? 'found' : 'not_found';
-        $diag['config']['service_account_path_checked'] = $saFile;
         $diag['config']['appscript_url'] = !empty($cfg['appscript_url']) ? 'configured' : 'not_set';
 
         if (file_exists($saFile)) {
