@@ -141,4 +141,33 @@ export function onFirebaseAuthStateChange(callback: (user: FirebaseUser | null) 
   return onAuthStateChanged(authInstance, callback)
 }
 
+/**
+ * Henter gyldig Firebase Auth ID-token (JWT)
+ */
+export async function getFirebaseIdToken(): Promise<string | null> {
+  const authInstance = getFirebaseAuth()
+  if (authInstance?.currentUser) {
+    try {
+      return await authInstance.currentUser.getIdToken()
+    } catch (err) {
+      console.warn('[Firebase] Kunne ikke hente ID-token fra currentUser:', err)
+    }
+  }
+  return sessionStorage.getItem('tortur_id_token')
+}
+
+/**
+ * Utfører en fetch-forespørsel mot Firebase Realtime Database med automatisk
+ * vedlagt autentiseringstoken (?auth=<token>) fra Firebase Auth.
+ */
+export async function fetchFirebase(url: string, init?: RequestInit): Promise<Response> {
+  const token = await getFirebaseIdToken()
+  if (token) {
+    const separator = url.includes('?') ? '&' : '?'
+    const authedUrl = `${url}${separator}auth=${encodeURIComponent(token)}`
+    return fetch(authedUrl, init)
+  }
+  return fetch(url, init)
+}
+
 export { dbRef, set, get, update, remove, type DatabaseReference }

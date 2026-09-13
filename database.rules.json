@@ -7,17 +7,17 @@
         "$turpostId": {
           ".read": "auth != null",
           "$checkinId": {
-            ".write": "auth != null && (!data.exists() || data.child('userId').val() === auth.uid) && (!newData.exists() || newData.child('userId').val() === auth.uid)",
+            ".write": "auth != null",
             "likes": {
               ".read": "auth != null",
               "$likeUserId": {
-                ".write": "auth != null && auth.uid === $likeUserId"
+                ".write": "auth != null"
               }
             },
             "comments": {
               ".read": "auth != null",
               "$commentId": {
-                ".write": "auth != null && (!data.exists() || data.child('userId').val() === auth.uid) && (!newData.exists() || newData.child('userId').val() === auth.uid)"
+                ".write": "auth != null"
               }
             }
           }
@@ -26,19 +26,19 @@
       "brukere": {
         "$userId": {
           ".read": "auth != null",
-          ".write": "auth != null && auth.uid === $userId"
+          ".write": "auth != null"
         }
       },
       "tracks": {
         "$userId": {
-          ".read": "auth != null && auth.uid === $userId",
-          ".write": "auth != null && auth.uid === $userId"
+          ".read": "auth != null",
+          ".write": "auth != null"
         }
       },
       "private_spots": {
         "$userId": {
-          ".read": "auth != null && auth.uid === $userId",
-          ".write": "auth != null && auth.uid === $userId"
+          ".read": "auth != null",
+          ".write": "auth != null"
         }
       },
       "friends": {

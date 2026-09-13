@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { useAuth, getFirebaseConfig, type FirebaseCheckinItem, type CheckinResult } from './useAuth'
+import { useAuth, getFirebaseConfig, fetchFirebase, type FirebaseCheckinItem, type CheckinResult } from './useAuth'
 import type { TurpostItem } from './useTurposter'
 
 export interface SpotSuggestion {
@@ -49,7 +49,7 @@ export function usePrivateTurposter() {
     try {
       isLoading.value = true
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots.json`
-      const res = await fetch(url)
+      const res = await fetchFirebase(url)
       if (!res.ok) return []
 
       const data = await res.json()
@@ -131,7 +131,7 @@ export function usePrivateTurposter() {
 
       // 1. Lagre under brukerens egne spots: /<prefix>/brukere/<userId>/my_spots/<spotId>.json
       const userSpotUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots/${encodeURIComponent(String(spot.id))}.json`
-      const resUser = await fetch(userSpotUrl, {
+      const resUser = await fetchFirebase(userSpotUrl, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(spotData)
@@ -161,7 +161,7 @@ export function usePrivateTurposter() {
         }
 
         const suggestionUrl = `${config.dbUrl}/${config.prefix}/spot_suggestions/${encodeURIComponent(String(spot.id))}.json`
-        await fetch(suggestionUrl, {
+        await fetchFirebase(suggestionUrl, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(suggestionData)
@@ -190,7 +190,7 @@ export function usePrivateTurposter() {
     const nowIso = new Date().toISOString()
     // 1. Oppdater status i brukerens egen turpost
     const userSpotUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots/${encodeURIComponent(String(spot.id))}.json`
-    await fetch(userSpotUrl, {
+    await fetchFirebase(userSpotUrl, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -218,7 +218,7 @@ export function usePrivateTurposter() {
     }
 
     const suggestionUrl = `${config.dbUrl}/${config.prefix}/spot_suggestions/${encodeURIComponent(String(spot.id))}.json`
-    await fetch(suggestionUrl, {
+    await fetchFirebase(suggestionUrl, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(suggestionData)
@@ -236,15 +236,15 @@ export function usePrivateTurposter() {
     try {
       // 1. Slett selve spotet
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots/${encodeURIComponent(spotId)}.json`
-      await fetch(url, { method: 'DELETE' })
+      await fetchFirebase(url, { method: 'DELETE' })
 
       // 2. Slett tilhørende private innsjekkinger
       const checkinsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}.json`
-      await fetch(checkinsUrl, { method: 'DELETE' })
+      await fetchFirebase(checkinsUrl, { method: 'DELETE' })
 
       // 3. Fjern eventuelt fra forslagslisten
       const suggestionUrl = `${config.dbUrl}/${config.prefix}/spot_suggestions/${encodeURIComponent(spotId)}.json`
-      await fetch(suggestionUrl, { method: 'DELETE' })
+      await fetchFirebase(suggestionUrl, { method: 'DELETE' })
     } catch (err) {
       console.warn('[usePrivateTurposter] Kunne ikke slette my_spot:', err)
       throw err
@@ -261,7 +261,7 @@ export function usePrivateTurposter() {
 
     try {
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}.json`
-      const res = await fetch(url)
+      const res = await fetchFirebase(url)
       if (!res.ok) return []
       const data = await res.json()
       if (!data || typeof data !== 'object') return []
@@ -294,7 +294,7 @@ export function usePrivateTurposter() {
 
     try {
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}/${encodeURIComponent(checkinId)}.json`
-      await fetch(url, { method: 'DELETE' })
+      await fetchFirebase(url, { method: 'DELETE' })
     } catch (err) {
       console.warn('[usePrivateTurposter] Kunne ikke slette privat innsjekking:', err)
       throw err
@@ -346,7 +346,7 @@ export function usePrivateTurposter() {
     }
 
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}/${encodeURIComponent(checkinId)}.json`
-    const patchRes = await fetch(url, {
+    const patchRes = await fetchFirebase(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patchData)
@@ -354,7 +354,7 @@ export function usePrivateTurposter() {
 
     if (params.visibility !== undefined) {
       const visUrl = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(checkinId)}.json`
-      await fetch(visUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params.visibility) })
+      await fetchFirebase(visUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params.visibility) })
     }
 
     if (!patchRes.ok) {
@@ -391,7 +391,7 @@ export function usePrivateTurposter() {
 
     try {
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins.json`
-      const res = await fetch(url)
+      const res = await fetchFirebase(url)
       if (!res.ok) return []
 
       const data = await res.json()
@@ -519,7 +519,7 @@ export function usePrivateTurposter() {
 
     try {
       const url = `${config.dbUrl}/${config.prefix}/spot_suggestions.json`
-      const res = await fetch(url)
+      const res = await fetchFirebase(url)
       if (!res.ok) return []
 
       const data = await res.json()
@@ -552,7 +552,7 @@ export function usePrivateTurposter() {
 
     try {
       const url = `${config.dbUrl}/${config.prefix}/spot_suggestions/${encodeURIComponent(spotId)}.json`
-      await fetch(url, { method: 'DELETE' })
+      await fetchFirebase(url, { method: 'DELETE' })
     } catch (err) {
       console.warn('[usePrivateTurposter] Kunne ikke slette spot_suggestion:', err)
       throw err

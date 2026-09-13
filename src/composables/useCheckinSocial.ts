@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import {
   useAuth,
+  fetchFirebase,
   type FirebaseCheckinItem,
   type CheckinReaction,
   type CheckinReactionType,
@@ -125,13 +126,13 @@ export function useCheckinSocial() {
 
     if (isSame) {
       // Fjern like
-      await Promise.all(urls.map(u => fetch(u, { method: 'DELETE' }).catch(() => {})))
+      await Promise.all(urls.map(u => fetchFirebase(u, { method: 'DELETE' }).catch(() => {})))
       return { newReaction: null, isRemoved: true }
     } else {
       // Sett/oppdater like
       await Promise.all(
         urls.map(u =>
-          fetch(u, {
+          fetchFirebase(u, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(reactionData)
@@ -202,7 +203,7 @@ export function useCheckinSocial() {
 
     await Promise.all(
       urls.map(u =>
-        fetch(u, {
+        fetchFirebase(u, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(commentData)
@@ -257,7 +258,7 @@ export function useCheckinSocial() {
       `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/${chkIdEncoded}/comments/${commIdEncoded}.json`
     )
 
-    await Promise.all(urls.map(u => fetch(u, { method: 'DELETE' }).catch(() => {})))
+    await Promise.all(urls.map(u => fetchFirebase(u, { method: 'DELETE' }).catch(() => {})))
   }
 
   return {

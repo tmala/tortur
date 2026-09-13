@@ -1,5 +1,7 @@
 import { ref, computed } from 'vue'
-import { signInWithGoogleIdToken, signOutFirebase } from '@/services/firebase'
+import { signInWithGoogleIdToken, signOutFirebase, fetchFirebase, getFirebaseIdToken } from '@/services/firebase'
+
+export { fetchFirebase, getFirebaseIdToken }
 
 export interface GoogleUser {
   userId: string
@@ -350,8 +352,8 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
       const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(checkinResult.id)}.json`
       const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(checkinResult.id)}.json`
       await Promise.all([
-        fetch(turpostUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }),
-        fetch(userUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson })
+        fetchFirebase(turpostUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }),
+        fetchFirebase(userUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson })
       ])
     } catch (fbErr) {
       console.warn('[useAuth] Feil ved direkte lagring av innsjekking i Firebase:', fbErr)
@@ -411,9 +413,9 @@ async function deletePublicCheckin(params: {
       const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(params.checkinId)}.json`
       const legacyUserUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(params.checkinId)}.json`
       await Promise.all([
-        fetch(turpostUrl, { method: 'DELETE' }),
-        fetch(userUrl, { method: 'DELETE' }),
-        fetch(legacyUserUrl, { method: 'DELETE' }).catch(() => {})
+        fetchFirebase(turpostUrl, { method: 'DELETE' }),
+        fetchFirebase(userUrl, { method: 'DELETE' }),
+        fetchFirebase(legacyUserUrl, { method: 'DELETE' }).catch(() => {})
       ])
     } catch (err) {
       console.warn('[useAuth] Feil ved direkte sletting i Firebase:', err)
@@ -509,12 +511,12 @@ async function updatePublicCheckin(params: {
         const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(params.checkinId)}.json`
         const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(params.checkinId)}.json`
         const promises = [
-          fetch(turpostUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody }),
-          fetch(userUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody })
+          fetchFirebase(turpostUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody }),
+          fetchFirebase(userUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: patchBody })
         ]
         if (params.visibility !== undefined) {
           const visUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/checkins_visibility/${encodeURIComponent(params.checkinId)}.json`
-          promises.push(fetch(visUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params.visibility) }))
+          promises.push(fetchFirebase(visUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params.visibility) }))
         }
         await Promise.all(promises)
       }
@@ -593,7 +595,7 @@ async function fetchTurpostCheckins(turpostId: string | number): Promise<Firebas
 
   try {
     const url = `${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(turpostId))}.json`
-    const res = await fetch(url)
+    const res = await fetchFirebase(url)
     if (!res.ok) return []
     const data = await res.json()
     if (!data || typeof data !== 'object') return []
@@ -627,7 +629,7 @@ export async function migrateUserCheckinsIfNeeded(userId: string, dbUrl: string,
 
   try {
     const userRootUrl = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(userId)}.json`
-    const res = await fetch(userRootUrl)
+    const res = await fetchFirebase(userRootUrl)
     if (!res.ok) return
     const data = await res.json()
     if (!data || typeof data !== 'object') {
@@ -647,15 +649,15 @@ export async function migrateUserCheckinsIfNeeded(userId: string, dbUrl: string,
     if (legacyCheckins.length > 0) {
       await Promise.all(
         legacyCheckins.map(async ({ key, checkin }) => {
-          const checkinId = checkin.id || key
-          const newUrl = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(userId)}/checkins/${encodeURIComponent(checkinId)}.json`
-          await fetch(newUrl, {
+          const chkId = checkin.id || key
+          const newUrl = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(userId)}/checkins/${encodeURIComponent(chkId)}.json`
+          await fetchFirebase(newUrl, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(checkin)
           })
           const oldUrl = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(userId)}/${encodeURIComponent(key)}.json`
-          await fetch(oldUrl, { method: 'DELETE' }).catch(() => {})
+          await fetchFirebase(oldUrl, { method: 'DELETE' }).catch(() => {})
         })
       )
     }
@@ -690,7 +692,7 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
 
     // 2. Hent innsjekkinger fra den nye underkatalogen /checkins/
     const url = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins.json`
-    const res = await fetch(url)
+    const res = await fetchFirebase(url)
     if (!res.ok) return []
     const data = await res.json()
     if (!data || typeof data !== 'object') return []
@@ -705,8 +707,8 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
       if (String(item.turpostId).startsWith('spot_')) {
         // Rydd opp uønsket kopi som Apps Script la under offentlig turpost- og checkins-node
         if (item.id) {
-          fetch(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(item.id)}.json`, { method: 'DELETE' }).catch(() => {})
-          fetch(`${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`, { method: 'DELETE' }).catch(() => {})
+          fetchFirebase(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(item.id)}.json`, { method: 'DELETE' }).catch(() => {})
+          fetchFirebase(`${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`, { method: 'DELETE' }).catch(() => {})
         }
         continue
       }
@@ -719,7 +721,7 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
         if (!item.turpostId || item.isPrivate) return
         try {
           const tpUrl = `${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`
-          const tpRes = await fetch(tpUrl)
+          const tpRes = await fetchFirebase(tpUrl)
           if (tpRes.ok) {
             const tpData = await tpRes.json()
             if (tpData && typeof tpData === 'object') {

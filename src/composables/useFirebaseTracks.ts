@@ -1,4 +1,4 @@
-import { getFirebaseConfig } from './useAuth'
+import { getFirebaseConfig, fetchFirebase } from './useAuth'
 import type { SavedTrack } from '@/stores/gpsTrack'
 
 /**
@@ -40,7 +40,7 @@ export function useFirebaseTracks() {
 
     try {
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/tracks.json`
-      const res = await fetch(url)
+      const res = await fetchFirebase(url)
       if (!res.ok) return []
 
       const data = await res.json()
@@ -100,7 +100,7 @@ export function useFirebaseTracks() {
         firebaseKey: key
       }
 
-      const res = await fetch(url, {
+      const res = await fetchFirebase(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -126,7 +126,7 @@ export function useFirebaseTracks() {
       const key = track.firebaseKey || formatTrackKey(track.startTime || track.createdAt)
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/tracks/${encodeURIComponent(key)}.json`
 
-      const res = await fetch(url, {
+      const res = await fetchFirebase(url, {
         method: 'DELETE'
       })
 
@@ -154,7 +154,7 @@ export function useFirebaseTracks() {
       const key = track.firebaseKey || formatTrackKey(track.startTime || track.createdAt)
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/tracks/${encodeURIComponent(key)}.json`
 
-      const res = await fetch(url, {
+      const res = await fetchFirebase(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName })

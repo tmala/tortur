@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { getFirebaseConfig, type GoogleUser, type FirebaseCheckinItem } from './useAuth'
+import { getFirebaseConfig, fetchFirebase, type GoogleUser, type FirebaseCheckinItem } from './useAuth'
 
 export type CheckinVisibility = 'all' | 'friends' | 'private'
 
@@ -66,7 +66,7 @@ export async function registerPublicUser(googleUser: GoogleUser): Promise<void> 
       lastSeen: new Date().toISOString()
     }
     const url = `${config.dbUrl}/${config.prefix}/users_public/${encodeURIComponent(googleUser.userId)}.json`
-    await fetch(url, {
+    await fetchFirebase(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(publicData)
@@ -89,7 +89,7 @@ export async function loadFriends(userId: string): Promise<FriendUser[]> {
 
   try {
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/friends.json`
-    const res = await fetch(url)
+    const res = await fetchFirebase(url)
     if (!res.ok) return []
     const data = await res.json()
     if (!data || typeof data !== 'object') {
@@ -140,7 +140,7 @@ export async function loadFriendRequests(userId: string): Promise<{
 
   try {
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/friend_requests.json`
-    const res = await fetch(url)
+    const res = await fetchFirebase(url)
     if (!res.ok) return { incoming: [], outgoing: [] }
     const data = await res.json()
     if (!data || typeof data !== 'object') {
@@ -233,12 +233,12 @@ export async function sendFriendRequest(
   const outgoingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(currentUser.userId)}/friend_requests/outgoing/${encodeURIComponent(targetUser.userId)}.json`
 
   const [resIn, resOut] = await Promise.all([
-    fetch(incomingUrl, {
+    fetchFirebase(incomingUrl, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(incomingReq)
     }),
-    fetch(outgoingUrl, {
+    fetchFirebase(outgoingUrl, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(outgoingReq)
@@ -296,18 +296,18 @@ export async function acceptFriendRequest(
   const delOutgoingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(request.fromUserId)}/friend_requests/outgoing/${encodeURIComponent(currentUser.userId)}.json`
 
   await Promise.all([
-    fetch(myFriendUrl, {
+    fetchFirebase(myFriendUrl, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(myFriendData)
     }),
-    fetch(theirFriendUrl, {
+    fetchFirebase(theirFriendUrl, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(theirFriendData)
     }),
-    fetch(delIncomingUrl, { method: 'DELETE' }),
-    fetch(delOutgoingUrl, { method: 'DELETE' })
+    fetchFirebase(delIncomingUrl, { method: 'DELETE' }),
+    fetchFirebase(delOutgoingUrl, { method: 'DELETE' })
   ])
 
   // Oppdater lister
@@ -331,8 +331,8 @@ export async function rejectFriendRequest(
   const delOutgoingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(senderUserId)}/friend_requests/outgoing/${encodeURIComponent(currentUserId)}.json`
 
   await Promise.all([
-    fetch(delIncomingUrl, { method: 'DELETE' }),
-    fetch(delOutgoingUrl, { method: 'DELETE' })
+    fetchFirebase(delIncomingUrl, { method: 'DELETE' }),
+    fetchFirebase(delOutgoingUrl, { method: 'DELETE' })
   ])
 
   incomingRequests.value = incomingRequests.value.filter(r => r.fromUserId !== senderUserId)
@@ -352,8 +352,8 @@ export async function cancelFriendRequest(
   const delOutgoingUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(currentUserId)}/friend_requests/outgoing/${encodeURIComponent(targetUserId)}.json`
 
   await Promise.all([
-    fetch(delIncomingUrl, { method: 'DELETE' }),
-    fetch(delOutgoingUrl, { method: 'DELETE' })
+    fetchFirebase(delIncomingUrl, { method: 'DELETE' }),
+    fetchFirebase(delOutgoingUrl, { method: 'DELETE' })
   ])
 
   outgoingRequests.value = outgoingRequests.value.filter(r => r.toUserId !== targetUserId)
@@ -373,8 +373,8 @@ export async function removeFriend(
   const urlB = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}/friends/${encodeURIComponent(currentUserId)}.json`
 
   await Promise.all([
-    fetch(urlA, { method: 'DELETE' }),
-    fetch(urlB, { method: 'DELETE' })
+    fetchFirebase(urlA, { method: 'DELETE' }),
+    fetchFirebase(urlB, { method: 'DELETE' })
   ])
 
   friends.value = friends.value.filter(f => f.userId !== friendUserId)
@@ -389,7 +389,7 @@ export async function searchPublicUsers(query: string = ''): Promise<PublicUser[
 
   try {
     const url = `${config.dbUrl}/${config.prefix}/users_public.json`
-    const res = await fetch(url)
+    const res = await fetchFirebase(url)
     if (!res.ok) return []
     const data = await res.json()
     if (!data || typeof data !== 'object') return []
@@ -422,7 +422,7 @@ export async function loadDefaultVisibility(userId: string): Promise<CheckinVisi
 
   try {
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/settings/defaultVisibility.json`
-    const res = await fetch(url)
+    const res = await fetchFirebase(url)
     if (res.ok) {
       const data = await res.json()
       if (data && ['all', 'friends', 'private'].includes(data)) {
@@ -460,7 +460,7 @@ export async function setDefaultVisibility(
 
   try {
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/settings/defaultVisibility.json`
-    await fetch(url, {
+    await fetchFirebase(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(visibility)
@@ -491,7 +491,7 @@ export async function setCheckinVisibility(
     // 1. Lagre i dedikert indeks checkins_visibility/<checkinId>.json
     const visUrl = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(checkinId)}.json`
     const patchBody = JSON.stringify(visibility)
-    await fetch(visUrl, {
+    await fetchFirebase(visUrl, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: patchBody
@@ -502,7 +502,7 @@ export async function setCheckinVisibility(
 
     if (opts?.isPrivate && opts?.userId && opts?.spotId) {
       const privateSpotUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(opts.userId)}/my_spots_checkins/${encodeURIComponent(String(opts.spotId))}/${encodeURIComponent(checkinId)}.json`
-      await fetch(privateSpotUrl, {
+      await fetchFirebase(privateSpotUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: jsonPatch
@@ -512,7 +512,7 @@ export async function setCheckinVisibility(
       if (opts?.turpostId) {
         const turpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(opts.turpostId))}/${encodeURIComponent(checkinId)}.json`
         promises.push(
-          fetch(turpostUrl, {
+          fetchFirebase(turpostUrl, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: jsonPatch
@@ -522,7 +522,7 @@ export async function setCheckinVisibility(
       if (opts?.userId) {
         const userUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(opts.userId)}/checkins/${encodeURIComponent(checkinId)}.json`
         promises.push(
-          fetch(userUrl, {
+          fetchFirebase(userUrl, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: jsonPatch
@@ -547,7 +547,7 @@ export async function getCheckinVisibility(checkinId: string): Promise<CheckinVi
 
   try {
     const url = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(checkinId)}.json`
-    const res = await fetch(url)
+    const res = await fetchFirebase(url)
     if (!res.ok) return 'all'
     const data = await res.json()
     if (data && ['all', 'friends', 'private'].includes(data)) {
@@ -584,7 +584,7 @@ export async function fetchFriendCheckins(friendUserId: string): Promise<Firebas
 
     // 1. Hent fra /checkins/
     const checkinsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}/checkins.json`
-    const res = await fetch(checkinsUrl)
+    const res = await fetchFirebase(checkinsUrl)
     if (res.ok) {
       const rawData = await res.json()
       if (rawData && typeof rawData === 'object') {
@@ -599,7 +599,7 @@ export async function fetchFriendCheckins(friendUserId: string): Promise<Firebas
 
     // 2. Hent også fra rotnivå (hvis vennen har legacy innsjekkinger som ikke er flyttet enda)
     const rootUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}.json`
-    const rootRes = await fetch(rootUrl)
+    const rootRes = await fetchFirebase(rootUrl)
     if (rootRes.ok) {
       const rootData = await rootRes.json()
       if (rootData && typeof rootData === 'object') {
@@ -649,7 +649,7 @@ export async function fetchFriendCheckins(friendUserId: string): Promise<Firebas
         if (!item.turpostId || item.isPrivate) return
         try {
           const turpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`
-          const tpRes = await fetch(turpostUrl)
+          const tpRes = await fetchFirebase(turpostUrl)
           if (tpRes.ok) {
             const tpData = await tpRes.json()
             if (tpData && typeof tpData === 'object') {

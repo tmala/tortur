@@ -17,7 +17,8 @@ vi.mock('../composables/useAuth', () => ({
   getFirebaseConfig: vi.fn().mockResolvedValue({
     dbUrl: 'https://test-db.firebaseio.com',
     prefix: 'test_prefix'
-  })
+  }),
+  fetchFirebase: vi.fn((url: string, init?: any) => fetch(url, init))
 }))
 
 describe('usePrivateTurposter', () => {
