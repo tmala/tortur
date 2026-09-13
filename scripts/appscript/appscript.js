@@ -1,5 +1,5 @@
 // =============================================================================
-// TorTur – Google Apps Script Backend v9
+// TorTur – Google Apps Script Backend v11
 // =============================================================================
 // Instruksjoner:
 //  1. Gå til Google Regneark → Extensions → Apps Script
@@ -510,7 +510,8 @@ function handleUpdateCheckin(body) {
   }
 
   // 1. Beskrivelse
-  var updatedDescription = body.description !== undefined ? body.description.toString().trim() : undefined
+  var updatedDescription =
+    body.description !== undefined ? body.description.toString().trim() : undefined
   if (foundRowIndex > 0 && innsjekkSheet && updatedDescription !== undefined) {
     innsjekkSheet.getRange(foundRowIndex, COL_INNSJEKK_DESC).setValue(updatedDescription)
   }
