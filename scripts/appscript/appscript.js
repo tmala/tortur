@@ -321,63 +321,8 @@ function handleCheckin(body) {
   rowData[COL_INNSJEKK_CHECKIN_ID - 1] = checkinId
   innsjekkSheet.appendRow(rowData)
 
-  // 6. Synkroniser til Firebase Realtime Database hvis konfigurert
-  try {
-    var sysConfig = getSystemConfig(ss)
-    var firebaseUrl = (sysConfig.FIREBASE_DB_URL || '').toString().trim().replace(/\/$/, '')
-    var secretPrefix = (sysConfig.FIREBASE_SECRET_PREFIX || '')
-      .toString()
-      .trim()
-      .replace(/^\/|\/$/g, '')
-
-    if (firebaseUrl && secretPrefix) {
-      var turpostName = (body.turpostName || '').toString().trim()
-      var firebasePayload = {
-        id: checkinId,
-        userId: userId,
-        userName: userName,
-        userAvatar: userAvatar,
-        turpostId: String(turpostId),
-        turpostName: turpostName,
-        timestamp: timestamp,
-        description: description,
-        imageUrl: imageUrl,
-      }
-      var payloadJson = JSON.stringify(firebasePayload)
-      var fetchOptions = {
-        method: 'put',
-        contentType: 'application/json',
-        payload: payloadJson,
-        muteHttpExceptions: true,
-      }
-
-      // 6a. Turpost-indeks: /{secretPrefix}/turposter/{turpostId}/{checkinId}.json
-      var turpostUrl =
-        firebaseUrl +
-        '/' +
-        secretPrefix +
-        '/turposter/' +
-        encodeURIComponent(turpostId) +
-        '/' +
-        checkinId +
-        '.json'
-      UrlFetchApp.fetch(turpostUrl, fetchOptions)
-
-      // 6b. Bruker-indeks: /{secretPrefix}/brukere/{userId}/checkins/{checkinId}.json
-      var brukerUrl =
-        firebaseUrl +
-        '/' +
-        secretPrefix +
-        '/brukere/' +
-        encodeURIComponent(userId) +
-        '/checkins/' +
-        checkinId +
-        '.json'
-      UrlFetchApp.fetch(brukerUrl, fetchOptions)
-    }
-  } catch (fbErr) {
-    Logger.log('Feil ved synkronisering til Firebase: ' + fbErr.message)
-  }
+  // 6. Firebase Realtime Database håndteres nå direkte av webklienten via autentisert Firebase SDK.
+  // Apps Script har dermed fullført lagring i Regneark og opplasting av bilde til Google Drive.
 
   return jsonResponse({
     success: true,
@@ -479,60 +424,8 @@ function handleDeleteCheckin(body) {
     }
   }
 
-  // Synkroniser sletting til Firebase Realtime Database hvis konfigurert
-  try {
-    var sysConfig = getSystemConfig(ss)
-    var firebaseUrl = (sysConfig.FIREBASE_DB_URL || '').toString().trim().replace(/\/$/, '')
-    var secretPrefix = (sysConfig.FIREBASE_SECRET_PREFIX || '')
-      .toString()
-      .trim()
-      .replace(/^\/|\/$/g, '')
-
-    if (firebaseUrl && secretPrefix && checkinId) {
-      var fetchOptions = {
-        method: 'delete',
-        muteHttpExceptions: true,
-      }
-
-      if (turpostId) {
-        var turpostUrl =
-          firebaseUrl +
-          '/' +
-          secretPrefix +
-          '/turposter/' +
-          encodeURIComponent(turpostId) +
-          '/' +
-          encodeURIComponent(checkinId) +
-          '.json'
-        UrlFetchApp.fetch(turpostUrl, fetchOptions)
-      }
-
-      var brukerUrl =
-        firebaseUrl +
-        '/' +
-        secretPrefix +
-        '/brukere/' +
-        encodeURIComponent(userId) +
-        '/checkins/' +
-        encodeURIComponent(checkinId) +
-        '.json'
-      UrlFetchApp.fetch(brukerUrl, fetchOptions)
-
-      // Rydd også opp fra gammel rot-sti hvis den finnes
-      var oldBrukerUrl =
-        firebaseUrl +
-        '/' +
-        secretPrefix +
-        '/brukere/' +
-        encodeURIComponent(userId) +
-        '/' +
-        encodeURIComponent(checkinId) +
-        '.json'
-      UrlFetchApp.fetch(oldBrukerUrl, fetchOptions)
-    }
-  } catch (fbErr) {
-    Logger.log('Feil ved sletting i Firebase: ' + fbErr.message)
-  }
+  // Sletting i Firebase Realtime Database håndteres nå direkte av webklienten via autentisert Firebase SDK.
+  // Apps Script har dermed fullført sletting fra Regneark og Google Drive.
 
   return jsonResponse({
     success: true,
@@ -643,60 +536,8 @@ function handleUpdateCheckin(body) {
     }
   }
 
-  // 3. Oppdater Firebase Realtime Database hvis konfigurert
-  try {
-    var sysConfig = getSystemConfig(ss)
-    var firebaseUrl = (sysConfig.FIREBASE_DB_URL || '').toString().trim().replace(/\/$/, '')
-    var secretPrefix = (sysConfig.FIREBASE_SECRET_PREFIX || '')
-      .toString()
-      .trim()
-      .replace(/^\/|\/$/g, '')
-
-    if (firebaseUrl && secretPrefix && checkinId) {
-      var patchPayload = {}
-      if (updatedDescription !== undefined) {
-        patchPayload.description = updatedDescription
-      }
-      if (updatedImageUrl !== undefined) {
-        patchPayload.imageUrl = updatedImageUrl
-      }
-
-      if (Object.keys(patchPayload).length > 0) {
-        var fetchOptions = {
-          method: 'patch',
-          contentType: 'application/json',
-          payload: JSON.stringify(patchPayload),
-          muteHttpExceptions: true,
-        }
-
-        if (turpostId) {
-          var turpostUrl =
-            firebaseUrl +
-            '/' +
-            secretPrefix +
-            '/turposter/' +
-            encodeURIComponent(turpostId) +
-            '/' +
-            encodeURIComponent(checkinId) +
-            '.json'
-          UrlFetchApp.fetch(turpostUrl, fetchOptions)
-        }
-
-        var brukerUrl =
-          firebaseUrl +
-          '/' +
-          secretPrefix +
-          '/brukere/' +
-          encodeURIComponent(userId) +
-          '/checkins/' +
-          encodeURIComponent(checkinId) +
-          '.json'
-        UrlFetchApp.fetch(brukerUrl, fetchOptions)
-      }
-    }
-  } catch (fbErr) {
-    Logger.log('Feil ved oppdatering i Firebase: ' + fbErr.message)
-  }
+  // Oppdatering i Firebase Realtime Database håndteres nå direkte av webklienten via autentisert Firebase SDK.
+  // Apps Script har dermed fullført oppdatering i Regneark og Google Drive.
 
   return jsonResponse({
     success: true,

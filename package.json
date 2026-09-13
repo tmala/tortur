@@ -1,6 +1,6 @@
 {
   "name": "tortur",
-  "version": "0.2.06",
+  "version": "0.2.07",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,6 +19,7 @@
     "deploy": "zsh deploy.sh"
   },
   "dependencies": {
+    "firebase": "^12.19.0",
     "leaflet": "^1.9.4",
     "lucide-vue-next": "^1.0.0",
     "pinia": "^4.0.2",

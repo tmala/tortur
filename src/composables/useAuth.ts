@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { signInWithGoogleIdToken, signOutFirebase } from '@/services/firebase'
 
 export interface GoogleUser {
   userId: string
@@ -96,7 +97,10 @@ try {
   if (savedConfig) systemConfig.value = JSON.parse(savedConfig)
 
   const savedToken = sessionStorage.getItem(STORAGE_KEY_TOKEN)
-  if (savedToken) currentIdToken.value = savedToken
+  if (savedToken) {
+    currentIdToken.value = savedToken
+    signInWithGoogleIdToken(savedToken).catch(() => {})
+  }
 } catch {
   // Ugyldig data – ignorer
 }
@@ -170,6 +174,13 @@ async function loginWithToken(idToken: string): Promise<void> {
     localStorage.setItem(STORAGE_KEY_USER,   JSON.stringify(user.value))
     localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(systemConfig.value))
     sessionStorage.setItem(STORAGE_KEY_TOKEN, idToken)
+
+    // Logg inn i Firebase Auth med samme Google-token for sikker tilgang til Realtime Database
+    try {
+      await signInWithGoogleIdToken(idToken)
+    } catch (fbAuthErr) {
+      console.warn('[useAuth] Firebase Auth innlogging feilet (fortsetter med Apps Script sesjon):', fbAuthErr)
+    }
   } catch (err) {
     error.value = 'Kunne ikke nå innloggingsserveren. Sjekk nettverkstilkoblingen.'
     console.error('[useAuth] Login-feil:', err)
@@ -225,6 +236,7 @@ async function login(): Promise<void> {
 // Logg ut
 // =============================================================================
 function logout(): void {
+  signOutFirebase().catch(() => {})
   user.value           = null
   systemConfig.value   = {}
   currentIdToken.value = null
@@ -317,7 +329,36 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
     localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(data.systemConfig))
   }
 
-  return data.checkin as CheckinResult
+  const checkinResult = data.checkin as CheckinResult
+
+  // Synkroniser innsjekkingen direkte til Firebase Realtime Database fra webappen
+  const fbConfig = await getFirebaseConfig()
+  if (fbConfig && checkinResult.id && user.value) {
+    try {
+      const firebaseItem: FirebaseCheckinItem = {
+        id: checkinResult.id,
+        userId: user.value.userId,
+        userName: user.value.userName,
+        userAvatar: user.value.avatarUrl || '',
+        turpostId: String(params.turpostId),
+        turpostName: params.turpostName || '',
+        timestamp: checkinResult.timestamp || new Date().toISOString(),
+        description: params.description || '',
+        imageUrl: checkinResult.imageUrl || ''
+      }
+      const itemJson = JSON.stringify(firebaseItem)
+      const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(checkinResult.id)}.json`
+      const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(checkinResult.id)}.json`
+      await Promise.all([
+        fetch(turpostUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }),
+        fetch(userUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson })
+      ])
+    } catch (fbErr) {
+      console.warn('[useAuth] Feil ved direkte lagring av innsjekking i Firebase:', fbErr)
+    }
+  }
+
+  return checkinResult
 }
 
 // =============================================================================
