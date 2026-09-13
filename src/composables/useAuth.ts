@@ -79,7 +79,7 @@ const STORAGE_KEY_USER   = 'tortur_user'
 const STORAGE_KEY_CONFIG = 'tortur_system_config'
 const STORAGE_KEY_TOKEN  = 'tortur_id_token'
 
-const APPSCRIPT_URL = import.meta.env.VITE_APPSCRIPT_URL as string | undefined
+const API_URL = import.meta.env.VITE_API_URL as string
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
 
 // Singleton state – delt på tvers av alle useAuth()-kall
@@ -111,7 +111,7 @@ try {
 // Last Google Identity Services SDK dynamisk
 // =============================================================================
 function loadGIS(): Promise<void> {
-  if (gisLoaded || (window as any).google?.accounts?.id) {
+  if (gisLoaded || window.google?.accounts?.id) {
     gisLoaded = true
     return Promise.resolve()
   }
@@ -130,8 +130,8 @@ function loadGIS(): Promise<void> {
 // Send id_token til Apps Script og valider whitelist
 // =============================================================================
 async function loginWithToken(idToken: string): Promise<void> {
-  if (!APPSCRIPT_URL) {
-    error.value = 'VITE_APPSCRIPT_URL er ikke konfigurert i .env'
+  if (!API_URL) {
+    error.value = 'VITE_API_URL er ikke konfigurert i .env'
     return
   }
 
@@ -139,9 +139,8 @@ async function loginWithToken(idToken: string): Promise<void> {
   error.value = null
 
   try {
-    // NB: 'application/json' trigger CORS preflight som Apps Script ikke støtter.
-    // 'text/plain' er en "simple request" og unngår preflight.
-    const response = await fetch(APPSCRIPT_URL, {
+    // NB: 'application/json' trigger CORS preflight. 'text/plain' er en "simple request" og unngår preflight.
+    const response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ action: 'login', idToken })
@@ -149,18 +148,18 @@ async function loginWithToken(idToken: string): Promise<void> {
 
     // Sjekk HTTP-statuskode før vi prøver å parse JSON
     if (!response.ok) {
-      error.value = `Apps Script svarte med HTTP ${response.status}. Sjekk at deployment-URL i .env er oppdatert.`
+      error.value = `API-serveren svarte med HTTP ${response.status}. Sjekk at VITE_API_URL i .env er oppdatert.`
       return
     }
 
-    // Defensiv JSON-parsing – Apps Script kan returnere HTML ved feilkonfig
+    // Defensiv JSON-parsing – API kan returnere HTML ved feilkonfig
     const text = await response.text()
     let data: Record<string, unknown>
     try {
       data = JSON.parse(text)
     } catch {
-      console.error('[useAuth] Ugyldig JSON fra Apps Script:', text.slice(0, 200))
-      error.value = 'Apps Script returnerte ugyldig svar (ikke JSON). Deployment-URL er sannsynligvis utdatert.'
+      console.error('[useAuth] Ugyldig JSON fra API:', text.slice(0, 200))
+      error.value = 'API-serveren returnerte ugyldig svar (ikke JSON). Sjekk at VITE_API_URL i .env er riktig konfigurert.'
       return
     }
 
@@ -202,15 +201,16 @@ async function login(): Promise<void> {
 
   try {
     await loadGIS()
-    const google = (window as any).google
-    if (!google?.accounts?.id) {
+    const google = window.google
+    const gisId = google?.accounts?.id
+    if (!gisId) {
       error.value = 'Google Identity Services er ikke tilgjengelig'
       return
     }
 
-    google.accounts.id.initialize({
+    gisId.initialize({
       client_id: GOOGLE_CLIENT_ID,
-      callback: (response: any) => {
+      callback: (response: { credential?: string }) => {
         if (response.credential) {
           loginWithToken(response.credential)
         } else {
@@ -221,16 +221,16 @@ async function login(): Promise<void> {
       cancel_on_tap_outside: true
     })
 
-    google.accounts.id.prompt((notification: any) => {
+    gisId.prompt((notification: { isNotDisplayed: () => boolean; isSkippedMoment: () => boolean }) => {
       if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        google.accounts.id.renderButton(
+        gisId.renderButton(
           document.getElementById('g_id_signin_hidden') || document.body,
           { theme: 'outline', size: 'large' }
         )
       }
     })
-  } catch (e: any) {
-    error.value = e?.message || 'Innlogging feilet'
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : 'Innlogging feilet'
   }
 }
 
@@ -249,7 +249,7 @@ function logout(): void {
   migratedUsersCache.clear()
 
   try {
-    const google = (window as any).google
+    const google = window.google
     if (google?.accounts?.id) {
       google.accounts.id.disableAutoSelect()
     }
@@ -276,8 +276,8 @@ async function fileToBase64(file: File): Promise<string> {
 // Send innsjekk til Google Apps Script
 // =============================================================================
 async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
-  if (!APPSCRIPT_URL) {
-    throw new Error('VITE_APPSCRIPT_URL er ikke konfigurert i miljøvariabler.')
+  if (!API_URL) {
+    throw new Error('VITE_API_URL er ikke konfigurert i miljøvariabler.')
   }
   if (!user.value) {
     throw new Error('Du må være innlogget for å sjekke inn.')
@@ -304,7 +304,7 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
     image: imagePayload
   }
 
-  const response = await fetch(APPSCRIPT_URL, {
+  const response = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(payload)
@@ -315,7 +315,7 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
   }
 
   const text = await response.text()
-  let data: any
+  let data: Record<string, unknown>
   try {
     data = JSON.parse(text)
   } catch {
@@ -323,11 +323,11 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
   }
 
   if (!data.success) {
-    throw new Error(data.error || 'Innsjekking feilet.')
+    throw new Error((data.error as string) || 'Innsjekking feilet.')
   }
 
-  if (data.systemConfig) {
-    systemConfig.value = data.systemConfig
+  if (data.systemConfig && typeof data.systemConfig === 'object') {
+    systemConfig.value = data.systemConfig as SystemConfig
     localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(data.systemConfig))
   }
 
@@ -375,8 +375,8 @@ async function deletePublicCheckin(params: {
     throw new Error('Du må være innlogget for å slette en innsjekking.')
   }
 
-  // 1. Send forespørsel til Google Apps Script for sletting i Regneark og Drive
-  if (APPSCRIPT_URL) {
+  // 1. Send forespørsel til backend API for sletting i Regneark og Drive
+  if (API_URL) {
     const payload = {
       action: 'delete_checkin',
       idToken: currentIdToken.value || undefined,
@@ -387,7 +387,7 @@ async function deletePublicCheckin(params: {
     }
 
     try {
-      const response = await fetch(APPSCRIPT_URL, {
+      const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(payload)
@@ -397,11 +397,11 @@ async function deletePublicCheckin(params: {
         const text = await response.text()
         const data = JSON.parse(text)
         if (!data.success) {
-          console.warn('[useAuth] Apps Script delete_checkin returnerte feil:', data.error)
+          console.warn('[useAuth] API delete_checkin returnerte feil:', data.error)
         }
       }
     } catch (err) {
-      console.warn('[useAuth] Feil ved sletting via Apps Script:', err)
+      console.warn('[useAuth] Feil ved sletting via API:', err)
     }
   }
 
@@ -441,7 +441,7 @@ async function updatePublicCheckin(params: {
 
   let finalImageUrl: string | undefined = undefined
 
-  if (APPSCRIPT_URL) {
+  if (API_URL) {
     let imagePayload: { base64: string; mimeType: string; fileName: string } | null = null
     if (params.imageFile) {
       const base64 = await fileToBase64(params.imageFile)
@@ -464,7 +464,7 @@ async function updatePublicCheckin(params: {
       removeImage: params.removeImage
     }
 
-    const response = await fetch(APPSCRIPT_URL, {
+    const response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload)
@@ -475,7 +475,7 @@ async function updatePublicCheckin(params: {
     }
 
     const text = await response.text()
-    let data: any
+    let data: Record<string, unknown>
     try {
       data = JSON.parse(text)
     } catch {
@@ -483,17 +483,21 @@ async function updatePublicCheckin(params: {
     }
 
     if (!data.success) {
-      throw new Error(data.error || 'Oppdatering av innsjekking feilet.')
+      throw new Error((data.error as string) || 'Oppdatering av innsjekking feilet.')
     }
 
-    finalImageUrl = data.imageUrl
+    if (params.removeImage) {
+      finalImageUrl = ''
+    } else {
+      finalImageUrl = typeof data.imageUrl === 'string' ? data.imageUrl : undefined
+    }
   }
 
   // Synkroniser direkte til Firebase RTDB for å sikre umiddelbar oppdatering
   const fbConfig = await getFirebaseConfig()
   if (fbConfig && params.checkinId) {
     try {
-      const patchData: Record<string, any> = {}
+      const patchData: Record<string, unknown> = {}
       if (params.description !== undefined) {
         patchData.description = params.description
       }
@@ -551,10 +555,10 @@ async function updatePublicCheckinImage(params: {
 // Hent fersk SystemKonfigurasjon fra Apps Script hvis den mangler eller er utdatert
 // =============================================================================
 async function refreshSystemConfig(): Promise<SystemConfig> {
-  if (!APPSCRIPT_URL || !user.value) return systemConfig.value
+  if (!API_URL || !user.value) return systemConfig.value
 
   try {
-    const response = await fetch(APPSCRIPT_URL, {
+    const response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
@@ -641,7 +645,7 @@ export async function migrateUserCheckinsIfNeeded(userId: string, dbUrl: string,
     const legacyCheckins: { key: string; checkin: FirebaseCheckinItem }[] = []
     for (const [key, val] of Object.entries(data)) {
       if (RESERVED_USER_SUBKEYS.has(key)) continue
-      if (val && typeof val === 'object' && (val as any).turpostId != null) {
+      if (val && typeof val === 'object' && 'turpostId' in val && (val as { turpostId: unknown }).turpostId != null) {
         legacyCheckins.push({ key, checkin: val as FirebaseCheckinItem })
       }
     }
@@ -699,7 +703,7 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
     // Filtrer ut eventuelle private innsjekkinger (turpostId som starter med 'spot_') som Apps Script automatisk synkroniserte hit
     const checkins: FirebaseCheckinItem[] = []
     for (const [key, val] of Object.entries(data)) {
-      const item = val as any
+      const item = val as Record<string, unknown> | null
       if (!item || typeof item !== 'object' || item.turpostId == null) continue
       if (!item.id) item.id = key
       if (!item.userId && user.value) item.userId = user.value.userId
@@ -707,12 +711,12 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
       if (String(item.turpostId).startsWith('spot_')) {
         // Rydd opp uønsket kopi som Apps Script la under offentlig turpost- og checkins-node
         if (item.id) {
-          fetchFirebase(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(item.id)}.json`, { method: 'DELETE' }).catch(() => {})
-          fetchFirebase(`${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`, { method: 'DELETE' }).catch(() => {})
+          fetchFirebase(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(String(item.id))}.json`, { method: 'DELETE' }).catch(() => {})
+          fetchFirebase(`${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(String(item.id))}.json`, { method: 'DELETE' }).catch(() => {})
         }
         continue
       }
-      checkins.push(item as FirebaseCheckinItem)
+      checkins.push(item as unknown as FirebaseCheckinItem)
     }
 
     // Hent eventuelle oppdaterte likes og kommentarer fra turpost-noden

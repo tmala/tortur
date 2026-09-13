@@ -1,4 +1,15 @@
 <script setup lang="ts">
+import {
+  LocateFixed,
+  Route,
+  Map as MapIcon,
+  Mountain,
+  Layers,
+  MapPin,
+  X,
+  FolderHeart,
+} from 'lucide-vue-next'
+
 defineProps<{
   isOpen: boolean
 }>()
@@ -10,10 +21,12 @@ const emit = defineEmits<{
 
 <template>
   <transition name="fade-slide">
-    <div v-if="isOpen" class="info-modal glass-panel">
+    <div v-if="isOpen" class="info-modal glass-panel" @click.stop>
       <div class="layer-modal-header">
         <h3>Om TorTur</h3>
-        <button class="btn-close" @click="emit('close')" title="Lukk">✕</button>
+        <button class="btn-close" @click="emit('close')" title="Lukk" aria-label="Lukk">
+          <X :size="14" />
+        </button>
       </div>
       <div class="info-content">
         <p>
@@ -22,42 +35,73 @@ const emit = defineEmits<{
         </p>
         <div class="info-feature-list">
           <div class="info-feature-item">
-            <span class="bullet">📍</span>
-            <span><strong>Finn min posisjon:</strong> Viser hvor du er og sentrerer kartet.</span>
+            <span class="feature-icon-badge" title="Turposter">
+              <Mountain :size="15" />
+            </span>
+            <div class="feature-text">
+              <strong>Turposter:</strong> Utforsk over 15 000 turposter i Norge sortert etter fylke
+              og kommune. Det er også turposter enkelte steder i utlandet
+            </div>
           </div>
           <div class="info-feature-item">
-            <span class="bullet">🧭</span>
-            <span><strong>Følg meg:</strong> Sporer bevegelsene dine fortløpende.</span>
+            <span class="feature-icon-badge" title="Vis turposter der jeg er">
+              <MapPin :size="15" />
+            </span>
+            <div class="feature-text">
+              <strong>Vis turposter der jeg er:</strong> Viser turposter der du er og sentrerer
+              kartet rundt deg.
+            </div>
           </div>
           <div class="info-feature-item">
-            <span class="bullet">🗺️</span>
-            <span
-              ><strong>Klikk i kartet:</strong> Slå på kommunegrenser og klikk direkte på en kommune
-              i kartet for å hente turpostene der.</span
-            >
+            <span class="feature-icon-badge" title="Hvor er jeg">
+              <LocateFixed :size="15" />
+            </span>
+            <div class="feature-text">
+              <strong>Hvor er jeg:</strong> Viser posisjonen din og sentrerer kartet rundt deg.
+            </div>
           </div>
           <div class="info-feature-item">
-            <span class="bullet">⛰️</span>
-            <span
-              ><strong>Turposter i Norge:</strong> Utforsk over 15 000 turposter sortert etter fylke
-              og kommune.</span
-            >
+            <span class="feature-icon-badge" title="Følg meg">
+              <Route :size="15" />
+            </span>
+            <div class="feature-text">
+              <strong>Følg meg:</strong> Sporer bevegelsene dine fortløpende ("on"/"off")
+            </div>
+          </div>
+
+          <div class="info-feature-item">
+            <span class="feature-icon-badge" title="Lagrede spor">
+              <FolderHeart :size="15" />
+            </span>
+            <div class="feature-text">
+              <strong>Lagrede spor:</strong> Viser dine lagrede GPS-spor. Herfra kan du velge å
+              lagre dem i sky og/eller laste dem ned
+            </div>
+          </div>
+
+          <div class="info-feature-item">
+            <span class="feature-icon-badge" title="Grenser">
+              <MapIcon :size="15" />
+            </span>
+            <div class="feature-text">
+              <strong>Grenser:</strong> Slå på kommunegrenser og klikk direkte på en kommune i
+              kartet for å hente turpostene der (fungerer kun for Norge).
+            </div>
           </div>
           <div class="info-feature-item">
-            <span class="bullet">⛵</span>
-            <span
-              ><strong>Sjøkart:</strong> Offisielt norsk sjøkart fra Kartverket (med dybder og
-              fyrlykter) og globalt OpenSeaMap.</span
-            >
-          </div>
-          <div class="info-feature-item">
-            <span class="bullet">⚡</span>
-            <span
-              ><strong>PWA Offline Cache:</strong> Kan installeres på mobilen eller
-              skrivebordet.</span
-            >
+            <span class="feature-icon-badge" title="Kartlag">
+              <Layers :size="15" />
+            </span>
+            <div class="feature-text">
+              <strong>Kartlag:</strong> Velg hvilket kartlag som skal brukes.
+            </div>
           </div>
         </div>
+      </div>
+      <br />
+      <div class="info-content" align="center">
+        <a href="privacy.html">Personvern</a> &nbsp;&nbsp;
+        <a href="termsofservice.html">Brukervilkår</a>
       </div>
     </div>
   </transition>
@@ -101,13 +145,17 @@ const emit = defineEmits<{
 }
 
 .btn-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #334155;
   border: none;
   color: #cbd5e1;
   font-size: 14px;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 4px 6px;
   border-radius: 6px;
+  transition: all 0.15s ease;
 }
 
 .btn-close:hover {
@@ -125,14 +173,38 @@ const emit = defineEmits<{
   margin-top: 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .info-feature-item {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
   font-size: 12px;
+  line-height: 1.4;
+}
+
+.feature-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #38bdf8;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.feature-text {
+  flex: 1;
+}
+
+.feature-text strong {
+  color: #f8fafc;
 }
 
 @media (max-width: 640px) {
