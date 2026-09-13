@@ -234,6 +234,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/tortur\/api\/bw-ais/, ''),
       },
+      '/tortur/api': {
+        target: 'https://trillebar.no',
+        changeOrigin: true,
+      },
     },
   },
 })

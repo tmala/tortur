@@ -11,7 +11,7 @@ describe('Checkin deletion and image updates', () => {
 
   it('deletePublicCheckin calls Apps Script and Firebase DELETE', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any, opts: any) => {
-      if (typeof url === 'string' && url.includes('script.google.com')) {
+      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/'))) {
         return {
           ok: true,
           text: async () => JSON.stringify({ success: true, checkinId: 'c_101' }),
@@ -69,7 +69,7 @@ describe('Checkin deletion and image updates', () => {
 
   it('updatePublicCheckinImage calls Apps Script and Firebase PATCH', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
-      if (typeof url === 'string' && url.includes('script.google.com')) {
+      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/'))) {
         return {
           ok: true,
           text: async () => JSON.stringify({ success: true, checkinId: 'c_102', imageUrl: 'https://lh3.googleusercontent.com/d/file123' }),
@@ -128,7 +128,7 @@ describe('Checkin deletion and image updates', () => {
 
   it('updatePublicCheckin updates description and removes image', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
-      if (typeof url === 'string' && url.includes('script.google.com')) {
+      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/'))) {
         return {
           ok: true,
           text: async () => JSON.stringify({ success: true, checkinId: 'c_103' }),

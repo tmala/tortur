@@ -20,17 +20,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// GET-kall fungerer som helsekontroll
+require_once __DIR__ . '/GoogleClient.php';
+
+// GET-kall fungerer som helsekontroll og diagnostikk
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    echo json_encode([
+    $configFile = __DIR__ . '/config.php';
+    $configExists = file_exists($configFile);
+    $diag = [
         'status'    => 'ok',
         'app'       => 'TorTur PHP Backend API',
-        'timestamp' => gmdate('Y-m-d\TH:i:s\Z')
-    ]);
+        'timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
+        'config'    => [
+            'config_file' => $configExists ? 'found' : 'missing'
+        ]
+    ];
+
+    if ($configExists) {
+        $cfg = require $configFile;
+        $ssId = $cfg['spreadsheet_id'] ?? '';
+        $saFile = $cfg['service_account_file'] ?? (__DIR__ . '/service-account.json');
+
+        $diag['config']['spreadsheet_id'] = (!empty($ssId) && $ssId !== 'FYLL_INN_DIN_SPREADSHEET_ID_HER') ? 'configured' : 'missing_or_default';
+        $diag['config']['service_account_file'] = file_exists($saFile) ? 'found' : 'not_found';
+        $diag['config']['service_account_path_checked'] = $saFile;
+
+        if (file_exists($saFile)) {
+            try {
+                $testClient = new GoogleClient($saFile);
+                $token = $testClient->getAccessToken();
+                $diag['google_auth'] = !empty($token) ? 'connected' : 'no_token';
+            } catch (Throwable $t) {
+                $diag['google_auth'] = 'error: ' . $t->getMessage();
+            }
+        } else {
+            $diag['google_auth'] = 'skipped (service_account_file not found)';
+        }
+    } else {
+        $diag['google_auth'] = 'skipped (config.php missing)';
+    }
+
+    echo json_encode($diag, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     exit;
 }
-
-require_once __DIR__ . '/GoogleClient.php';
 
 // Last konfigurasjon
 $configFile = __DIR__ . '/config.php';
