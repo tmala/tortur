@@ -111,7 +111,8 @@ onUnmounted(() => {
 
             <h2 id="auth-modal-title" class="auth-modal-title">Logg inn på TorTur</h2>
             <p class="auth-modal-subtitle">
-              Innlogging gir tilgang til sanntids AIS-båttrafikk og personlige innstillinger.
+              Innlogging gir tilgang til innsjekking på turposter, oprettelse av nye private
+              turposter og logging av spor.
             </p>
 
             <div class="auth-modal-actions">
@@ -422,7 +423,7 @@ onUnmounted(() => {
 }
 .auth-modal-subtitle {
   font-size: 13px;
-  color: #64748b;
+  color: white;
   margin: 0 0 24px;
   line-height: 1.5;
 }
@@ -466,8 +467,8 @@ onUnmounted(() => {
 }
 
 .auth-modal-note {
-  font-size: 11px;
-  color: #475569;
+  font-size: 12px;
+  color: white;
   margin: 16px 0 0;
 }
 

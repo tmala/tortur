@@ -1,5 +1,5 @@
 // =============================================================================
-// TorTur – Google Apps Script Backend v11
+// TorTur – Google Apps Script Backend v12
 // =============================================================================
 // Instruksjoner:
 //  1. Gå til Google Regneark → Extensions → Apps Script
@@ -180,7 +180,7 @@ function handleLogin(body) {
       error:
         'Brukeren <' +
         googleUser.email +
-        '> er ikke whitelistet for TorTur-appen. Ta kontakt med administrator for aa faa tilgang.',
+        '> er ikke whitelistet for TorTur-appen. Ta kontakt med administrator for å få tilgang.',
     })
   }
 
