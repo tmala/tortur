@@ -57,7 +57,6 @@ class GoogleClient {
         ]);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         if ($httpCode !== 200 || !$response) {
             return null;
@@ -132,7 +131,6 @@ class GoogleClient {
         ]);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         $json = json_decode($response, true);
         if ($httpCode !== 200 || empty($json['access_token'])) {
@@ -257,7 +255,6 @@ class GoogleClient {
         ]);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         if ($httpCode !== 200 || !$response) {
             error_log("[AppsScriptProxy] Opplasting feilet. HTTP $httpCode: $response");
@@ -297,7 +294,6 @@ class GoogleClient {
         ]);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         if ($httpCode !== 200 || !$response) {
             return false;
@@ -347,7 +343,6 @@ class GoogleClient {
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err = curl_error($ch);
-        curl_close($ch);
 
         if ($err) {
             throw new Exception("Nettverksfeil mot Google API: $err");
