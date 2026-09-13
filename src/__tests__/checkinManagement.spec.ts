@@ -10,19 +10,19 @@ describe('Checkin deletion and image updates', () => {
   })
 
   it('deletePublicCheckin calls Apps Script and Firebase DELETE', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any, opts: any) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL, opts?: RequestInit) => {
       if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/'))) {
         return {
           ok: true,
           text: async () => JSON.stringify({ success: true, checkinId: 'c_101' }),
           json: async () => ({ success: true, checkinId: 'c_101' })
-        } as any
+        } as unknown as Response
       }
       return {
         ok: true,
         text: async () => JSON.stringify({}),
         json: async () => ({})
-      } as any
+      } as unknown as Response
     })
 
     const { user, systemConfig, deletePublicCheckin } = useAuth()
@@ -68,19 +68,19 @@ describe('Checkin deletion and image updates', () => {
   })
 
   it('updatePublicCheckinImage calls Apps Script and Firebase PATCH', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/'))) {
         return {
           ok: true,
           text: async () => JSON.stringify({ success: true, checkinId: 'c_102', imageUrl: 'https://lh3.googleusercontent.com/d/file123' }),
           json: async () => ({ success: true, checkinId: 'c_102', imageUrl: 'https://lh3.googleusercontent.com/d/file123' })
-        } as any
+        } as unknown as Response
       }
       return {
         ok: true,
         text: async () => JSON.stringify({}),
         json: async () => ({})
-      } as any
+      } as unknown as Response
     })
 
     const { user, systemConfig, updatePublicCheckinImage } = useAuth()
@@ -127,19 +127,19 @@ describe('Checkin deletion and image updates', () => {
   })
 
   it('updatePublicCheckin updates description and removes image', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/'))) {
         return {
           ok: true,
           text: async () => JSON.stringify({ success: true, checkinId: 'c_103' }),
           json: async () => ({ success: true, checkinId: 'c_103' })
-        } as any
+        } as unknown as Response
       }
       return {
         ok: true,
         text: async () => JSON.stringify({}),
         json: async () => ({})
-      } as any
+      } as unknown as Response
     })
 
     const { user, systemConfig, updatePublicCheckin } = useAuth()
@@ -190,7 +190,7 @@ describe('Checkin deletion and image updates', () => {
       ok: true,
       text: async () => JSON.stringify({ success: true, imageUrl: '' }),
       json: async () => ({})
-    } as any)
+    } as unknown as Response)
 
     const { systemConfig } = useAuth()
     systemConfig.value = {
@@ -211,7 +211,7 @@ describe('Checkin deletion and image updates', () => {
   })
 
   it('migrerer automatisk eldre innsjekkinger fra bruker-rot til /checkins/ under fetchMyCheckins', async () => {
-    const fakeUserData: Record<string, any> = {
+    const fakeUserData: Record<string, unknown> = {
       tracks: { 'track-1': { id: 'track-1' } },
       my_spots: { 'spot-1': { id: 'spot-1' } },
       settings: { defaultVisibility: 'all' },
@@ -232,9 +232,9 @@ describe('Checkin deletion and image updates', () => {
       }
     }
 
-    const checkinsSubnode: Record<string, any> = {}
+    const checkinsSubnode: Record<string, unknown> = {}
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any, opts: any) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL, opts?: RequestInit) => {
       const urlStr = String(url)
 
       // 1. GET brukerrot under migrering
@@ -242,24 +242,24 @@ describe('Checkin deletion and image updates', () => {
         return {
           ok: true,
           json: async () => fakeUserData
-        } as any
+        } as unknown as Response
       }
 
       // 2. PUT til /checkins/<id>.json
       if (urlStr.includes('/brukere/user_mig_1/checkins/') && opts?.method === 'PUT') {
-        const body = JSON.parse(opts.body)
+        const body = typeof opts.body === 'string' ? JSON.parse(opts.body) : {}
         checkinsSubnode[body.id] = body
-        return { ok: true, json: async () => body } as any
+        return { ok: true, json: async () => body } as unknown as Response
       }
 
       // 3. DELETE fra gammel rot
       if (urlStr.endsWith('/brukere/user_mig_1/chk_old_1.json') && opts?.method === 'DELETE') {
         delete fakeUserData['chk_old_1']
-        return { ok: true, json: async () => null } as any
+        return { ok: true, json: async () => null } as unknown as Response
       }
       if (urlStr.endsWith('/brukere/user_mig_1/chk_old_2.json') && opts?.method === 'DELETE') {
         delete fakeUserData['chk_old_2']
-        return { ok: true, json: async () => null } as any
+        return { ok: true, json: async () => null } as unknown as Response
       }
 
       // 4. GET /checkins.json
@@ -267,10 +267,10 @@ describe('Checkin deletion and image updates', () => {
         return {
           ok: true,
           json: async () => checkinsSubnode
-        } as any
+        } as unknown as Response
       }
 
-      return { ok: true, json: async () => ({}) } as any
+      return { ok: true, json: async () => ({}) } as unknown as Response
     })
 
     const { user, systemConfig, fetchMyCheckins } = useAuth()
@@ -327,14 +327,14 @@ describe('Checkin deletion and image updates', () => {
 post_101;Ekorn-stien;60.45;5.32;150;Vestland;Bergen
 post_102;Hafskorsundet;61.42;7.25;210;Vestland;Luster`
 
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       if (typeof url === 'string' && url.includes('mountains.csv')) {
         return {
           ok: true,
           text: async () => mockCsv
-        } as any
+        } as unknown as Response
       }
-      return { ok: false } as any
+      return { ok: false } as unknown as Response
     })
 
     const byId = await lookupTurpost('post_101')

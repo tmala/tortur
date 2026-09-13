@@ -1,22 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest'
 import { useCheckinSocial } from '../composables/useCheckinSocial'
 import { useAuth } from '../composables/useAuth'
 import { useFriends } from '../composables/useFriends'
 
 describe('useCheckinSocial - Likes/Reaksjoner og Kommentarer', () => {
-  let fetchSpy: any
+  let fetchSpy: MockInstance
 
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
     sessionStorage.clear()
 
-    fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any, opts: any) => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL, opts?: RequestInit) => {
       return {
         ok: true,
         text: async () => JSON.stringify({ success: true }),
         json: async () => ({ success: true })
-      } as any
+      } as unknown as Response
     })
 
     const { user, systemConfig } = useAuth()
@@ -61,11 +61,11 @@ describe('useCheckinSocial - Likes/Reaksjoner og Kommentarer', () => {
     expect(res.newReaction?.userId).toBe('test_user_1')
 
     // Sjekk at PUT ble kalt til turposten og forfatterens checkins
-    const putTurpost = fetchSpy.mock.calls.find((c: any) =>
-      String(c[0]).includes('/turposter/tp_100/chk_200/likes/test_user_1.json') && c[1]?.method === 'PUT'
+    const putTurpost = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/turposter/tp_100/chk_200/likes/test_user_1.json') && (c[1] as RequestInit | undefined)?.method === 'PUT'
     )
-    const putAuthor = fetchSpy.mock.calls.find((c: any) =>
-      String(c[0]).includes('/brukere/friend_user_2/checkins/chk_200/likes/test_user_1.json') && c[1]?.method === 'PUT'
+    const putAuthor = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/brukere/friend_user_2/checkins/chk_200/likes/test_user_1.json') && (c[1] as RequestInit | undefined)?.method === 'PUT'
     )
 
     expect(putTurpost).toBeDefined()
@@ -105,8 +105,8 @@ describe('useCheckinSocial - Likes/Reaksjoner og Kommentarer', () => {
     expect(res.isRemoved).toBe(true)
     expect(res.newReaction).toBeNull()
 
-    const delTurpost = fetchSpy.mock.calls.find((c: any) =>
-      String(c[0]).includes('/turposter/tp_100/chk_200/likes/test_user_1.json') && c[1]?.method === 'DELETE'
+    const delTurpost = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/turposter/tp_100/chk_200/likes/test_user_1.json') && (c[1] as RequestInit | undefined)?.method === 'DELETE'
     )
     expect(delTurpost).toBeDefined()
   })
@@ -139,8 +139,8 @@ describe('useCheckinSocial - Likes/Reaksjoner og Kommentarer', () => {
     expect(comment.userId).toBe('test_user_1')
     expect(comment.userName).toBe('Test User')
 
-    const putCommentTurpost = fetchSpy.mock.calls.find((c: any) =>
-      String(c[0]).includes(`/turposter/tp_100/chk_200/comments/${comment.id}.json`) && c[1]?.method === 'PUT'
+    const putCommentTurpost = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes(`/turposter/tp_100/chk_200/comments/${comment.id}.json`) && (c[1] as RequestInit | undefined)?.method === 'PUT'
     )
     expect(putCommentTurpost).toBeDefined()
   })
@@ -170,8 +170,8 @@ describe('useCheckinSocial - Likes/Reaksjoner og Kommentarer', () => {
       commentUserId: 'friend_user_2' // skrevet av en venn
     })
 
-    const delCall = fetchSpy.mock.calls.find((c: any) =>
-      String(c[0]).includes('/turposter/tp_100/chk_my_own/comments/comm_random_456.json') && c[1]?.method === 'DELETE'
+    const delCall = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/turposter/tp_100/chk_my_own/comments/comm_random_456.json') && (c[1] as RequestInit | undefined)?.method === 'DELETE'
     )
     expect(delCall).toBeDefined()
   })

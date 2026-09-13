@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { usePrivateTurposter } from '../composables/usePrivateTurposter'
+import type { TurpostItem } from '../composables/useTurposter'
 
 vi.mock('../composables/useAuth', () => ({
   useAuth: vi.fn().mockReturnValue({
@@ -18,7 +19,7 @@ vi.mock('../composables/useAuth', () => ({
     dbUrl: 'https://test-db.firebaseio.com',
     prefix: 'test_prefix'
   }),
-  fetchFirebase: vi.fn((url: string, init?: any) => fetch(url, init))
+  fetchFirebase: vi.fn((url: string, init?: RequestInit) => fetch(url, init))
 }))
 
 describe('usePrivateTurposter', () => {
@@ -39,7 +40,7 @@ describe('usePrivateTurposter', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       text: async () => mockCsvContent
-    } as any)
+    } as unknown as Response)
 
     const { calculateCsvPlacement } = usePrivateTurposter()
 
@@ -61,22 +62,22 @@ describe('usePrivateTurposter', () => {
   })
 
   it('submits an existing spot for public review', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       if (typeof url === 'string' && url.includes('config.json')) {
         return {
           ok: true,
           json: async () => ({ dbUrl: 'https://test-db.firebaseio.com', prefix: 'test_prefix' })
-        } as any
+        } as unknown as Response
       }
       return {
         ok: true,
         json: async () => ({})
-      } as any
+      } as unknown as Response
     })
 
     const { suggestExistingSpotForPublic } = usePrivateTurposter()
 
-    const mockSpot = {
+    const mockSpot: TurpostItem = {
       id: 'spot_123',
       name: 'Utsiktsposten',
       lat: 60.1,
@@ -88,7 +89,7 @@ describe('usePrivateTurposter', () => {
       isPrivate: true
     }
 
-    await suggestExistingSpotForPublic('user_abc', mockSpot as any, {
+    await suggestExistingSpotForPublic('user_abc', mockSpot, {
       name: 'Test Bruker',
       email: 'test@example.com'
     })
@@ -107,17 +108,17 @@ describe('usePrivateTurposter', () => {
   })
 
   it('deletes spot and cleans up its checkins', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       if (typeof url === 'string' && url.includes('config.json')) {
         return {
           ok: true,
           json: async () => ({ dbUrl: 'https://test-db.firebaseio.com', prefix: 'test_prefix' })
-        } as any
+        } as unknown as Response
       }
       return {
         ok: true,
         json: async () => ({})
-      } as any
+      } as unknown as Response
     })
 
     const { deleteMySpot } = usePrivateTurposter()
@@ -134,10 +135,10 @@ describe('usePrivateTurposter', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({})
-    } as any)
+    } as unknown as Response)
 
     const { submitPrivateCheckin } = usePrivateTurposter()
-    const mockPost = {
+    const mockPost: TurpostItem = {
       id: 'spot_123',
       name: 'Min Turpost',
       lat: 60.1,
@@ -153,7 +154,7 @@ describe('usePrivateTurposter', () => {
     const result = await submitPrivateCheckin({
       userId: 'user_abc',
       userName: 'Test Bruker',
-      post: mockPost as any,
+      post: mockPost,
       description: 'Flott tur!',
       imageFile: mockFile
     })

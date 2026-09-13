@@ -9,6 +9,8 @@ import TurposterPanel from '../components/TurposterPanel.vue'
 import CheckinModal from '../components/CheckinModal.vue'
 import TurpostCheckinsModal from '../components/TurpostCheckinsModal.vue'
 import UserProfileModal from '../components/UserProfileModal.vue'
+import type { FylkeInfo } from '../composables/useTurposter'
+import type { GoogleUser } from '../composables/useAuth'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -374,7 +376,7 @@ describe('TurposterPanel', () => {
 
     // Sjekk at event 'select-fylke' ble trigget med Utlandet-fylket
     expect(wrapper.emitted('select-fylke')).toBeTruthy()
-    const emittedFylke = wrapper.emitted('select-fylke')![0]![0] as any
+    const emittedFylke = wrapper.emitted('select-fylke')![0]![0] as FylkeInfo
     expect(emittedFylke.slug).toBe('utlandet')
 
     // Oppdater props som om forelder valgte Utlandet
@@ -717,10 +719,12 @@ describe('UserProfileModal', () => {
   })
 
   it('deduplicates duplicate checkins preferring the one marked as private', async () => {
-    const sampleUser = {
+    const sampleUser: GoogleUser = {
       userId: '112985692350976832637',
       userName: 'Tor Mala',
-      email: 'tormala@example.com'
+      email: 'tormala@example.com',
+      avatarUrl: '',
+      lastLogin: '2026-09-10T00:16:00Z'
     }
 
     const checkins = [
@@ -753,7 +757,7 @@ describe('UserProfileModal', () => {
     mount(UserProfileModal, {
       props: {
         isOpen: true,
-        user: sampleUser as any,
+        user: sampleUser,
         checkins
       }
     })
@@ -778,7 +782,7 @@ describe('UserProfileModal', () => {
     const wrapper = mount(UserProfileModal, {
       props: {
         isOpen: true,
-        user: sampleUser as any,
+        user: sampleUser,
         checkins: [],
         friendsCount: 3,
         savedTracksCount: 2,
@@ -853,7 +857,7 @@ describe('UserProfileModal', () => {
     mount(UserProfileModal, {
       props: {
         isOpen: true,
-        user: sampleUser as any,
+        user: sampleUser,
         checkins
       }
     })
@@ -882,7 +886,7 @@ describe('UserProfileModal', () => {
     const wrapperNoSuggestions = mount(UserProfileModal, {
       props: {
         isOpen: true,
-        user: sampleUser as any,
+        user: sampleUser,
         checkins: [],
         isAdmin: true,
         spotSuggestionsCount: 0
@@ -898,7 +902,7 @@ describe('UserProfileModal', () => {
     const wrapperWithSuggestions = mount(UserProfileModal, {
       props: {
         isOpen: true,
-        user: sampleUser as any,
+        user: sampleUser,
         checkins: [],
         isAdmin: true,
         spotSuggestionsCount: 3
@@ -928,7 +932,7 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
       altitude: null
     }
 
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       const urlStr = String(url)
       if (urlStr.includes('hierarchy.json')) {
         return {
@@ -992,7 +996,7 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
       altitude: null
     }
 
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       const urlStr = String(url)
       if (urlStr.includes('hierarchy.json')) {
         return {

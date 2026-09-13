@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { useFriends, registerPublicUser, searchPublicUsers, fetchFriendCheckins } from '../composables/useFriends'
+import { ref } from 'vue'
+import { useFriends, registerPublicUser, searchPublicUsers, fetchFriendCheckins, type CheckinVisibility, type FriendUser, type FriendRequest } from '../composables/useFriends'
 import * as friendsModule from '../composables/useFriends'
 import { useAuth } from '../composables/useAuth'
 import FriendProfileModal from '../components/FriendProfileModal.vue'
@@ -18,7 +19,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
         ok: true,
         text: async () => JSON.stringify({}),
         json: async () => ({})
-      } as any
+      } as unknown as Response
     })
 
     const { systemConfig } = useAuth()
@@ -46,7 +47,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
   })
 
   it('loadFriends loads friends correctly into state', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       if (String(url).includes('/brukere/user_me/friends.json')) {
         return {
           ok: true,
@@ -58,9 +59,9 @@ describe('useFriends - Friends system and check-in visibility', () => {
               since: '2026-09-01T12:00:00Z'
             }
           })
-        } as any
+        } as unknown as Response
       }
-      return { ok: true, json: async () => ({}) } as any
+      return { ok: true, json: async () => ({}) } as unknown as Response
     })
 
     const { systemConfig } = useAuth()
@@ -81,7 +82,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
 
   it('sendFriendRequest puts incoming for target and outgoing for current user', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      return { ok: true, json: async () => ({}) } as any
+      return { ok: true, json: async () => ({}) } as unknown as Response
     })
 
     const { systemConfig } = useAuth()
@@ -126,7 +127,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
 
   it('acceptFriendRequest puts friend in both users and deletes requests', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      return { ok: true, json: async () => ({}) } as any
+      return { ok: true, json: async () => ({}) } as unknown as Response
     })
 
     const { systemConfig } = useAuth()
@@ -178,7 +179,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
   })
 
   it('searchPublicUsers filters users by name or email case-insensitively', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       if (String(url).includes('/users_public.json')) {
         return {
           ok: true,
@@ -187,9 +188,9 @@ describe('useFriends - Friends system and check-in visibility', () => {
             u2: { userId: 'u2', userName: 'Kari Nordmann', email: 'kari@fjord.no' },
             u3: { userId: 'u3', userName: 'Ola Hansen', email: 'ola@test.no' }
           })
-        } as any
+        } as unknown as Response
       }
-      return { ok: true, json: async () => ({}) } as any
+      return { ok: true, json: async () => ({}) } as unknown as Response
     })
 
     const { systemConfig } = useAuth()
@@ -210,7 +211,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
 
   it('setDefaultVisibility and loadDefaultVisibility persist visibility settings', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      return { ok: true, json: async () => 'friends' } as any
+      return { ok: true, json: async () => 'friends' } as unknown as Response
     })
 
     const { systemConfig } = useAuth()
@@ -236,7 +237,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
 
   it('setCheckinVisibility writes to checkins_visibility and patches checkin', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      return { ok: true, json: async () => ({}) } as any
+      return { ok: true, json: async () => ({}) } as unknown as Response
     })
 
     const { systemConfig } = useAuth()
@@ -272,7 +273,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
   })
 
   it('fetchFriendCheckins henter vennens innsjekkinger og ekskluderer private', async () => {
-    const friendCheckinsData: Record<string, any> = {
+    const friendCheckinsData: Record<string, unknown> = {
       chk_pub: {
         id: 'chk_pub',
         userId: 'friend_42',
@@ -307,15 +308,15 @@ describe('useFriends - Friends system and check-in visibility', () => {
       }
     }
 
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       const urlStr = String(url)
       if (urlStr.includes('/brukere/friend_42/checkins.json')) {
         return {
           ok: true,
           json: async () => friendCheckinsData
-        } as any
+        } as unknown as Response
       }
-      return { ok: false, json: async () => ({}) } as any
+      return { ok: false, json: async () => ({}) } as unknown as Response
     })
 
     const { systemConfig } = useAuth()
@@ -357,15 +358,15 @@ describe('useFriends - Friends system and check-in visibility', () => {
       }
     }
 
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       const urlStr = String(url)
       if (urlStr.includes('/brukere/friend_50/checkins.json')) {
-        return { ok: true, json: async () => friendCheckins } as any
+        return { ok: true, json: async () => friendCheckins } as unknown as Response
       }
       if (urlStr.includes('/turposter/tp_fl%C3%B8yen/chk_1.json') || urlStr.includes('/turposter/tp_fløyen/chk_1.json')) {
-        return { ok: true, json: async () => turpostSocialData } as any
+        return { ok: true, json: async () => turpostSocialData } as unknown as Response
       }
-      return { ok: false, json: async () => ({}) } as any
+      return { ok: false, json: async () => ({}) } as unknown as Response
     })
 
     const { systemConfig } = useAuth()
@@ -412,24 +413,24 @@ describe('useFriends - Friends system and check-in visibility', () => {
 
     vi.spyOn(friendsModule, 'useFriends').mockReturnValue({
       fetchFriendCheckins: vi.fn().mockResolvedValue(mockCheckins),
-      friends: { value: [] } as any,
+      friends: ref<FriendUser[]>([]),
       loadFriends: vi.fn(),
       sendFriendRequest: vi.fn(),
       acceptFriendRequest: vi.fn(),
       declineFriendRequest: vi.fn(),
       removeFriend: vi.fn(),
       isFriend: vi.fn(),
-      outgoingRequests: { value: [] } as any,
-      incomingRequests: { value: [] } as any,
-      defaultVisibility: { value: 'all' } as any,
+      outgoingRequests: ref<FriendRequest[]>([]),
+      incomingRequests: ref<FriendRequest[]>([]),
+      defaultVisibility: ref<CheckinVisibility>('all'),
       setDefaultVisibility: vi.fn(),
       loadDefaultVisibility: vi.fn(),
       setCheckinVisibility: vi.fn(),
-      pendingSuggestions: { value: [] } as any,
+      pendingSuggestions: ref([]),
       loadPendingSuggestions: vi.fn(),
       approveSuggestion: vi.fn(),
       rejectSuggestion: vi.fn()
-    } as any)
+    } as unknown as ReturnType<typeof friendsModule.useFriends>)
 
     const wrapper = mount(FriendProfileModal, {
       props: {

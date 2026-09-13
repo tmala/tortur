@@ -63,7 +63,7 @@ describe('useGeoDetect', () => {
       }
     ]
 
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       const urlStr = String(url)
       if (urlStr.includes('kommuner.geojson')) {
         return {
