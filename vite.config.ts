@@ -164,6 +164,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        navigateFallbackDenylist: [/^\/tortur\/api/],
         runtimeCaching: [
           {
             urlPattern:
