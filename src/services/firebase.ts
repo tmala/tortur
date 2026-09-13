@@ -99,6 +99,8 @@ export function getFirebaseDatabase(customDbUrl?: string): Database | null {
   return database
 }
 
+let signInPromise: Promise<UserCredential | null> | null = null
+
 /**
  * Logger inn i Firebase Auth ved hjelp av et Google ID-token (JWT) fra GIS
  */
@@ -109,13 +111,24 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<UserCred
     return null
   }
   const credential = GoogleAuthProvider.credential(idToken)
-  return await signInWithCredential(authInstance, credential)
+  signInPromise = signInWithCredential(authInstance, credential)
+  try {
+    const res = await signInPromise
+    if (res?.user) {
+      const fbToken = await res.user.getIdToken()
+      sessionStorage.setItem('tortur_firebase_token', fbToken)
+    }
+    return res
+  } finally {
+    signInPromise = null
+  }
 }
 
 /**
  * Logger ut fra Firebase Auth
  */
 export async function signOutFirebase(): Promise<void> {
+  sessionStorage.removeItem('tortur_firebase_token')
   const authInstance = getFirebaseAuth()
   if (!authInstance) return
   await fbSignOut(authInstance)
@@ -142,18 +155,40 @@ export function onFirebaseAuthStateChange(callback: (user: FirebaseUser | null) 
 }
 
 /**
- * Henter gyldig Firebase Auth ID-token (JWT)
+ * Henter gyldig Firebase Auth ID-token (JWT).
+ * Venter om en innlogging pågår, eller henter fra aktiv Firebase-bruker.
  */
 export async function getFirebaseIdToken(): Promise<string | null> {
   const authInstance = getFirebaseAuth()
-  if (authInstance?.currentUser) {
+  if (!authInstance) return null
+
+  // 1. Hvis en innlogging pågår, vent på den først
+  if (signInPromise) {
     try {
-      return await authInstance.currentUser.getIdToken()
+      await signInPromise
+    } catch {}
+  }
+
+  // 2. Hvis currentUser ennå ikke er klar, vent på authStateReady
+  if (!authInstance.currentUser && typeof authInstance.authStateReady === 'function') {
+    try {
+      await authInstance.authStateReady()
+    } catch {}
+  }
+
+  // 3. Hvis brukeren er tilgjengelig, hent ferskt Firebase ID-token
+  if (authInstance.currentUser) {
+    try {
+      const token = await authInstance.currentUser.getIdToken()
+      sessionStorage.setItem('tortur_firebase_token', token)
+      return token
     } catch (err) {
       console.warn('[Firebase] Kunne ikke hente ID-token fra currentUser:', err)
     }
   }
-  return sessionStorage.getItem('tortur_id_token')
+
+  // 4. Returner eventuelt tidligere cachet Firebase-token
+  return sessionStorage.getItem('tortur_firebase_token')
 }
 
 /**
