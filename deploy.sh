@@ -47,11 +47,14 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Slett hemmelige filer og maler fra dist før opplasting (hvis de ble kopiert)
+rm -f dist/api/service-account.json dist/api/config.php dist/api/config.example.php dist/api/service-account.example.json
+
 echo "Overfører filer til $SSH_DEPLOY_TARGET:$SSH_DEPLOY_PATH..."
 
 # Try rsync first (preferred for speed, handles directory structure and deletes obsolete files safely without owner/group errors)
 if command -v rsync >/dev/null 2>&1; then
-  rsync -rtlz --delete dist/ "$SSH_DEPLOY_TARGET:$SSH_DEPLOY_PATH/"
+  rsync -rtlz --delete --exclude='api/config.php' --exclude='api/service-account.json' dist/ "$SSH_DEPLOY_TARGET:$SSH_DEPLOY_PATH/"
   RESULT=$?
 else
   # Fallback to scp (cd into dist to avoid path expansion and glob issues)

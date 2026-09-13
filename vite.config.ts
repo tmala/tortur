@@ -5,9 +5,33 @@ import vueJsx from '@vitejs/plugin-vue-jsx'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { VitePWA } from 'vite-plugin-pwa'
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync, unlinkSync } from 'node:fs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
+
+function excludeApiSecretsPlugin() {
+  return {
+    name: 'exclude-api-secrets',
+    closeBundle() {
+      const forbidden = [
+        './dist/api/service-account.json',
+        './dist/api/config.php',
+        './dist/api/config.example.php',
+        './dist/api/service-account.example.json',
+      ]
+      for (const rel of forbidden) {
+        try {
+          const full = fileURLToPath(new URL(rel, import.meta.url))
+          if (existsSync(full)) {
+            unlinkSync(full)
+          }
+        } catch {
+          // Ignorer hvis filen ikke finnes
+        }
+      }
+    }
+  }
+}
 
 function barentsWatchAisDevPlugin() {
   let cachedAisData: any[] | null = null
@@ -187,6 +211,7 @@ export default defineConfig({
         ],
       },
     }),
+    excludeApiSecretsPlugin(),
   ],
   build: {
     chunkSizeWarningLimit: 600,

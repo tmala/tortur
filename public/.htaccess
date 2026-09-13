@@ -2,6 +2,11 @@
   RewriteEngine On
   RewriteBase /tortur/
   RewriteRule ^index\.html$ - [L]
+
+  # Ikke omskriv api-kall til SPA index.html
+  RewriteCond %{REQUEST_URI} ^/tortur/api [NC]
+  RewriteRule ^ - [L]
+
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /tortur/index.html [L]

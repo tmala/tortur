@@ -1,0 +1,20 @@
+# public/api/.htaccess
+DirectoryIndex index.php
+
+# Beskytt sensitive filer mot direkte nedlasting via webserver
+<FilesMatch "(\.json|\.env|\.ini|\.log|config\.php)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Tillat CORS for POST/GET/OPTIONS
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "POST, GET, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+</IfModule>
