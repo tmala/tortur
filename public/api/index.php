@@ -26,12 +26,18 @@ require_once __DIR__ . '/GoogleClient.php';
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $configFile = __DIR__ . '/config.php';
     $configExists = file_exists($configFile);
+    $uploadsDir = __DIR__ . '/uploads';
     $diag = [
-        'status'    => 'ok',
-        'app'       => 'TorTur PHP Backend API',
-        'timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
-        'config'    => [
+        'status'      => 'ok',
+        'app'         => 'TorTur PHP Backend API',
+        'php_version' => PHP_VERSION,
+        'timestamp'   => gmdate('Y-m-d\TH:i:s\Z'),
+        'config'      => [
             'config_file' => $configExists ? 'found' : 'missing'
+        ],
+        'storage'     => [
+            'uploads_dir_exists'   => is_dir($uploadsDir),
+            'uploads_dir_writable' => is_dir($uploadsDir) ? is_writable($uploadsDir) : is_writable(__DIR__)
         ]
     ];
 
@@ -43,6 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $diag['config']['spreadsheet_id'] = (!empty($ssId) && $ssId !== 'FYLL_INN_DIN_SPREADSHEET_ID_HER') ? 'configured' : 'missing_or_default';
         $diag['config']['service_account_file'] = file_exists($saFile) ? 'found' : 'not_found';
         $diag['config']['service_account_path_checked'] = $saFile;
+        $diag['config']['storage_driver'] = $cfg['storage_driver'] ?? 'auto';
 
         if (file_exists($saFile)) {
             try {
@@ -80,6 +87,8 @@ $serviceAccount  = $config['service_account_file'] ?? (__DIR__ . '/service-accou
 $sheetBrukere    = $config['sheet_brukere'] ?? 'Brukere';
 $sheetSystem     = $config['sheet_system'] ?? 'SystemKonfigurasjon';
 $sheetInnsjekk   = $config['sheet_innsjekk'] ?? 'TurpostInnsjekk';
+$storageDriver   = $config['storage_driver'] ?? 'auto';
+$baseUrl         = $config['base_url'] ?? null;
 
 if (empty($spreadsheetId) || $spreadsheetId === 'FYLL_INN_DIN_SPREADSHEET_ID_HER') {
     http_response_code(500);
@@ -114,7 +123,7 @@ try {
             break;
 
         case 'checkin':
-            handleCheckin($client, $body, $spreadsheetId, $sheetBrukere, $sheetSystem, $sheetInnsjekk);
+            handleCheckin($client, $body, $spreadsheetId, $sheetBrukere, $sheetSystem, $sheetInnsjekk, $storageDriver, $baseUrl);
             break;
 
         case 'delete_checkin':
@@ -123,7 +132,7 @@ try {
 
         case 'update_checkin':
         case 'update_checkin_image':
-            handleUpdateCheckin($client, $body, $spreadsheetId, $sheetInnsjekk, $sheetSystem);
+            handleUpdateCheckin($client, $body, $spreadsheetId, $sheetInnsjekk, $sheetSystem, $storageDriver, $baseUrl);
             break;
 
         case 'getconfig':
@@ -217,7 +226,7 @@ function handleLogin(GoogleClient $client, array $body, string $ssId, string $sh
     ]);
 }
 
-function handleCheckin(GoogleClient $client, array $body, string $ssId, string $sheetBrukere, string $sheetSystem, string $sheetInnsjekk): void {
+function handleCheckin(GoogleClient $client, array $body, string $ssId, string $sheetBrukere, string $sheetSystem, string $sheetInnsjekk, string $storageDriver = 'auto', ?string $baseUrl = null): void {
     $turpostId = trim((string)($body['turpostId'] ?? ''));
     if (empty($turpostId)) {
         echo json_encode(['success' => false, 'error' => 'Mangler turpostId for innsjekk.']);
@@ -266,10 +275,10 @@ function handleCheckin(GoogleClient $client, array $body, string $ssId, string $
     $systemConfig = fetchSystemConfig($client, $ssId, $sheetSystem);
     $baseFolderId = !empty($systemConfig['INNSJEKK_FOLDER_ID']) ? trim($systemConfig['INNSJEKK_FOLDER_ID']) : null;
 
-    // Håndter bildeopplasting til Drive
+    // Håndter bildeopplasting (Google Drive med automatisk lokal fallback)
     $imageUrl = '';
     if (!empty($body['image']['base64'])) {
-        $imageUrl = $client->uploadImage($turpostId, $body['image'], $baseFolderId);
+        $imageUrl = handleImageUpload($turpostId, $body['image'], $client, $baseFolderId, $storageDriver, $baseUrl);
     }
 
     $checkinId   = 'c_' . round(microtime(true) * 1000);
@@ -352,9 +361,8 @@ function handleDeleteCheckin(GoogleClient $client, array $body, string $ssId, st
             }
 
             if ($isMatch) {
-                $fileId = extractDriveFileId($rowImageUrl);
-                if ($fileId) {
-                    $client->deleteDriveFile($fileId);
+                if ($rowImageUrl) {
+                    deleteCheckinImage($rowImageUrl, $client);
                     $deletedImages++;
                 }
 
@@ -373,7 +381,7 @@ function handleDeleteCheckin(GoogleClient $client, array $body, string $ssId, st
     ]);
 }
 
-function handleUpdateCheckin(GoogleClient $client, array $body, string $ssId, string $sheetInnsjekk, string $sheetSystem): void {
+function handleUpdateCheckin(GoogleClient $client, array $body, string $ssId, string $sheetInnsjekk, string $sheetSystem, string $storageDriver = 'auto', ?string $baseUrl = null): void {
     $turpostId = (string)($body['turpostId'] ?? '');
     $checkinId = (string)($body['checkinId'] ?? '');
     $timestamp = (string)($body['timestamp'] ?? '');
@@ -438,19 +446,17 @@ function handleUpdateCheckin(GoogleClient $client, array $body, string $ssId, st
 
     if (!empty($body['image']['base64'])) {
         if ($oldImageUrl) {
-            $oldFileId = extractDriveFileId($oldImageUrl);
-            if ($oldFileId) $client->deleteDriveFile($oldFileId);
+            deleteCheckinImage($oldImageUrl, $client);
         }
 
         $systemConfig = fetchSystemConfig($client, $ssId, $sheetSystem);
         $baseFolderId = !empty($systemConfig['INNSJEKK_FOLDER_ID']) ? trim($systemConfig['INNSJEKK_FOLDER_ID']) : null;
-        $updatedImageUrl = $client->uploadImage($turpostId, $body['image'], $baseFolderId);
+        $updatedImageUrl = handleImageUpload($turpostId, $body['image'], $client, $baseFolderId, $storageDriver, $baseUrl);
 
         $client->updateSheetValues($ssId, "{$sheetInnsjekk}!E{$foundRowIndex}", [[$updatedImageUrl]]);
     } elseif (!empty($body['removeImage'])) {
         if ($oldImageUrl) {
-            $oldFileId = extractDriveFileId($oldImageUrl);
-            if ($oldFileId) $client->deleteDriveFile($oldFileId);
+            deleteCheckinImage($oldImageUrl, $client);
         }
         $updatedImageUrl = '';
         $client->updateSheetValues($ssId, "{$sheetInnsjekk}!E{$foundRowIndex}", [['']]);
@@ -498,4 +504,112 @@ function extractDriveFileId(?string $url): ?string {
     if (preg_match('/\/d\/([a-zA-Z0-9_-]+)/', $url, $m)) return $m[1];
     if (preg_match('/[?&]id=([a-zA-Z0-9_-]+)/', $url, $m)) return $m[1];
     return null;
+}
+
+/**
+ * Lagrer et bilde lokalt på webserveren under public/api/uploads/turposter/{turpostId}/.
+ * Returnerer den fulle offentlige URL-en til bildet.
+ */
+function saveLocalImage(string $turpostId, array $imageObj, ?string $customBaseUrl = null): string {
+    $base64 = $imageObj['base64'] ?? '';
+    if (strpos($base64, ',') !== false) {
+        $base64 = explode(',', $base64, 2)[1];
+    }
+    $binary = base64_decode($base64);
+    if (!$binary) {
+        error_log("[LocalUpload] Ugyldig base64-data mottatt for turpost {$turpostId}.");
+        return '';
+    }
+
+    $mimeType = $imageObj['mimeType'] ?? 'image/jpeg';
+    $ext = strpos($mimeType, 'png') !== false ? '.png' : (strpos($mimeType, 'webp') !== false ? '.webp' : '.jpg');
+    $fileName = 'innsjekk_' . round(microtime(true) * 1000) . '_' . bin2hex(random_bytes(4)) . $ext;
+
+    $safeTurpostId = preg_replace('/[^a-zA-Z0-9_-]/', '', $turpostId);
+    if ($safeTurpostId === '') {
+        $safeTurpostId = 'ukjent';
+    }
+
+    $uploadDir = __DIR__ . '/uploads/turposter/' . $safeTurpostId;
+    if (!is_dir($uploadDir)) {
+        if (!mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+            error_log("[LocalUpload] Kunne ikke opprette mappe: $uploadDir");
+            return '';
+        }
+    }
+
+    $filePath = $uploadDir . '/' . $fileName;
+    if (file_put_contents($filePath, $binary) === false) {
+        error_log("[LocalUpload] Kunne ikke skrive fil til disk: $filePath");
+        return '';
+    }
+
+    // Bestem offentlig base-URL
+    if ($customBaseUrl) {
+        $baseUrl = rtrim($customBaseUrl, '/');
+    } else {
+        $scheme = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ||
+                  (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')) ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'trillebar.no';
+        $scriptDir = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/tortur/api/'), '/\\');
+        $baseUrl = "{$scheme}://{$host}{$scriptDir}";
+    }
+
+    return "{$baseUrl}/uploads/turposter/{$safeTurpostId}/{$fileName}";
+}
+
+/**
+ * Sletter bilde, enten fra lokal disk (/uploads/) eller fra Google Drive.
+ */
+function deleteCheckinImage(?string $url, GoogleClient $client): void {
+    if (!$url) return;
+    if (strpos($url, '/uploads/') !== false) {
+        $parsed = parse_url($url, PHP_URL_PATH);
+        if ($parsed) {
+            if (preg_match('#/uploads/turposter/([^/]+)/([^/]+)$#', $parsed, $m)) {
+                $turpostId = preg_replace('/[^a-zA-Z0-9_-]/', '', $m[1]);
+                $fileName  = basename($m[2]);
+                $localPath = __DIR__ . "/uploads/turposter/{$turpostId}/{$fileName}";
+                if (file_exists($localPath)) {
+                    @unlink($localPath);
+                }
+            }
+        }
+    } else {
+        $oldFileId = extractDriveFileId($url);
+        if ($oldFileId) {
+            $client->deleteDriveFile($oldFileId);
+        }
+    }
+}
+
+/**
+ * Felles opplasting med automatisk fallback:
+ * Prøver Google Drive først, men faller automatisk tilbake til lokal webserver
+ * hvis Drive mangler lagringskvote (slik Service Accounts gjør på personlige Google-kontoer).
+ */
+function handleImageUpload(string $turpostId, array $imageObj, GoogleClient $client, ?string $baseFolderId, string $storageDriver = 'auto', ?string $customBaseUrl = null): string {
+    if (empty($imageObj['base64'])) {
+        return '';
+    }
+
+    if ($storageDriver === 'local') {
+        return saveLocalImage($turpostId, $imageObj, $customBaseUrl);
+    }
+
+    if ($storageDriver === 'drive') {
+        $img = $client->uploadImage($turpostId, $imageObj, $baseFolderId);
+        if (!empty($img)) return $img;
+        error_log("[Upload] Google Drive feilet under driver 'drive'.");
+        return '';
+    }
+
+    // Default: 'auto'
+    $img = $client->uploadImage($turpostId, $imageObj, $baseFolderId);
+    if (!empty($img)) {
+        return $img;
+    }
+
+    error_log("[Upload] Google Drive utilgjengelig eller mangler kvote. Faller tilbake til lokal fillagring på webserver.");
+    return saveLocalImage($turpostId, $imageObj, $customBaseUrl);
 }

@@ -22,4 +22,14 @@ return [
     'sheet_brukere'  => 'Brukere',
     'sheet_system'   => 'SystemKonfigurasjon',
     'sheet_innsjekk' => 'TurpostInnsjekk',
+
+    // Bildelagring for innsjekkinger:
+    //   'auto'  (standard): Prøver Google Drive først. Hvis Service Account mangler kvote
+    //                       (vanlig på @gmail.com-kontoer), lagres bildet automatisk lokalt på webserveren.
+    //   'local':            Lagrer alltid direkte på webserveren (raskest, krever ingen Drive-kvote).
+    //   'drive':            Tvinger Google Drive (krever Google Workspace / Shared Drive med kvote).
+    'storage_driver' => 'auto',
+
+    // Valgfri egendefinert base-URL til API-et (hvis den ikke detekteres automatisk):
+    // 'base_url' => 'https://trillebar.no/tortur/api',
 ];

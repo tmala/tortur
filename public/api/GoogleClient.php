@@ -10,6 +10,22 @@
  *   4. Google Identity Services ID-token-validering mot tokeninfo.
  */
 
+if (!function_exists('str_contains')) {
+    function str_contains(string $haystack, string $needle): bool {
+        return $needle === '' || strpos($haystack, $needle) !== false;
+    }
+}
+if (!function_exists('str_starts_with')) {
+    function str_starts_with(string $haystack, string $needle): bool {
+        return strncmp($haystack, $needle, strlen($needle)) === 0;
+    }
+}
+if (!function_exists('str_ends_with')) {
+    function str_ends_with(string $haystack, string $needle): bool {
+        return $needle === '' || substr($haystack, -strlen($needle)) === $needle;
+    }
+}
+
 class GoogleClient {
     private array $serviceAccount;
     private string $cachePath;
@@ -309,6 +325,8 @@ class GoogleClient {
 
         $json = json_decode($response, true);
         if ($httpCode !== 200 || empty($json['id'])) {
+            $err = $json['error']['message'] ?? "HTTP $httpCode: $response";
+            error_log("[GoogleDrive] Opplasting feilet: $err");
             return '';
         }
 

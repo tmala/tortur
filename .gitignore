@@ -18,6 +18,7 @@ coverage
 public/api/config.php
 public/api/service-account.json
 public/api/*.log
+public/api/uploads/turposter/
 
 # Editor directories and files
 .vscode/*

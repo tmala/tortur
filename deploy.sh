@@ -54,7 +54,7 @@ echo "Overfører filer til $SSH_DEPLOY_TARGET:$SSH_DEPLOY_PATH..."
 
 # Try rsync first (preferred for speed, handles directory structure and deletes obsolete files safely without owner/group errors)
 if command -v rsync >/dev/null 2>&1; then
-  rsync -rtlz --delete --exclude='api/config.php' --exclude='api/service-account.json' dist/ "$SSH_DEPLOY_TARGET:$SSH_DEPLOY_PATH/"
+  rsync -rtlz --delete --exclude='api/config.php' --exclude='api/service-account.json' --exclude='api/uploads' dist/ "$SSH_DEPLOY_TARGET:$SSH_DEPLOY_PATH/"
   RESULT=$?
 else
   # Fallback to scp (cd into dist to avoid path expansion and glob issues)
