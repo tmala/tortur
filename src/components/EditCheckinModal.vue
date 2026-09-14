@@ -15,7 +15,7 @@ import {
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import type { CheckinVisibility } from '@/composables/useFriends'
-import { compressImage } from '@/utils/imageCompression'
+import { compressImageWithExif } from '@/utils/imageCompression'
 import { formatDistance } from '@/composables/useGeolocation'
 import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import { useAppStateStore } from '@/stores/appState'
@@ -149,7 +149,7 @@ async function processAndSetFile(file: File) {
   isProcessingImage.value = true
   errorMessage.value = null
   try {
-    const compressed = await compressImage(file)
+    const compressed = await compressImageWithExif(file)
     setFile(compressed)
     isImageRemoved.value = false
   } catch (err: unknown) {

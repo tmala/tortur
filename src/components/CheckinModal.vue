@@ -5,7 +5,7 @@ import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type GoogleUser, type CheckinResult } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import { useFriends, type CheckinVisibility } from '@/composables/useFriends'
-import { compressImage } from '@/utils/imageCompression'
+import { compressImageWithExif } from '@/utils/imageCompression'
 import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import WebcamCapture from '@/components/checkin/WebcamCapture.vue'
 import CheckinVisibilitySelector from '@/components/checkin/CheckinVisibilitySelector.vue'
@@ -141,7 +141,7 @@ async function processAndSetImage(file: File) {
   isProcessingImage.value = true
 
   try {
-    const compressed = await compressImage(file)
+    const compressed = await compressImageWithExif(file)
     if (previewUrl.value) {
       URL.revokeObjectURL(previewUrl.value)
     }
