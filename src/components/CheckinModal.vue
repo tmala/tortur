@@ -237,7 +237,7 @@ const handleSubmit = async () => {
 }
 
 const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && props.isOpen && !isSubmitting.value) {
+  if (e.key === 'Escape' && props.isOpen && !isSubmitting.value && !isTrackPickerOpen.value) {
     isWebcamActive.value = false
     emit('close')
   }
@@ -259,7 +259,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <Transition name="checkin-fade">
-      <div v-if="isOpen" class="checkin-overlay" @click.self="!isSubmitting && emit('close')">
+      <div v-if="isOpen" class="checkin-overlay" @click.self="!isSubmitting && !isTrackPickerOpen && emit('close')">
         <div class="checkin-card glass-panel" role="dialog" aria-modal="true">
           <!-- Header -->
           <div class="checkin-header">

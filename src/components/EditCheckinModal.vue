@@ -18,6 +18,8 @@ import type { CheckinVisibility } from '@/composables/useFriends'
 import { compressImage } from '@/utils/imageCompression'
 import { formatDistance } from '@/composables/useGeolocation'
 import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
+import { useAppStateStore } from '@/stores/appState'
+import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
 import WebcamCapture from '@/components/checkin/WebcamCapture.vue'
 import CheckinVisibilitySelector from '@/components/checkin/CheckinVisibilitySelector.vue'
 import TrackPickerModal from '@/components/TrackPickerModal.vue'
@@ -49,6 +51,7 @@ const isDeleting = ref(false)
 const errorMessage = ref<string | null>(null)
 const isSuccess = ref(false)
 const trackStore = useGpsTrackStore()
+const appState = useAppStateStore()
 const selectedTrackId = ref<string | null>(null)
 const isTrackPickerOpen = ref(false)
 
@@ -63,6 +66,22 @@ function handleTrackSelected(track: SavedTrack | null) {
 
 function removeTrack() {
   selectedTrackId.value = null
+}
+
+async function handleViewTrackOnMap() {
+  if (!selectedTrackId.value) return
+  let track = attachedTrack.value
+  if (!track && props.checkin?.userId) {
+    const { fetchUserTrackById } = useFirebaseTracks()
+    track = await fetchUserTrackById(props.checkin.userId, selectedTrackId.value)
+  }
+  if (track) {
+    trackStore.viewTrackOnMap(track, true)
+    appState.requestViewTrack(track)
+  } else {
+    trackStore.viewTrackOnMap(selectedTrackId.value, true)
+  }
+  emit('close')
 }
 
 const cameraInputRef = ref<HTMLInputElement | null>(null)
@@ -357,7 +376,7 @@ const onDragEnd = () => {
 }
 
 const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && props.isOpen && !isSubmitting.value) {
+  if (e.key === 'Escape' && props.isOpen && !isSubmitting.value && !isTrackPickerOpen.value) {
     isWebcamActive.value = false
     emit('close')
   }
@@ -382,7 +401,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <Transition name="fade">
-      <div v-if="isOpen" class="modal-overlay" @click.self="!isSubmitting && emit('close')">
+      <div v-if="isOpen" class="modal-overlay" @click.self="!isSubmitting && !isTrackPickerOpen && emit('close')">
         <div
           ref="modalRef"
           class="edit-checkin-card glass-panel"
@@ -585,6 +604,15 @@ onUnmounted(() => {
                 <div class="track-card-actions">
                   <button
                     type="button"
+                    class="btn-track-action view-map"
+                    title="Vis dette sporet på kartet"
+                    aria-label="Vis på kart"
+                    @click="handleViewTrackOnMap"
+                  >
+                    Vis på kart
+                  </button>
+                  <button
+                    type="button"
                     class="btn-track-action"
                     title="Endre spor"
                     aria-label="Endre spor"
@@ -599,7 +627,7 @@ onUnmounted(() => {
                     aria-label="Fjern spor"
                     @click="removeTrack"
                   >
-                    <X :size="14" />
+                    Fjern
                   </button>
                 </div>
               </div>
@@ -1213,6 +1241,17 @@ onUnmounted(() => {
 .btn-track-action:hover {
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
+}
+
+.btn-track-action.view-map {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.btn-track-action.view-map:hover {
+  background: rgba(16, 185, 129, 0.28);
+  color: #6ee7b7;
 }
 
 .btn-track-action.remove {

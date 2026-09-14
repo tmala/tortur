@@ -123,6 +123,11 @@ function selectTrack(track: SavedTrack | null) {
   selectedTrackId.value = track ? track.id : null
 }
 
+function selectAndConfirm(track: SavedTrack | null) {
+  selectedTrackId.value = track ? track.id : null
+  handleConfirm()
+}
+
 function handleConfirm() {
   emit('select', selectedTrack.value)
   emit('close')
@@ -220,14 +225,15 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Ingen spor-alternativ (fjern kobling) -->
+          <!-- Valg: Intet spor -->
           <div
-            class="track-option none-option"
+            class="track-option empty-option"
             :class="{ active: selectedTrackId === null }"
             role="button"
             tabindex="0"
-            aria-label="Intet spor tilknyttet"
+            aria-label="Intet GPS-spor"
             @click="selectTrack(null)"
+            @dblclick="selectAndConfirm(null)"
             @keydown.enter="selectTrack(null)"
             @keydown.space.prevent="selectTrack(null)"
           >
@@ -251,6 +257,7 @@ onUnmounted(() => {
               tabindex="0"
               :aria-label="track.name"
               @click="selectTrack(track)"
+              @dblclick="selectAndConfirm(track)"
               @keydown.enter="selectTrack(track)"
               @keydown.space.prevent="selectTrack(track)"
             >
@@ -318,7 +325,7 @@ onUnmounted(() => {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 12000;
   background-color: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(4px);
   display: flex;

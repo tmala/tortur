@@ -17,6 +17,7 @@ import {
 import type { FirebaseCheckinItem } from '@/composables/useAuth'
 import { useFriends, type FriendUser } from '@/composables/useFriends'
 import { useGpsTrackStore } from '@/stores/gpsTrack'
+import { useAppStateStore } from '@/stores/appState'
 import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
 import CheckinSocialSection from './CheckinSocialSection.vue'
 
@@ -162,16 +163,19 @@ function handleViewOnMap(item: FirebaseCheckinItem) {
 async function handleViewTrack(item: FirebaseCheckinItem) {
   if (!item.trackId) return
   const trackStore = useGpsTrackStore()
+  const appState = useAppStateStore()
   const local = trackStore.savedTracks.find((t) => t.id === item.trackId)
   if (local) {
-    trackStore.viewTrackOnMap(local)
+    trackStore.viewTrackOnMap(local, true)
+    appState.requestViewTrack(local)
   } else {
     const { fetchUserTrackById } = useFirebaseTracks()
     const remote = await fetchUserTrackById(item.userId, item.trackId)
     if (remote) {
-      trackStore.viewTrackOnMap(remote)
+      trackStore.viewTrackOnMap(remote, true)
+      appState.requestViewTrack(remote)
     } else {
-      trackStore.viewTrackOnMap(item.trackId)
+      trackStore.viewTrackOnMap(item.trackId, true)
     }
   }
   emit('close')
@@ -331,6 +335,17 @@ onUnmounted(() => {
                 </div>
 
                 <div class="checkin-title-right">
+                  <button
+                    v-if="item.trackId"
+                    type="button"
+                    class="btn-friend-track-header"
+                    title="Vis tilknyttet GPS-spor på kart"
+                    aria-label="Vis GPS-spor på kart"
+                    @click.stop="handleViewTrack(item)"
+                  >
+                    <Route :size="11" />
+                    <span>GPS-spor</span>
+                  </button>
                   <span class="checkin-date">
                     <Calendar :size="11" />
                     {{ formatDate(item.timestamp) }}
@@ -767,6 +782,27 @@ onUnmounted(() => {
 .vis-tag.all {
   background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
+}
+
+.btn-friend-track-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 6px;
+  color: #34d399;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-friend-track-header:hover {
+  background: rgba(16, 185, 129, 0.28);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.5);
 }
 
 .checkin-title-right {

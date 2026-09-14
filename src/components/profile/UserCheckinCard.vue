@@ -88,6 +88,17 @@ const formatDate = (isoString?: string) => {
           </span>
         </div>
         <div class="checkin-header-right">
+          <button
+            v-if="item.trackId"
+            type="button"
+            class="header-track-badge"
+            title="Vis tilknyttet GPS-spor på kart"
+            aria-label="Vis GPS-spor på kart"
+            @click.stop="emit('view-track', item)"
+          >
+            <Route :size="11" />
+            <span>GPS-spor</span>
+          </button>
           <div class="checkin-date-badge">
             <span>{{ formatDate(item.timestamp) }}</span>
           </div>
@@ -212,6 +223,27 @@ const formatDate = (isoString?: string) => {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.header-track-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 6px;
+  color: #34d399;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.header-track-badge:hover {
+  background: rgba(16, 185, 129, 0.28);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.5);
 }
 
 .chevron-expand {

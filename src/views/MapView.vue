@@ -11,8 +11,10 @@ import AdminAddTurpostModal from '@/components/AdminAddTurpostModal.vue'
 import {
   useGeolocation,
   calculateDistanceMeters,
+  formatDistance,
   type GeoLocationState,
 } from '@/composables/useGeolocation'
+import { Route, X as CloseIcon, Navigation } from 'lucide-vue-next'
 import {
   useTurposter,
   findKommuneInHierarchy,
@@ -402,8 +404,14 @@ const handleTrackClick = () => {
 }
 
 const handleViewSavedTrack = (track: SavedTrack | null) => {
-  if (track && mapViewerRef.value) {
-    mapViewerRef.value.zoomToTrack(track.points)
+  if (track) {
+    if (mapViewerRef.value) {
+      mapViewerRef.value.zoomToTrack(track.points)
+    } else {
+      nextTick(() => {
+        mapViewerRef.value?.zoomToTrack(track.points)
+      })
+    }
   }
 }
 
@@ -411,10 +419,11 @@ const handleViewSavedTrack = (track: SavedTrack | null) => {
 watch(
   () => trackStore.activeTrack,
   (track) => {
-    if (track && mapViewerRef.value) {
-      mapViewerRef.value.zoomToTrack(track.points)
+    if (track) {
+      handleViewSavedTrack(track)
     }
   },
+  { immediate: true },
 )
 
 // Håndter åpning og lukking av turpost-panel
@@ -684,6 +693,7 @@ watch(
       appState.clearViewTrack()
     }
   },
+  { immediate: true },
 )
 
 watch(
@@ -732,6 +742,47 @@ onUnmounted(() => {
         ✕ Avbryt
       </button>
     </div>
+
+    <!-- Flytende banner når et lagret GPS-spor vises på kartet -->
+    <transition name="fade-slide">
+      <div v-if="trackStore.activeTrack" class="active-track-banner">
+        <div
+          class="active-track-content"
+          @click="handleViewSavedTrack(trackStore.activeTrack)"
+          title="Klikk for å sentrere kartet på sporet"
+        >
+          <Route :size="16" class="track-banner-icon" />
+          <div class="active-track-text">
+            <span class="active-track-label">Spor:</span>
+            <span class="active-track-title">{{ trackStore.activeTrack.name }}</span>
+            <span v-if="trackStore.activeTrack.distanceMeters" class="active-track-dist">
+              ({{ formatDistance(trackStore.activeTrack.distanceMeters) }})
+            </span>
+          </div>
+        </div>
+        <div class="active-track-actions">
+          <button
+            type="button"
+            class="btn-track-banner-focus"
+            @click="handleViewSavedTrack(trackStore.activeTrack)"
+            title="Sentrér og zoom til sporet"
+            aria-label="Sentrér på sporet"
+          >
+            <Navigation :size="12" />
+            <span>Sentrér</span>
+          </button>
+          <button
+            type="button"
+            class="btn-track-banner-close"
+            @click="trackStore.clearActiveTrack()"
+            title="Skjul sporet fra kartet"
+            aria-label="Skjul spor"
+          >
+            <CloseIcon :size="14" />
+          </button>
+        </div>
+      </div>
+    </transition>
 
     <MapViewer
       ref="mapViewerRef"
@@ -944,5 +995,126 @@ onUnmounted(() => {
 .btn-cancel-add-spot:hover {
   background: #ef4444;
   color: #ffffff;
+}
+
+.active-track-banner {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1050;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: 24px;
+  padding: 6px 12px 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(16, 185, 129, 0.2);
+  color: #f8fafc;
+  font-size: 13px;
+  max-width: 90vw;
+}
+
+.active-track-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.track-banner-icon {
+  color: #34d399;
+  flex-shrink: 0;
+}
+
+.active-track-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-track-label {
+  color: #94a3b8;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.active-track-title {
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.active-track-dist {
+  color: #34d399;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.active-track-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-track-banner-focus {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+  border-radius: 14px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-track-banner-focus:hover {
+  background: rgba(16, 185, 129, 0.35);
+  color: #fff;
+}
+
+.btn-track-banner-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #94a3b8;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-track-banner-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.25s ease;
+}
+
+.fade-slide-enter-from,
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -10px);
 }
 </style>

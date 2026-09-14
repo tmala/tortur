@@ -255,9 +255,9 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
   }
 
   // Vis spor på kartet (tar enten spor-ID eller et komplett SavedTrack-objekt for eksterne/venners spor)
-  const viewTrackOnMap = (trackOrId: string | SavedTrack) => {
+  const viewTrackOnMap = (trackOrId: string | SavedTrack, forceActive: boolean = false) => {
     if (typeof trackOrId === 'string') {
-      if (activeTrackId.value === trackOrId) {
+      if (!forceActive && activeTrackId.value === trackOrId) {
         // Klikk på nytt fjerner visningen
         activeTrackId.value = null
         externalTrack.value = null
@@ -268,7 +268,7 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
         }
       }
     } else {
-      if (activeTrackId.value === trackOrId.id) {
+      if (!forceActive && activeTrackId.value === trackOrId.id) {
         activeTrackId.value = null
         externalTrack.value = null
       } else {

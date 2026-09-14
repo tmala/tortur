@@ -10,6 +10,7 @@ import {
 } from 'lucide-vue-next'
 import type { GoogleUser, FirebaseCheckinItem } from '@/composables/useAuth'
 import { useGpsTrackStore } from '@/stores/gpsTrack'
+import { useAppStateStore } from '@/stores/appState'
 import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
 import EditCheckinModal from './EditCheckinModal.vue'
 import UserCheckinCard from './profile/UserCheckinCard.vue'
@@ -53,16 +54,19 @@ function handleViewOnMap(item: FirebaseCheckinItem) {
 async function handleViewTrack(item: FirebaseCheckinItem) {
   if (!item.trackId) return
   const trackStore = useGpsTrackStore()
+  const appState = useAppStateStore()
   const local = trackStore.savedTracks.find((t) => t.id === item.trackId)
   if (local) {
-    trackStore.viewTrackOnMap(local)
+    trackStore.viewTrackOnMap(local, true)
+    appState.requestViewTrack(local)
   } else {
     const { fetchUserTrackById } = useFirebaseTracks()
     const remote = await fetchUserTrackById(item.userId, item.trackId)
     if (remote) {
-      trackStore.viewTrackOnMap(remote)
+      trackStore.viewTrackOnMap(remote, true)
+      appState.requestViewTrack(remote)
     } else {
-      trackStore.viewTrackOnMap(item.trackId)
+      trackStore.viewTrackOnMap(item.trackId, true)
     }
   }
   emit('close')

@@ -1,5 +1,5 @@
 // =============================================================================
-// TorTur – Google Apps Script Backend v13
+// TorTur – Google Apps Script Backend v14
 // =============================================================================
 // Instruksjoner:
 //  1. Gå til Google Regneark → Extensions → Apps Script
@@ -550,7 +550,9 @@ function handleUpdateCheckin(body) {
 
   // 3. TrackID
   if (foundRowIndex > 0 && innsjekkSheet && body.trackId !== undefined) {
-    innsjekkSheet.getRange(foundRowIndex, COL_INNSJEKK_TRACK_ID).setValue(body.trackId ? body.trackId.toString().trim() : '')
+    innsjekkSheet
+      .getRange(foundRowIndex, COL_INNSJEKK_TRACK_ID)
+      .setValue(body.trackId ? body.trackId.toString().trim() : '')
   }
 
   // Oppdatering i Firebase Realtime Database håndteres nå direkte av webklienten via autentisert Firebase SDK.

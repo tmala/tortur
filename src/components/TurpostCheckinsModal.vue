@@ -6,6 +6,7 @@ import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import { useFriends } from '@/composables/useFriends'
 import { useGpsTrackStore } from '@/stores/gpsTrack'
+import { useAppStateStore } from '@/stores/appState'
 import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
 import EditCheckinModal from './EditCheckinModal.vue'
 import CheckinSocialSection from './CheckinSocialSection.vue'
@@ -235,23 +236,25 @@ function handleDeletePrivateTurpost() {
   }
 }
 
-// Dra/flytte-logikk for modalen
 const modalRef = ref<HTMLElement | null>(null)
 const dragPosition = ref({ x: 0, y: 0 })
 const trackStore = useGpsTrackStore()
+const appState = useAppStateStore()
 
 async function handleViewTrackOnMap(item: FirebaseCheckinItem) {
   if (!item.trackId) return
   const local = trackStore.savedTracks.find((t) => t.id === item.trackId)
   if (local) {
-    trackStore.viewTrackOnMap(local)
+    trackStore.viewTrackOnMap(local, true)
+    appState.requestViewTrack(local)
   } else {
     const { fetchUserTrackById } = useFirebaseTracks()
     const remote = await fetchUserTrackById(item.userId, item.trackId)
     if (remote) {
-      trackStore.viewTrackOnMap(remote)
+      trackStore.viewTrackOnMap(remote, true)
+      appState.requestViewTrack(remote)
     } else {
-      trackStore.viewTrackOnMap(item.trackId)
+      trackStore.viewTrackOnMap(item.trackId, true)
     }
   }
   emit('close')
@@ -552,6 +555,19 @@ onUnmounted(() => {
                   </div>
 
                   <div class="item-header-right">
+                    <!-- Hurtigknapp for tilknyttet GPS-spor -->
+                    <button
+                      v-if="item.trackId"
+                      type="button"
+                      class="btn-track-header-badge"
+                      title="Vis tilknyttet GPS-spor på kartet"
+                      aria-label="Vis GPS-spor på kart"
+                      @click.stop="handleViewTrackOnMap(item)"
+                    >
+                      <Route :size="12" />
+                      <span>GPS-spor</span>
+                    </button>
+
                     <!-- Handlinger for egne innsjekkinger (både felles og private) -->
                     <div v-if="item.userId === currentUserId" class="checkin-item-actions">
                       <button
@@ -1255,6 +1271,27 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.btn-track-header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 6px;
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-track-header-badge:hover {
+  background: rgba(16, 185, 129, 0.28);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.5);
 }
 
 .btn-item-action {
