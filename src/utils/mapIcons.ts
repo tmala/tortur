@@ -95,3 +95,42 @@ export const createVesselIcon = (vessel: AisVessel) => {
     popupAnchor: [0, -16]
   })
 }
+
+export const createKmMarkerIcon = (marker: { km: number; splitFormatted?: string }) => {
+  const hasSplit = Boolean(marker.splitFormatted)
+
+  return L.divIcon({
+    className: 'custom-km-marker-pin',
+    html: `
+      <div class="track-km-pin">
+        <div class="track-km-pill">
+          <span class="track-km-label">${marker.km} km</span>
+          ${hasSplit ? `<span class="track-km-sep">•</span><span class="track-km-time">${marker.splitFormatted}</span>` : ''}
+        </div>
+        <div class="track-km-needle"></div>
+      </div>
+    `,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0]
+  })
+}
+
+export const createTrackReplayIcon = (heading: number = 0) => {
+  return L.divIcon({
+    className: 'custom-track-replay-pin',
+    html: `
+      <div class="track-replay-avatar" style="transform: rotate(${Math.round(heading)}deg);">
+        <div class="track-replay-pulse"></div>
+        <div class="track-replay-arrow">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <polygon points="12,2 21,21 12,17 3,21" fill="#0284c7" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+    `,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+  })
+}
+
+

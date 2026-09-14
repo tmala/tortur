@@ -14,7 +14,7 @@ import {
   formatDistance,
   type GeoLocationState,
 } from '@/composables/useGeolocation'
-import { Route, X as CloseIcon, Navigation } from 'lucide-vue-next'
+import { Route, X as CloseIcon, Navigation, Play, Pause, RotateCcw } from 'lucide-vue-next'
 import {
   useTurposter,
   findKommuneInHierarchy,
@@ -416,9 +416,35 @@ const handleViewSavedTrack = (track: SavedTrack | null) => {
 }
 
 // Zoom til spor når aktivt spor endres (f.eks. valgt fra en innsjekking)
+const isReplayingTrack = ref(false)
+const replaySpeedOptions = [10, 20, 40, 80]
+const currentReplaySpeed = ref(40)
+
+const handleCycleReplaySpeed = () => {
+  const currentIndex = replaySpeedOptions.indexOf(currentReplaySpeed.value)
+  const nextIndex = (currentIndex + 1) % replaySpeedOptions.length
+  currentReplaySpeed.value = replaySpeedOptions[nextIndex]!
+  mapViewerRef.value?.setTrackReplaySpeed(currentReplaySpeed.value)
+}
+
+const handleToggleTrackReplay = () => {
+  mapViewerRef.value?.toggleTrackReplay(currentReplaySpeed.value)
+}
+
+const handleStopTrackReplay = () => {
+  mapViewerRef.value?.stopTrackReplay()
+  isReplayingTrack.value = false
+}
+
+const handleTrackReplayChange = (isPlaying: boolean) => {
+  isReplayingTrack.value = isPlaying
+}
+
 watch(
   () => trackStore.activeTrack,
   (track) => {
+    mapViewerRef.value?.stopTrackReplay()
+    isReplayingTrack.value = false
     if (track) {
       handleViewSavedTrack(track)
     }
@@ -761,6 +787,43 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="active-track-actions">
+          <!-- Avspilling -->
+          <button
+            type="button"
+            class="btn-track-banner-play"
+            :class="{ 'is-playing': isReplayingTrack }"
+            @click="handleToggleTrackReplay"
+            :title="isReplayingTrack ? 'Pause avspilling av ruten' : `Spill av ruten med animert retningspil (${currentReplaySpeed}x fart)`"
+            :aria-label="isReplayingTrack ? 'Pause avspilling' : 'Spill av ruten'"
+          >
+            <Pause v-if="isReplayingTrack" :size="12" />
+            <Play v-else :size="12" />
+            <span>{{ isReplayingTrack ? 'Pause' : 'Spill av' }}</span>
+          </button>
+
+          <!-- Hastighetsvelger -->
+          <button
+            type="button"
+            class="btn-track-banner-speed"
+            @click="handleCycleReplaySpeed"
+            :title="`Klikk for å endre fart (nå: ${currentReplaySpeed}x)`"
+            :aria-label="`Endre fart, nå ${currentReplaySpeed}x`"
+          >
+            <span>{{ currentReplaySpeed }}x</span>
+          </button>
+
+          <button
+            v-if="isReplayingTrack"
+            type="button"
+            class="btn-track-banner-reset"
+            @click="handleStopTrackReplay"
+            title="Stopp og nullstill avspilling"
+            aria-label="Stopp avspilling"
+          >
+            <RotateCcw :size="12" />
+          </button>
+
+          <!-- Sentrér -->
           <button
             type="button"
             class="btn-track-banner-focus"
@@ -771,6 +834,7 @@ onUnmounted(() => {
             <Navigation :size="12" />
             <span>Sentrér</span>
           </button>
+          <!-- Skjul -->
           <button
             type="button"
             class="btn-track-banner-close"
@@ -816,6 +880,7 @@ onUnmounted(() => {
       @delete-private-spot="handleDeletePrivateSpot"
       @click-track="handleTrackClick"
       @disable-municipalities="showMunicipalities = false"
+      @track-replay-change="handleTrackReplayChange"
     />
 
     <AppHeader
@@ -1065,6 +1130,84 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.btn-track-banner-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(2, 132, 199, 0.22);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+  border-radius: 14px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-track-banner-play:hover {
+  background: rgba(2, 132, 199, 0.4);
+  color: #fff;
+  border-color: rgba(56, 189, 248, 0.7);
+}
+
+.btn-track-banner-play.is-playing {
+  background: rgba(249, 115, 22, 0.25);
+  border-color: rgba(249, 115, 22, 0.6);
+  color: #fb923c;
+  animation: play-btn-pulse 1.8s infinite ease-in-out;
+}
+
+@keyframes play-btn-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(249, 115, 22, 0);
+  }
+}
+
+.btn-track-banner-speed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 132, 199, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  border-radius: 12px;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-track-banner-speed:hover {
+  background: rgba(2, 132, 199, 0.35);
+  color: #fff;
+  border-color: rgba(56, 189, 248, 0.7);
+}
+
+.btn-track-banner-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-track-banner-reset:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 .btn-track-banner-focus {

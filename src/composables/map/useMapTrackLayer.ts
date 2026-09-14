@@ -1,5 +1,12 @@
+import { ref } from 'vue'
 import L from 'leaflet'
 import { type TrackPoint, formatDistance } from '@/composables/useGeolocation'
+import { calculateKmMarkers } from '@/utils/trackKmMarkers'
+import { createKmMarkerIcon, createTrackReplayIcon } from '@/utils/mapIcons'
+import {
+  getTrackDurationMs,
+  interpolatePositionAtElapsedMs
+} from '@/utils/trackPlayback'
 
 const escapeTrackHtml = (str: string): string => {
   return str.replace(/[&<>"']/g, (m) => {
@@ -21,6 +28,24 @@ export function useMapTrackLayer(
   let trackPolyline: L.Polyline | null = null
   let trackBgPolyline: L.Polyline | null = null
   let trackHitPolyline: L.Polyline | null = null
+  let kmMarkersLayer: L.LayerGroup | null = null
+
+  // Tilstand for animert avspilling av sporet
+  const isReplaying = ref(false)
+  const replayProgress = ref(0)
+  const replaySpeed = ref(40)
+
+  const setReplaySpeed = (speed: number) => {
+    if (speed > 0) {
+      replaySpeed.value = speed
+    }
+  }
+
+  let currentPoints: TrackPoint[] = []
+  let replayMarker: L.Marker | null = null
+  let replayElapsedMs = 0
+  let replayAnimFrameId: number | null = null
+  let lastAnimWallTime: number | null = null
 
   const getTrackTooltipContent = (trackName?: string, trackDistanceMeters?: number) => {
     const name = trackName || 'GPS-spor'
@@ -42,6 +67,13 @@ export function useMapTrackLayer(
     if (!map) return
 
     const pts = points || []
+    const pointsChanged = pts !== currentPoints
+    currentPoints = pts
+
+    if (pointsChanged) {
+      stopReplay()
+    }
+
     if (pts.length < 2) {
       if (trackPolyline) {
         trackPolyline.remove()
@@ -54,6 +86,11 @@ export function useMapTrackLayer(
       if (trackHitPolyline) {
         trackHitPolyline.remove()
         trackHitPolyline = null
+      }
+      if (kmMarkersLayer) {
+        kmMarkersLayer.clearLayers()
+        kmMarkersLayer.remove()
+        kmMarkersLayer = null
       }
       return
     }
@@ -107,11 +144,155 @@ export function useMapTrackLayer(
       trackPolyline.setLatLngs(latlngs)
       trackHitPolyline.setTooltipContent(getTrackTooltipContent(trackName, trackDistanceMeters))
     }
+
+    // Oppdater kilometermarkører langs sporet
+    const kmMarkers = calculateKmMarkers(pts)
+
+    if (!kmMarkersLayer) {
+      kmMarkersLayer = L.layerGroup().addTo(map)
+    } else {
+      kmMarkersLayer.clearLayers()
+    }
+
+    for (const markerInfo of kmMarkers) {
+      const icon = createKmMarkerIcon(markerInfo)
+      const marker = L.marker([markerInfo.lat, markerInfo.lng], {
+        icon,
+        interactive: true,
+        zIndexOffset: 500,
+      })
+
+      let tooltipHtml = `<div class="track-km-tooltip"><strong class="km-tt-title">${markerInfo.km}. kilometer</strong>`
+      if (markerInfo.splitDetailed) {
+        tooltipHtml += `<div class="km-tt-row"><span class="km-tt-label">Splittid:</span> <span class="km-tt-val">${escapeTrackHtml(markerInfo.splitDetailed)}</span></div>`
+      }
+      if (markerInfo.cumulativeDetailed) {
+        tooltipHtml += `<div class="km-tt-row"><span class="km-tt-label">Fra start:</span> <span class="km-tt-val">${escapeTrackHtml(markerInfo.cumulativeDetailed)}</span></div>`
+      }
+      tooltipHtml += `</div>`
+
+      marker.bindTooltip(tooltipHtml, {
+        direction: 'top',
+        offset: [0, -6],
+        className: 'track-km-tooltip-wrap',
+      })
+
+      marker.on('click', (e) => {
+        L.DomEvent.stopPropagation(e)
+        onClickTrack()
+      })
+
+      marker.addTo(kmMarkersLayer)
+    }
   }
 
   const updateTooltip = (trackName?: string, trackDistanceMeters?: number) => {
     if (trackHitPolyline) {
       trackHitPolyline.setTooltipContent(getTrackTooltipContent(trackName, trackDistanceMeters))
+    }
+  }
+
+  const updateReplayMarkerPosition = (elapsedMs: number) => {
+    if (!replayMarker || currentPoints.length < 2) return
+    const pos = interpolatePositionAtElapsedMs(currentPoints, elapsedMs)
+    if (!pos) return
+
+    replayMarker.setLatLng([pos.lat, pos.lng])
+    replayProgress.value = pos.progress
+
+    const iconEl = replayMarker.getElement()
+    const avatarEl = iconEl?.querySelector<HTMLElement>('.track-replay-avatar')
+    if (avatarEl) {
+      avatarEl.style.transform = `rotate(${Math.round(pos.bearing)}deg)`
+    }
+  }
+
+  const onReplayAnimFrame = (wallNow: number) => {
+    if (!isReplaying.value) return
+
+    if (lastAnimWallTime === null) {
+      lastAnimWallTime = wallNow
+    }
+
+    const dtWall = wallNow - lastAnimWallTime
+    lastAnimWallTime = wallNow
+
+    // Begrens dt til maks 100ms for å unngå hopp dersom fanen har vært i bakgrunnen
+    const clampedDt = Math.min(100, dtWall)
+    const totalDuration = getTrackDurationMs(currentPoints)
+
+    replayElapsedMs += clampedDt * replaySpeed.value
+
+    if (replayElapsedMs >= totalDuration) {
+      replayElapsedMs = totalDuration
+      updateReplayMarkerPosition(replayElapsedMs)
+      isReplaying.value = false
+      lastAnimWallTime = null
+      replayAnimFrameId = null
+      return
+    }
+
+    updateReplayMarkerPosition(replayElapsedMs)
+    replayAnimFrameId = requestAnimationFrame(onReplayAnimFrame)
+  }
+
+  const startReplay = (speedMultiplier?: number) => {
+    const map = getMap()
+    if (!map || currentPoints.length < 2) return
+
+    if (speedMultiplier && speedMultiplier > 0) {
+      replaySpeed.value = speedMultiplier
+    }
+
+    const totalDuration = getTrackDurationMs(currentPoints)
+    // Hvis vi er ved slutten, start forfra
+    if (replayElapsedMs >= totalDuration) {
+      replayElapsedMs = 0
+      replayProgress.value = 0
+    }
+
+    if (!replayMarker) {
+      const initialPos = interpolatePositionAtElapsedMs(currentPoints, replayElapsedMs)
+      if (!initialPos) return
+      replayMarker = L.marker([initialPos.lat, initialPos.lng], {
+        icon: createTrackReplayIcon(initialPos.bearing),
+        interactive: false,
+        zIndexOffset: 2000
+      }).addTo(map)
+    }
+
+    isReplaying.value = true
+    lastAnimWallTime = null
+    if (replayAnimFrameId) {
+      cancelAnimationFrame(replayAnimFrameId)
+    }
+    replayAnimFrameId = requestAnimationFrame(onReplayAnimFrame)
+  }
+
+  const pauseReplay = () => {
+    isReplaying.value = false
+    lastAnimWallTime = null
+    if (replayAnimFrameId) {
+      cancelAnimationFrame(replayAnimFrameId)
+      replayAnimFrameId = null
+    }
+  }
+
+  const stopReplay = () => {
+    pauseReplay()
+    replayElapsedMs = 0
+    replayProgress.value = 0
+    if (replayMarker) {
+      replayMarker.remove()
+      replayMarker = null
+    }
+  }
+
+  const toggleReplay = (speedMultiplier?: number) => {
+    if (isReplaying.value) {
+      pauseReplay()
+    } else {
+      startReplay(speedMultiplier)
     }
   }
 
@@ -126,6 +307,7 @@ export function useMapTrackLayer(
   }
 
   const cleanup = () => {
+    stopReplay()
     if (trackPolyline) {
       trackPolyline.remove()
       trackPolyline = null
@@ -138,12 +320,25 @@ export function useMapTrackLayer(
       trackHitPolyline.remove()
       trackHitPolyline = null
     }
+    if (kmMarkersLayer) {
+      kmMarkersLayer.clearLayers()
+      kmMarkersLayer.remove()
+      kmMarkersLayer = null
+    }
   }
 
   return {
     updateTrackLayer,
     updateTooltip,
     zoomToTrack,
-    cleanup
+    cleanup,
+    isReplaying,
+    replayProgress,
+    replaySpeed,
+    setReplaySpeed,
+    startReplay,
+    pauseReplay,
+    stopReplay,
+    toggleReplay
   }
 }

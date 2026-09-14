@@ -57,6 +57,7 @@ const emit = defineEmits<{
   (e: 'delete-private-spot', spotId: string): void
   (e: 'click-track'): void
   (e: 'disable-municipalities'): void
+  (e: 'track-replay-change', isPlaying: boolean): void
 }>()
 
 const mapContainer = ref<HTMLElement | null>(null)
@@ -591,6 +592,10 @@ watch(
   }
 )
 
+watch(trackLayer.isReplaying, (playing) => {
+  emit('track-replay-change', playing)
+})
+
 const clearSpotSuggestion = () => {
   if (suggestionMarker && map) {
     map.removeLayer(suggestionMarker)
@@ -698,7 +703,15 @@ defineExpose({
   resetAutoCenter: () => {
     isAutoCenter.value = false
   },
-  getMapInstance: () => map
+  getMapInstance: () => map,
+  startTrackReplay: trackLayer.startReplay,
+  pauseTrackReplay: trackLayer.pauseReplay,
+  stopTrackReplay: trackLayer.stopReplay,
+  toggleTrackReplay: trackLayer.toggleReplay,
+  isTrackReplaying: trackLayer.isReplaying,
+  trackReplayProgress: trackLayer.replayProgress,
+  trackReplaySpeed: trackLayer.replaySpeed,
+  setTrackReplaySpeed: trackLayer.setReplaySpeed
 })
 
 watch(
@@ -977,5 +990,184 @@ onUnmounted(() => {
   font-size: 10px;
   color: #94a3b8;
   margin-top: 2px;
+}
+
+/* Kilometerindikatorer langs GPS-spor */
+:deep(.custom-km-marker-pin) {
+  width: 0 !important;
+  height: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+:deep(.track-km-pin) {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.45));
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.15s ease;
+  z-index: 500;
+}
+
+:deep(.track-km-pin:hover) {
+  transform: translateX(-50%) scale(1.12);
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.65));
+  z-index: 9999 !important;
+}
+
+:deep(.track-km-pill) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1.5px solid #f97316;
+  border-radius: 12px;
+  padding: 2px 7px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+:deep(.track-km-label) {
+  color: #fb923c;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+:deep(.track-km-sep) {
+  color: #64748b;
+  font-size: 8px;
+  opacity: 0.8;
+}
+
+:deep(.track-km-time) {
+  color: #f1f5f9;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+:deep(.track-km-needle) {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #f97316;
+  margin-top: -0.5px;
+}
+
+/* Tooltip for kilometerindikatorer */
+:deep(.track-km-tooltip-wrap) {
+  background: rgba(15, 23, 42, 0.96) !important;
+  border: 1px solid rgba(249, 115, 22, 0.6) !important;
+  border-radius: 10px !important;
+  padding: 6px 12px !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(8px) !important;
+  color: #f8fafc !important;
+}
+
+:deep(.track-km-tooltip-wrap::before) {
+  border-top-color: rgba(249, 115, 22, 0.6) !important;
+}
+
+:deep(.track-km-tooltip) {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+:deep(.km-tt-title) {
+  font-size: 12px;
+  color: #fb923c;
+  margin-bottom: 1px;
+}
+
+:deep(.km-tt-row) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #cbd5e1;
+}
+
+:deep(.km-tt-label) {
+  color: #94a3b8;
+}
+
+:deep(.km-tt-val) {
+  color: #f8fafc;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Animert GPS-pil for avspilling av rute */
+:deep(.custom-track-replay-pin) {
+  width: 28px !important;
+  height: 28px !important;
+  border: none !important;
+  background: transparent !important;
+  pointer-events: none !important;
+}
+
+:deep(.track-replay-avatar) {
+  width: 28px;
+  height: 28px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.45));
+  will-change: transform;
+}
+
+:deep(.track-replay-pulse) {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  margin-top: -13px;
+  margin-left: -13px;
+  border-radius: 50%;
+  background: rgba(2, 132, 199, 0.35);
+  border: 1.5px solid rgba(56, 189, 248, 0.75);
+  animation: track-replay-pulse-anim 1.5s infinite ease-out;
+  pointer-events: none;
+}
+
+@keyframes track-replay-pulse-anim {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+:deep(.track-replay-arrow) {
+  position: relative;
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 </style>
