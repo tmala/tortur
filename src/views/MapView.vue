@@ -7,7 +7,7 @@ import LocationControls from '@/components/LocationControls.vue'
 import TurposterPanel from '@/components/TurposterPanel.vue'
 import CheckinModal from '@/components/CheckinModal.vue'
 import TurpostCheckinsModal from '@/components/TurpostCheckinsModal.vue'
-import AdminAddTurpostModal from '@/components/AdminAddTurpostModal.vue'
+import AddTurpostModal from '@/components/AddTurpostModal.vue'
 import {
   useGeolocation,
   calculateDistanceMeters,
@@ -94,12 +94,12 @@ watch(
 const { fetchMySpots, deleteMySpot, fetchMyPrivateCheckins, fetchSpotSuggestions } =
   usePrivateTurposter()
 
-// Admin / Bruker: ny turpost (kart-klikk)
-const adminClickCoords = ref<{ lat: number; lng: number } | null>(null)
+// Bruker / Admin: ny turpost (kart-klikk)
+const addTurpostClickCoords = ref<{ lat: number; lng: number } | null>(null)
 
-function handleAdminMapClick(coords: { lat: number; lng: number }) {
-  if (adminClickCoords.value) return
-  adminClickCoords.value = coords
+function handleAddTurpostMapClick(coords: { lat: number; lng: number }) {
+  if (addTurpostClickCoords.value) return
+  addTurpostClickCoords.value = coords
 }
 
 const loadMySpots = async () => {
@@ -130,7 +130,7 @@ const loadSpotSuggestions = async () => {
 function handleSpotSaved(spot: TurpostItem) {
   appState.mySpots = [spot, ...appState.mySpots.filter((s) => s.id !== spot.id)]
   appState.isAddSpotModeActive = false
-  adminClickCoords.value = null
+  addTurpostClickCoords.value = null
   if (isAdmin.value) {
     loadSpotSuggestions()
   }
@@ -876,7 +876,7 @@ onUnmounted(() => {
       @view-checkins="handleViewCheckins"
       @select-kommune-by-name="handleSelectKommuneByName"
       @clear-turposter="handleClearAllTurposter"
-      @admin-map-click="handleAdminMapClick"
+      @add-turpost-map-click="handleAddTurpostMapClick"
       @delete-private-spot="handleDeletePrivateSpot"
       @click-track="handleTrackClick"
       @disable-municipalities="showMunicipalities = false"
@@ -991,18 +991,18 @@ onUnmounted(() => {
       @checkin-updated="loadMyCheckins"
     />
 
-    <!-- Admin / Bruker: Legg til ny turpost -->
-    <AdminAddTurpostModal
+    <!-- Bruker / Admin: Legg til ny turpost -->
+    <AddTurpostModal
       v-if="appState.adminModeActive || appState.isAddSpotModeActive"
-      :is-open="!!adminClickCoords"
-      :lat="adminClickCoords?.lat ?? 0"
-      :lng="adminClickCoords?.lng ?? 0"
+      :is-open="!!addTurpostClickCoords"
+      :lat="addTurpostClickCoords?.lat ?? 0"
+      :lng="addTurpostClickCoords?.lng ?? 0"
       :is-admin="appState.adminModeActive"
       :user-id="user?.userId"
       :user-name="user?.userName"
       :user-email="user?.email"
       @close="
-        adminClickCoords = null;
+        addTurpostClickCoords = null;
         appState.isAddSpotModeActive = false;
       "
       @spot-saved="handleSpotSaved"

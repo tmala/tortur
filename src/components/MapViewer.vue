@@ -53,7 +53,7 @@ const emit = defineEmits<{
   (e: 'view-checkins', post: TurpostItem, initialTab?: 'public' | 'private'): void
   (e: 'select-kommune-by-name', name: string): void
   (e: 'clear-turposter'): void
-  (e: 'admin-map-click', coords: { lat: number; lng: number }): void
+  (e: 'add-turpost-map-click', coords: { lat: number; lng: number }): void
   (e: 'delete-private-spot', spotId: string): void
   (e: 'click-track'): void
   (e: 'disable-municipalities'): void
@@ -880,7 +880,7 @@ onMounted(() => {
   // Klikk i kartet for admin-modus eller "Legg til egen turpost"-modus
   map.on('click', (e: L.LeafletMouseEvent) => {
     if (props.isAdmin || props.isAddSpotActive) {
-      emit('admin-map-click', { lat: e.latlng.lat, lng: e.latlng.lng })
+      emit('add-turpost-map-click', { lat: e.latlng.lat, lng: e.latlng.lng })
     }
   })
 

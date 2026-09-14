@@ -8,11 +8,11 @@
         :style="modalStyle"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="admin-modal-title"
+        aria-labelledby="add-turpost-modal-title"
       >
         <!-- Header -->
         <div class="admin-modal-header" @pointerdown="startDrag" title="Klikk og dra for å flytte">
-          <h2 id="admin-modal-title">
+          <h2 id="add-turpost-modal-title">
             {{ isAdmin ? '🛠️ Legg til ny turpost' : '📍 Legg til egen turpost' }}
           </h2>
           <button class="admin-modal-close" @click="$emit('close')" aria-label="Lukk">✕</button>
@@ -219,7 +219,7 @@ const turpostName = ref('')
 const turpostAlt = ref<number | null>(null)
 const turpostId = ref('')
 const copied = ref(false)
-const suggestForPublic = ref(true)
+const suggestForPublic = ref(false)
 
 const isSavingSpot = ref(false)
 const saveSuccessMessage = ref<string | null>(null)
@@ -378,6 +378,7 @@ watch(
     saveSuccessMessage.value = null
     saveErrorMessage.value = null
     csvPlacement.value = null
+    suggestForPublic.value = false
 
     isDetecting.value = true
     try {
