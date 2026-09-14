@@ -52,7 +52,10 @@ export function useFirebaseTracks() {
         const item = val as Record<string, unknown>
         const parsedTime = parseTrackKeyTimestamp(key)
         const startTime = typeof item.startTime === 'number' ? item.startTime : parsedTime
-        const createdAt = typeof item.createdAt === 'number' ? item.createdAt : parsedTime
+        let createdAt = typeof item.createdAt === 'number' ? item.createdAt : parsedTime
+        if (startTime && createdAt > startTime) {
+          createdAt = startTime
+        }
         const endTime = typeof item.endTime === 'number' ? item.endTime : null
         const distanceMeters = typeof item.distanceMeters === 'number' ? item.distanceMeters : 0
         const durationMs = typeof item.durationMs === 'number' ? item.durationMs : 0

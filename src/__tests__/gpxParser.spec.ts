@@ -43,6 +43,27 @@ describe('gpxParser', () => {
     expect(result.points[0]!.timestamp).toBe(Date.parse('2026-09-10T12:00:00Z'))
   })
 
+  it('bruker <metadata><time> som fallback dersom trkpt mangler <time>', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <gpx version="1.1" creator="test">
+      <metadata>
+        <time>2026-09-04T09:27:45Z</time>
+      </metadata>
+      <trk>
+        <name>Tur uten punkttid</name>
+        <trkseg>
+          <trkpt lat="60.46" lon="5.34"></trkpt>
+          <trkpt lat="60.47" lon="5.35"></trkpt>
+        </trkseg>
+      </trk>
+    </gpx>`
+
+    const result = parseGpx(xml)
+    expect(result.points.length).toBe(2)
+    expect(result.points[0]!.timestamp).toBe(Date.parse('2026-09-04T09:27:45Z'))
+    expect(result.points[1]!.timestamp).toBe(Date.parse('2026-09-04T09:27:45Z'))
+  })
+
   it('kaster feil ved ugyldig eller tom XML', () => {
     expect(() => parseGpx('')).toThrow('GPX-innholdet er tomt')
     expect(() => parseGpx('<gpx><trk></trk></gpx>')).toThrow('Ingen gyldige GPS-punkter funnet')

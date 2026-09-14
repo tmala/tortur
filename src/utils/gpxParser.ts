@@ -78,6 +78,24 @@ export function parseGpx(xmlString: string): ParsedGpxResult {
     throw new Error('Ingen gyldige GPS-punkter funnet i GPX-filen.')
   }
 
+  // 3. Ekstraher eventuelt <metadata><time> eller <time> på rotnivå som fallback-tidsstempel
+  let metadataTime: number | undefined
+  const metaTimeEl = doc.querySelector('metadata > time') || doc.querySelector('gpx > time')
+  if (metaTimeEl && metaTimeEl.textContent) {
+    const parsedMetaTime = Date.parse(metaTimeEl.textContent.trim())
+    if (!isNaN(parsedMetaTime)) {
+      metadataTime = parsedMetaTime
+    }
+  }
+
+  if (metadataTime) {
+    for (const pt of points) {
+      if (!pt.timestamp) {
+        pt.timestamp = metadataTime
+      }
+    }
+  }
+
   return {
     name,
     points

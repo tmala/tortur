@@ -121,18 +121,48 @@ describe('useGpsTrackStore', () => {
     expect(store.activeTrackId).toBeNull()
   })
 
-  it('sets firebaseKey with ISO format without dots when saving a track', () => {
+  it('sets createdAt to first point timestamp (startTime) when saving a track', () => {
     const store = useGpsTrackStore()
+    const pointTime = Date.parse('2026-09-04T09:27:45Z')
     const points: TrackPoint[] = [
-      { lat: 60.3913, lng: 5.3221, timestamp: 1725450000000 }
+      { lat: 60.462, lng: 5.343, timestamp: pointTime },
+      { lat: 60.463, lng: 5.344, timestamp: pointTime + 10000 }
     ]
 
-    const saved = store.saveTrack(points, 'ISO-tur')
+    const saved = store.saveTrack(points, 'Rollandsoksen')
     expect(saved).not.toBeNull()
-    expect(saved?.firebaseKey).toBeDefined()
-    // Sjekk at nøkkelen ikke inneholder forbudte Firebase-tegn som punktum
-    expect(saved?.firebaseKey).not.toContain('.')
-    expect(saved?.firebaseKey).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}_\d{3}Z$/)
+    expect(saved?.createdAt).toBe(pointTime)
+    expect(saved?.startTime).toBe(pointTime)
+    expect(saved?.id).toContain(`track_${pointTime}_`)
+  })
+
+  it('normalizes createdAt to startTime if existing track in storage has later createdAt', () => {
+    const pointTime = Date.parse('2026-09-04T09:27:45Z')
+    const uploadTime = Date.parse('2026-09-14T01:42:21Z')
+
+    const legacyTrack = {
+      id: 'track_legacy',
+      userId: 'guest',
+      name: 'Rollandsoksen',
+      createdAt: uploadTime,
+      startTime: pointTime,
+      endTime: pointTime + 50000,
+      points: [{ lat: 60.462, lng: 5.343, timestamp: pointTime }],
+      distanceMeters: 100,
+      durationMs: 50000,
+      firebaseKey: '2026-09-04T09:27:45_000Z'
+    }
+    localStorage.setItem('tortur_saved_tracks_guest', JSON.stringify([legacyTrack]))
+
+    const store = useGpsTrackStore()
+    store.setUser('guest')
+
+    expect(store.savedTracks.length).toBe(1)
+    expect(store.savedTracks[0]!.createdAt).toBe(pointTime)
+
+    // Verify localStorage was updated with migrated createdAt
+    const stored = JSON.parse(localStorage.getItem('tortur_saved_tracks_guest') || '[]')
+    expect(stored[0].createdAt).toBe(pointTime)
   })
 })
 

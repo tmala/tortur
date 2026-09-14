@@ -490,7 +490,7 @@ const handleConfirmSaveLiveTrack = () => {
             </div>
             <div class="meta-item">
               <Calendar :size="13" class="meta-icon" />
-              <span>{{ formatDate(track.createdAt) }}</span>
+              <span>{{ formatDate(track.startTime || track.createdAt) }}</span>
             </div>
           </div>
 

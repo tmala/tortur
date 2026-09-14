@@ -56,7 +56,19 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
       if (data) {
         const parsed = JSON.parse(data)
         if (Array.isArray(parsed)) {
+          let hasMigration = false
+          for (const t of parsed) {
+            if (t && typeof t === 'object' && typeof t.startTime === 'number' && typeof t.createdAt === 'number') {
+              if (t.startTime && t.createdAt > t.startTime) {
+                t.createdAt = t.startTime
+                hasMigration = true
+              }
+            }
+          }
           savedTracks.value = parsed
+          if (hasMigration) {
+            persistTracks()
+          }
           return
         }
       }
@@ -108,6 +120,9 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
       // Bygg kart over eksterne spor indeksert på firebaseKey eller startTime
       const remoteMap = new Map<string, SavedTrack>()
       for (const rt of remoteTracks) {
+        if (rt.startTime && rt.createdAt > rt.startTime) {
+          rt.createdAt = rt.startTime
+        }
         const key = rt.firebaseKey || (rt.startTime ? formatTrackKey(rt.startTime) : rt.id)
         remoteMap.set(key, rt)
       }
@@ -186,10 +201,10 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
     const distanceMeters = computeDistance(points)
 
     const newTrack: SavedTrack = {
-      id: `track_${now}_${Math.random().toString(36).substring(2, 7)}`,
+      id: `track_${startTime}_${Math.random().toString(36).substring(2, 7)}`,
       userId: currentUserId.value,
       name: customName?.trim() || generateDefaultName(new Date(startTime)),
-      createdAt: now,
+      createdAt: startTime,
       points: JSON.parse(JSON.stringify(points)), // Kopi av punkter
       distanceMeters,
       durationMs,
@@ -240,7 +255,7 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
     const track = savedTracks.value.find((t) => t.id === id)
     if (!track) return false
 
-    track.name = newName.trim() || generateDefaultName(new Date(track.createdAt))
+    track.name = newName.trim() || generateDefaultName(new Date(track.startTime || track.createdAt))
     persistTracks()
 
     // Oppdater i Firebase i bakgrunnen hvis innlogget
@@ -288,7 +303,11 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
   const importGpx = async (file: File, customName?: string): Promise<SavedTrack> => {
     const { parseGpxFile } = await import('@/utils/gpxParser')
     const parsed = await parseGpxFile(file)
-    const trackName = customName?.trim() || parsed.name || generateDefaultName()
+    const firstTimestamp = parsed.points[0]?.timestamp
+    const trackName =
+      customName?.trim() ||
+      parsed.name ||
+      generateDefaultName(firstTimestamp ? new Date(firstTimestamp) : undefined)
     const newTrack = saveTrack(parsed.points, trackName)
     if (!newTrack) {
       throw new Error('Kunne ikke opprette spor fra GPX-data.')
@@ -300,7 +319,8 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
   const downloadGpx = (track: SavedTrack) => {
     if (!track || track.points.length === 0) return
 
-    const createdDate = new Date(track.createdAt)
+    const trackTime = track.startTime || track.createdAt
+    const createdDate = new Date(trackTime)
     const dateStr = createdDate.toISOString().slice(0, 10)
     const safeTitle = track.name
       .toLowerCase()
