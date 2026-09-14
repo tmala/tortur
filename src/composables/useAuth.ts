@@ -23,6 +23,7 @@ export interface CheckinParams {
   turpostName?: string
   description: string
   imageFile?: File | null
+  trackId?: string
 }
 
 export interface CheckinResult {
@@ -36,6 +37,7 @@ export interface CheckinResult {
   userName?: string
   userAvatar?: string
   visibility?: 'all' | 'friends' | 'private'
+  trackId?: string
 }
 
 export type CheckinReactionType = 'like' | 'love' | 'laugh' | 'sad' | 'wow' | 'angry'
@@ -73,6 +75,7 @@ export interface FirebaseCheckinItem {
   visibility?: 'all' | 'friends' | 'private'
   likes?: Record<string, CheckinReaction>
   comments?: Record<string, CheckinComment>
+  trackId?: string
 }
 
 const STORAGE_KEY_USER   = 'tortur_user'
@@ -301,7 +304,8 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
     turpostId: String(params.turpostId),
     turpostName: params.turpostName || '',
     description: params.description || '',
-    image: imagePayload
+    image: imagePayload,
+    trackId: params.trackId || undefined
   }
 
   const response = await fetch(API_URL, {
@@ -346,7 +350,8 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
         turpostName: params.turpostName || '',
         timestamp: checkinResult.timestamp || new Date().toISOString(),
         description: params.description || '',
-        imageUrl: checkinResult.imageUrl || ''
+        imageUrl: checkinResult.imageUrl || '',
+        trackId: params.trackId || checkinResult.trackId || undefined
       }
       const itemJson = JSON.stringify(firebaseItem)
       const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(checkinResult.id)}.json`
@@ -434,7 +439,8 @@ async function updatePublicCheckin(params: {
   imageFile?: File | null
   removeImage?: boolean
   visibility?: 'all' | 'friends' | 'private'
-}): Promise<{ imageUrl?: string; description?: string; visibility?: 'all' | 'friends' | 'private' }> {
+  trackId?: string | null
+}): Promise<{ imageUrl?: string; description?: string; visibility?: 'all' | 'friends' | 'private'; trackId?: string }> {
   if (!user.value) {
     throw new Error('Du må være innlogget for å oppdatere en innsjekking.')
   }
@@ -461,7 +467,8 @@ async function updatePublicCheckin(params: {
       timestamp: params.timestamp,
       description: params.description,
       image: imagePayload,
-      removeImage: params.removeImage
+      removeImage: params.removeImage,
+      trackId: params.trackId !== undefined ? (params.trackId === null ? '' : params.trackId) : undefined
     }
 
     const response = await fetch(API_URL, {
@@ -509,6 +516,9 @@ async function updatePublicCheckin(params: {
       if (params.visibility !== undefined) {
         patchData.visibility = params.visibility
       }
+      if (params.trackId !== undefined) {
+        patchData.trackId = params.trackId === null ? '' : params.trackId
+      }
 
       if (Object.keys(patchData).length > 0) {
         const patchBody = JSON.stringify(patchData)
@@ -529,7 +539,12 @@ async function updatePublicCheckin(params: {
     }
   }
 
-  return { imageUrl: finalImageUrl, description: params.description, visibility: params.visibility }
+  return {
+    imageUrl: finalImageUrl,
+    description: params.description,
+    visibility: params.visibility,
+    trackId: params.trackId !== undefined ? (params.trackId === null ? undefined : params.trackId) : undefined
+  }
 }
 
 // =============================================================================

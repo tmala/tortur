@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
-import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Image as ImageIcon, Trash2, Pencil, Globe, Users, Lock, ChevronDown } from 'lucide-vue-next'
+import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Trash2, Pencil, Globe, Users, Lock, ChevronDown, Route } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import { useFriends } from '@/composables/useFriends'
+import { useGpsTrackStore } from '@/stores/gpsTrack'
+import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
 import EditCheckinModal from './EditCheckinModal.vue'
 import CheckinSocialSection from './CheckinSocialSection.vue'
 import {
@@ -34,8 +36,8 @@ const emit = defineEmits<{
   (e: 'checkin-updated'): void
 }>()
 
-const { fetchTurpostCheckins, deletePublicCheckin, updatePublicCheckinImage } = useAuth()
-const { fetchPrivateCheckinsForSpot, deletePrivateCheckin, updatePrivateCheckinImage } = usePrivateTurposter()
+const { fetchTurpostCheckins } = useAuth()
+const { fetchPrivateCheckinsForSpot } = usePrivateTurposter()
 const { friends, isFriend } = useFriends()
 
 const checkins = ref<FirebaseCheckinItem[]>([])
@@ -153,7 +155,7 @@ const loadCheckins = async () => {
   }
 
   try {
-    const promises: Promise<any>[] = []
+    const promises: Promise<unknown>[] = []
     if (!props.turpost.isPrivate) {
       promises.push(fetchTurpostCheckins(props.turpost.id).then((data) => (checkins.value = data)))
     }
@@ -193,7 +195,6 @@ const loadCheckins = async () => {
   }
 }
 
-const isActionLoading = ref<string | null>(null)
 const editingCheckin = ref<FirebaseCheckinItem | null>(null)
 
 function handleCheckinEdited(updatedItem: FirebaseCheckinItem) {
@@ -225,47 +226,6 @@ function handleCheckinDeleted(deletedId: string) {
   }
 }
 
-async function handleDeletePublicCheckin(item: FirebaseCheckinItem) {
-  if (!props.turpost) return
-  if (!confirm('Er du sikker på at du vil slette denne innsjekkingen? Hvis den har et tilhørende bilde vil også bildet bli slettet.')) return
-
-  isActionLoading.value = item.id
-  try {
-    await deletePublicCheckin({
-      turpostId: props.turpost.id,
-      checkinId: item.id,
-      timestamp: item.timestamp
-    })
-    checkins.value = checkins.value.filter((c) => c.id !== item.id)
-    emit('checkin-deleted', item.id)
-  } catch (err: any) {
-    alert(err?.message || 'Kunne ikke slette innsjekkingen.')
-  } finally {
-    isActionLoading.value = null
-  }
-}
-
-async function handleDeletePrivateCheckin(item: FirebaseCheckinItem) {
-  if (!props.currentUserId || !props.turpost) return
-  if (!confirm('Er du sikker på at du vil slette denne private innsjekkingen?')) return
-
-  isActionLoading.value = item.id
-  try {
-    const primaryId = props.matchingPrivateSpot ? String(props.matchingPrivateSpot.id) : String(props.turpost.id)
-    await deletePrivateCheckin(props.currentUserId, item.spotId || primaryId, item.id)
-    if (primaryId !== String(props.turpost.id)) {
-      await deletePrivateCheckin(props.currentUserId, String(props.turpost.id), item.id).catch(() => {})
-    }
-    privateCheckins.value = privateCheckins.value.filter((c) => c.id !== item.id)
-    emit('private-checkin-deleted')
-    emit('checkin-deleted', item.id)
-  } catch (err) {
-    alert('Kunne ikke slette innsjekkingen.')
-  } finally {
-    isActionLoading.value = null
-  }
-}
-
 function handleDeletePrivateTurpost() {
   const target = props.matchingPrivateSpot || (props.turpost?.isPrivate ? props.turpost : null)
   if (!target) return
@@ -278,6 +238,24 @@ function handleDeletePrivateTurpost() {
 // Dra/flytte-logikk for modalen
 const modalRef = ref<HTMLElement | null>(null)
 const dragPosition = ref({ x: 0, y: 0 })
+const trackStore = useGpsTrackStore()
+
+async function handleViewTrackOnMap(item: FirebaseCheckinItem) {
+  if (!item.trackId) return
+  const local = trackStore.savedTracks.find((t) => t.id === item.trackId)
+  if (local) {
+    trackStore.viewTrackOnMap(local)
+  } else {
+    const { fetchUserTrackById } = useFirebaseTracks()
+    const remote = await fetchUserTrackById(item.userId, item.trackId)
+    if (remote) {
+      trackStore.viewTrackOnMap(remote)
+    } else {
+      trackStore.viewTrackOnMap(item.trackId)
+    }
+  }
+  emit('close')
+}
 const isDragging = ref(false)
 let dragStart = { x: 0, y: 0 }
 let initialPosition = { x: 0, y: 0 }
@@ -600,6 +578,20 @@ onUnmounted(() => {
                 <div v-if="isCheckinExpanded(item.id, idx)" class="item-expanded-content">
                   <!-- Beskrivelse -->
                   <p v-if="item.description" class="item-desc">{{ item.description }}</p>
+
+                  <!-- Tilknyttet GPS-spor -->
+                  <div v-if="item.trackId" class="checkin-track-bar">
+                    <button
+                      type="button"
+                      class="btn-view-attached-track"
+                      title="Vis tilknyttet GPS-spor på kartet"
+                      aria-label="Vis GPS-spor på kart"
+                      @click.stop="handleViewTrackOnMap(item)"
+                    >
+                      <Route :size="13" />
+                      <span>Vis tilknyttet GPS-spor på kart</span>
+                    </button>
+                  </div>
 
                   <!-- Bilde -->
                   <div v-if="item.imageUrl" class="item-photo-wrap" @click="selectedImage = item.imageUrl">
@@ -1503,5 +1495,30 @@ onUnmounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.checkin-track-bar {
+  margin: 8px 0;
+}
+
+.btn-view-attached-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(2, 132, 199, 0.12);
+  border: 1px solid rgba(2, 132, 199, 0.3);
+  border-radius: 8px;
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-view-attached-track:hover {
+  background: rgba(2, 132, 199, 0.22);
+  color: #7dd3fc;
+  transform: translateY(-1px);
 }
 </style>

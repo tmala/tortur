@@ -58,28 +58,28 @@ export function usePrivateTurposter() {
       const spots: TurpostItem[] = []
       for (const [id, val] of Object.entries(data)) {
         if (!val || typeof val !== 'object') continue
-        const item = val as any
+        const item = val as Record<string, unknown>
         spots.push({
           id: String(item.id || id),
-          name: item.name || 'Uten navn',
+          name: typeof item.name === 'string' ? item.name : 'Uten navn',
           lat: Number(item.lat),
           lng: Number(item.lng),
           alt: item.alt !== undefined ? Number(item.alt) : null,
-          fylke: item.fylke || '',
-          kommune: item.kommune || '',
+          fylke: typeof item.fylke === 'string' ? item.fylke : '',
+          kommune: typeof item.kommune === 'string' ? item.kommune : '',
           isPrivate: true,
           ownerId: userId,
-          ownerName: item.ownerName || '',
-          createdAt: item.createdAt || '',
+          ownerName: typeof item.ownerName === 'string' ? item.ownerName : '',
+          createdAt: typeof item.createdAt === 'string' ? item.createdAt : '',
           suggestedForPublic: Boolean(item.suggestedForPublic),
-          status: item.status || 'private',
-          csvLine: item.csvLine || '',
-          csvLineHint: item.csvLineHint || ''
+          status: (item.status as TurpostItem['status']) || 'private',
+          csvLine: typeof item.csvLine === 'string' ? item.csvLine : '',
+          csvLineHint: typeof item.csvLineHint === 'string' ? item.csvLineHint : ''
         })
       }
 
       return spots
-    } catch (err: any) {
+    } catch (err) {
       console.warn('[usePrivateTurposter] Kunne ikke hente my_spots fra Firebase:', err)
       return []
     } finally {
@@ -167,8 +167,8 @@ export function usePrivateTurposter() {
           body: JSON.stringify(suggestionData)
         })
       }
-    } catch (err: any) {
-      error.value = err.message || 'Kunne ikke lagre turposten.'
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Kunne ikke lagre turposten.'
       throw err
     } finally {
       isSaving.value = false
@@ -266,9 +266,9 @@ export function usePrivateTurposter() {
       const data = await res.json()
       if (!data || typeof data !== 'object') return []
       return Object.values(data)
-        .filter(item => item && typeof item === 'object' && (item as any).turpostId != null)
+        .filter((item): item is FirebaseCheckinItem => Boolean(item && typeof item === 'object' && (item as Record<string, unknown>).turpostId != null))
         .map(item => ({
-          ...(item as FirebaseCheckinItem),
+          ...item,
           isPrivate: true,
           spotId: spotId
         }))
@@ -313,8 +313,9 @@ export function usePrivateTurposter() {
       imageFile?: File | null
       removeImage?: boolean
       visibility?: 'all' | 'friends' | 'private'
+      trackId?: string | null
     }
-  ): Promise<{ imageUrl?: string; description?: string; visibility?: 'all' | 'friends' | 'private' }> {
+  ): Promise<{ imageUrl?: string; description?: string; visibility?: 'all' | 'friends' | 'private'; trackId?: string }> {
     if (!userId || userId === 'guest' || !spotId || !checkinId) {
       throw new Error('Mangler parametre for oppdatering av privat innsjekking.')
     }
@@ -323,22 +324,31 @@ export function usePrivateTurposter() {
       throw new Error('Firebase-konfigurasjon er ikke tilgjengelig.')
     }
 
-    const patchData: Record<string, any> = {}
+    const patchData: {
+      description?: string
+      imageUrl?: string
+      visibility?: 'all' | 'friends' | 'private'
+      trackId?: string
+    } = {}
     if (params.description !== undefined) {
       patchData.description = params.description
     }
     if (params.visibility !== undefined) {
       patchData.visibility = params.visibility
     }
+    if (params.trackId !== undefined) {
+      patchData.trackId = params.trackId === null ? '' : params.trackId
+    }
 
-    if (params.imageFile || params.removeImage) {
+    if (params.imageFile || params.removeImage || params.trackId !== undefined) {
       const updateRes = await updatePublicCheckin({
         turpostId: spotId,
         checkinId,
         description: params.description,
         imageFile: params.imageFile,
         removeImage: params.removeImage,
-        visibility: params.visibility
+        visibility: params.visibility,
+        trackId: params.trackId
       })
       if (updateRes.imageUrl !== undefined) {
         patchData.imageUrl = updateRes.imageUrl
@@ -361,7 +371,12 @@ export function usePrivateTurposter() {
       throw new Error(`Kunne ikke oppdatere privat innsjekking (status ${patchRes.status})`)
     }
 
-    return { imageUrl: patchData.imageUrl, description: patchData.description, visibility: params.visibility }
+    return {
+      imageUrl: patchData.imageUrl,
+      description: patchData.description,
+      visibility: params.visibility,
+      trackId: patchData.trackId
+    }
   }
 
   /**
@@ -401,8 +416,8 @@ export function usePrivateTurposter() {
       // Data kan være strukturert som { [spotId]: { [checkinId]: item } }
       for (const [spotId, spotVal] of Object.entries(data)) {
         if (!spotVal || typeof spotVal !== 'object') continue
-        for (const item of Object.values(spotVal as any)) {
-          if (item && typeof item === 'object' && (item as any).turpostId != null) {
+        for (const item of Object.values(spotVal as Record<string, unknown>)) {
+          if (item && typeof item === 'object' && (item as Record<string, unknown>).turpostId != null) {
             checkins.push({
               ...(item as FirebaseCheckinItem),
               isPrivate: true,
@@ -431,6 +446,7 @@ export function usePrivateTurposter() {
     description?: string
     imageFile?: File | null
     visibility?: 'all' | 'friends' | 'private'
+    trackId?: string
   }): Promise<CheckinResult> {
     const config = await getFirebaseConfig()
     if (!config) {
@@ -442,7 +458,8 @@ export function usePrivateTurposter() {
       turpostId: String(params.post.id),
       turpostName: params.post.name,
       description: params.description || '',
-      imageFile: params.imageFile || undefined
+      imageFile: params.imageFile || undefined,
+      trackId: params.trackId || undefined
     })
 
     const checkinId = appScriptResult.id || `checkin_${Date.now()}`
@@ -460,7 +477,8 @@ export function usePrivateTurposter() {
       timestamp: nowIso,
       description: params.description || appScriptResult.description || '',
       imageUrl: photoUrl,
-      visibility
+      visibility,
+      trackId: params.trackId || appScriptResult.trackId || undefined
     }
 
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/my_spots_checkins/${encodeURIComponent(String(params.post.id))}/${checkinId}.json`

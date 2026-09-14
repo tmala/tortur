@@ -9,6 +9,8 @@ import {
   RotateCw,
 } from 'lucide-vue-next'
 import type { GoogleUser, FirebaseCheckinItem } from '@/composables/useAuth'
+import { useGpsTrackStore } from '@/stores/gpsTrack'
+import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
 import EditCheckinModal from './EditCheckinModal.vue'
 import UserCheckinCard from './profile/UserCheckinCard.vue'
 import UserProfileShortcuts from './profile/UserProfileShortcuts.vue'
@@ -48,16 +50,30 @@ function handleViewOnMap(item: FirebaseCheckinItem) {
   emit('close')
 }
 
-function handleCheckinEdited(updatedItem: FirebaseCheckinItem) {
+async function handleViewTrack(item: FirebaseCheckinItem) {
+  if (!item.trackId) return
+  const trackStore = useGpsTrackStore()
+  const local = trackStore.savedTracks.find((t) => t.id === item.trackId)
+  if (local) {
+    trackStore.viewTrackOnMap(local)
+  } else {
+    const { fetchUserTrackById } = useFirebaseTracks()
+    const remote = await fetchUserTrackById(item.userId, item.trackId)
+    if (remote) {
+      trackStore.viewTrackOnMap(remote)
+    } else {
+      trackStore.viewTrackOnMap(item.trackId)
+    }
+  }
+  emit('close')
+}
+
+function handleCheckinEdited() {
   emit('checkin-updated')
   editingCheckin.value = null
 }
 
-function handleSocialUpdated(updatedItem: FirebaseCheckinItem) {
-  const idx = props.checkins.findIndex((c) => c.id === updatedItem.id)
-  if (idx !== -1) {
-    props.checkins[idx] = { ...props.checkins[idx], ...updatedItem }
-  }
+function handleSocialUpdated() {
   emit('checkin-updated')
 }
 
@@ -399,6 +415,7 @@ onUnmounted(() => {
                 :current-user-id="user?.userId"
                 @toggle-expand="toggleExpand(item.id || idx)"
                 @view-on-map="handleViewOnMap"
+                @view-track="handleViewTrack"
                 @edit="editingCheckin = $event"
                 @view-photo="lightboxImage = $event"
                 @social-updated="handleSocialUpdated"

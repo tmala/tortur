@@ -49,6 +49,7 @@ var COL_INNSJEKK_TIMESTAMP = 3 // C – TimeStamp (UTC ISO-streng)
 var COL_INNSJEKK_DESC = 4 // D – Beskrivelse
 var COL_INNSJEKK_IMAGE_URL = 5 // E – BildeURL
 var COL_INNSJEKK_CHECKIN_ID = 6 // F – CheckinID
+var COL_INNSJEKK_TRACK_ID = 7 // G – TrackID
 
 // =============================================================================
 // authorizeMe – kjør denne funksjonen én gang for å autorisere scriptet
@@ -311,9 +312,10 @@ function handleCheckin(body) {
     headers[COL_INNSJEKK_DESC - 1] = 'Beskrivelse'
     headers[COL_INNSJEKK_IMAGE_URL - 1] = 'BildeURL'
     headers[COL_INNSJEKK_CHECKIN_ID - 1] = 'CheckinID'
+    headers[COL_INNSJEKK_TRACK_ID - 1] = 'TrackID'
     innsjekkSheet.appendRow(headers)
 
-    var headerRange = innsjekkSheet.getRange(1, 1, 1, 6)
+    var headerRange = innsjekkSheet.getRange(1, 1, 1, 7)
     headerRange.setFontWeight('bold')
     headerRange.setBackground('#0284c7')
     headerRange.setFontColor('#ffffff')
@@ -327,6 +329,7 @@ function handleCheckin(body) {
   rowData[COL_INNSJEKK_DESC - 1] = description
   rowData[COL_INNSJEKK_IMAGE_URL - 1] = imageUrl
   rowData[COL_INNSJEKK_CHECKIN_ID - 1] = checkinId
+  rowData[COL_INNSJEKK_TRACK_ID - 1] = body.trackId || ''
   innsjekkSheet.appendRow(rowData)
 
   // 6. Firebase Realtime Database håndteres nå direkte av webklienten via autentisert Firebase SDK.
@@ -545,6 +548,11 @@ function handleUpdateCheckin(body) {
     }
   }
 
+  // 3. TrackID
+  if (foundRowIndex > 0 && innsjekkSheet && body.trackId !== undefined) {
+    innsjekkSheet.getRange(foundRowIndex, COL_INNSJEKK_TRACK_ID).setValue(body.trackId ? body.trackId.toString().trim() : '')
+  }
+
   // Oppdatering i Firebase Realtime Database håndteres nå direkte av webklienten via autentisert Firebase SDK.
   // Apps Script har dermed fullført oppdatering i Regneark og Google Drive.
 
@@ -553,6 +561,7 @@ function handleUpdateCheckin(body) {
     checkinId: checkinId,
     description: updatedDescription,
     imageUrl: updatedImageUrl !== undefined ? updatedImageUrl : oldImageUrl,
+    trackId: body.trackId !== undefined ? body.trackId : undefined,
   })
 }
 

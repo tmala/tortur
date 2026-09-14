@@ -241,7 +241,7 @@ const handleCheckinSubmitted = (result: CheckinResult) => {
   }
 }
 
-const handleSelectTurpost = (_post: TurpostItem) => {
+const handleSelectTurpost = () => {
   // Kan benyttes for tilstandsoppdateringer ved klikk på turpost
 }
 
@@ -406,6 +406,16 @@ const handleViewSavedTrack = (track: SavedTrack | null) => {
     mapViewerRef.value.zoomToTrack(track.points)
   }
 }
+
+// Zoom til spor når aktivt spor endres (f.eks. valgt fra en innsjekking)
+watch(
+  () => trackStore.activeTrack,
+  (track) => {
+    if (track && mapViewerRef.value) {
+      mapViewerRef.value.zoomToTrack(track.points)
+    }
+  },
+)
 
 // Håndter åpning og lukking av turpost-panel
 const handleToggleTurposter = () => {

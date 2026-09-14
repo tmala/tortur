@@ -8,11 +8,12 @@ import {
   Maximize2,
   Pencil,
   Users,
+  Route,
 } from 'lucide-vue-next'
 import type { FirebaseCheckinItem } from '@/composables/useAuth'
 import CheckinSocialSection from '../CheckinSocialSection.vue'
 
-const props = defineProps<{
+defineProps<{
   item: FirebaseCheckinItem
   isExpanded: boolean
   currentUserId?: string
@@ -21,6 +22,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'toggle-expand'): void
   (e: 'view-on-map', item: FirebaseCheckinItem): void
+  (e: 'view-track', item: FirebaseCheckinItem): void
   (e: 'edit', item: FirebaseCheckinItem): void
   (e: 'view-photo', url: string): void
   (e: 'social-updated', updatedItem: FirebaseCheckinItem): void
@@ -145,6 +147,16 @@ const formatDate = (isoString?: string) => {
           >
             <MapIcon :size="12" />
             <span>Vis på kart</span>
+          </button>
+          <button
+            v-if="item.trackId"
+            type="button"
+            class="btn-checkin-action track-action"
+            @click.stop="emit('view-track', item)"
+            title="Vis tilknyttet GPS-spor på kart"
+          >
+            <Route :size="12" />
+            <span>GPS-spor</span>
           </button>
           <button
             type="button"
@@ -335,10 +347,10 @@ const formatDate = (isoString?: string) => {
   transition: all 0.15s ease;
 }
 
-.btn-checkin-action:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: #ffffff;
+.btn-checkin-action:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .btn-checkin-action:disabled {

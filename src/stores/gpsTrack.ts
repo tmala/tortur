@@ -33,14 +33,15 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
   const currentUserId = ref<string>('guest')
   const savedTracks = ref<SavedTrack[]>([])
   const activeTrackId = ref<string | null>(null)
+  const externalTrack = ref<SavedTrack | null>(null)
   const isSyncing = ref<boolean>(false)
   const syncError = ref<string | null>(null)
   const lastSyncTime = ref<number | null>(null)
 
-  // Aktivt valgt spor som vises på kartet (hvis bruker har valgt et fra historikken)
+  // Aktivt valgt spor som vises på kartet (hvis bruker har valgt et fra historikken eller eksternt)
   const activeTrack = computed<SavedTrack | null>(() => {
     if (!activeTrackId.value) return null
-    return savedTracks.value.find((t) => t.id === activeTrackId.value) || null
+    return savedTracks.value.find((t) => t.id === activeTrackId.value) || externalTrack.value || null
   })
 
   // Hjelpefunksjon: last spor for gjeldende bruker fra localStorage
@@ -135,9 +136,9 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
       savedTracks.value = mergedList
       persistTracks()
       lastSyncTime.value = Date.now()
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn('[gpsTrackStore] Feil ved synkronisering mot Firebase:', err)
-      syncError.value = err?.message || 'Kunne ikke hente spor fra skyen'
+      syncError.value = err instanceof Error ? err.message : 'Kunne ikke hente spor fra skyen'
     } finally {
       isSyncing.value = false
     }
@@ -253,19 +254,46 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
     return true
   }
 
-  // Vis spor på kartet
-  const viewTrackOnMap = (id: string) => {
-    if (activeTrackId.value === id) {
-      // Klikk på nytt fjerner visningen
-      activeTrackId.value = null
+  // Vis spor på kartet (tar enten spor-ID eller et komplett SavedTrack-objekt for eksterne/venners spor)
+  const viewTrackOnMap = (trackOrId: string | SavedTrack) => {
+    if (typeof trackOrId === 'string') {
+      if (activeTrackId.value === trackOrId) {
+        // Klikk på nytt fjerner visningen
+        activeTrackId.value = null
+        externalTrack.value = null
+      } else {
+        activeTrackId.value = trackOrId
+        if (externalTrack.value && externalTrack.value.id !== trackOrId) {
+          externalTrack.value = null
+        }
+      }
     } else {
-      activeTrackId.value = id
+      if (activeTrackId.value === trackOrId.id) {
+        activeTrackId.value = null
+        externalTrack.value = null
+      } else {
+        externalTrack.value = trackOrId
+        activeTrackId.value = trackOrId.id
+      }
     }
   }
 
   // Skjul aktivt spor fra kartet
   const clearActiveTrack = () => {
     activeTrackId.value = null
+    externalTrack.value = null
+  }
+
+  // Importer GPX-fil, opprett SavedTrack, lagre lokalt og synkroniser mot Firebase
+  const importGpx = async (file: File, customName?: string): Promise<SavedTrack> => {
+    const { parseGpxFile } = await import('@/utils/gpxParser')
+    const parsed = await parseGpxFile(file)
+    const trackName = customName?.trim() || parsed.name || generateDefaultName()
+    const newTrack = saveTrack(parsed.points, trackName)
+    if (!newTrack) {
+      throw new Error('Kunne ikke opprette spor fra GPX-data.')
+    }
+    return newTrack
   }
 
   // Last ned spor som standard GPX 1.1 XML-fil
@@ -333,6 +361,7 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
     currentUserId,
     savedTracks,
     activeTrackId,
+    externalTrack,
     activeTrack,
     isSyncing,
     syncError,
@@ -346,6 +375,7 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
     viewTrackOnMap,
     clearActiveTrack,
     downloadGpx,
-    computeDistance
+    computeDistance,
+    importGpx
   }
 })

@@ -10,13 +10,17 @@ import {
   Image as ImageIcon,
   Trash2,
   Undo2,
+  Route,
 } from 'lucide-vue-next'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import type { CheckinVisibility } from '@/composables/useFriends'
 import { compressImage } from '@/utils/imageCompression'
+import { formatDistance } from '@/composables/useGeolocation'
+import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import WebcamCapture from '@/components/checkin/WebcamCapture.vue'
 import CheckinVisibilitySelector from '@/components/checkin/CheckinVisibilitySelector.vue'
+import TrackPickerModal from '@/components/TrackPickerModal.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -44,6 +48,22 @@ const isSubmitting = ref(false)
 const isDeleting = ref(false)
 const errorMessage = ref<string | null>(null)
 const isSuccess = ref(false)
+const trackStore = useGpsTrackStore()
+const selectedTrackId = ref<string | null>(null)
+const isTrackPickerOpen = ref(false)
+
+const attachedTrack = computed<SavedTrack | null>(() => {
+  if (!selectedTrackId.value) return null
+  return trackStore.savedTracks.find((t) => t.id === selectedTrackId.value) || null
+})
+
+function handleTrackSelected(track: SavedTrack | null) {
+  selectedTrackId.value = track ? track.id : null
+}
+
+function removeTrack() {
+  selectedTrackId.value = null
+}
 
 const cameraInputRef = ref<HTMLInputElement | null>(null)
 const galleryInputRef = ref<HTMLInputElement | null>(null)
@@ -76,6 +96,8 @@ watch(
       selectedVisibility.value =
         props.checkin.visibility || (props.checkin.isPrivate || props.isPrivate ? 'private' : 'all')
       isImageRemoved.value = false
+      selectedTrackId.value = props.checkin.trackId || null
+      isTrackPickerOpen.value = false
       clearSelectedFile()
       errorMessage.value = null
       isSuccess.value = false
@@ -180,6 +202,7 @@ const handleSubmit = async () => {
           imageFile: selectedFile.value,
           removeImage: isImageRemoved.value,
           visibility: selectedVisibility.value,
+          trackId: selectedTrackId.value,
         },
       )
       if (res.imageUrl !== undefined) {
@@ -194,6 +217,7 @@ const handleSubmit = async () => {
         imageFile: selectedFile.value,
         removeImage: isImageRemoved.value,
         visibility: selectedVisibility.value,
+        trackId: selectedTrackId.value,
       })
       if (res.imageUrl !== undefined) {
         updatedImageUrl = res.imageUrl
@@ -205,6 +229,7 @@ const handleSubmit = async () => {
       description: newDescription,
       imageUrl: updatedImageUrl,
       visibility: selectedVisibility.value,
+      trackId: selectedTrackId.value || undefined,
     }
 
     isSuccess.value = true
@@ -537,6 +562,60 @@ onUnmounted(() => {
               </div>
             </div>
 
+            <!-- GPS-spor -->
+            <div class="form-group">
+              <label class="form-label">
+                <span>Tilknyttet GPS-spor</span>
+                <span class="optional-tag">Valgfritt</span>
+              </label>
+
+              <div v-if="selectedTrackId" class="attached-track-card">
+                <div class="track-card-left">
+                  <div class="track-badge-icon">
+                    <Route :size="18" />
+                  </div>
+                  <div class="track-badge-info">
+                    <span class="track-badge-title">{{ attachedTrack?.name || 'GPS-spor' }}</span>
+                    <span v-if="attachedTrack" class="track-badge-dist">
+                      {{ formatDistance(attachedTrack.distanceMeters) }}
+                    </span>
+                    <span v-else class="track-badge-dist">Tilknyttet spor (ID: {{ selectedTrackId }})</span>
+                  </div>
+                </div>
+                <div class="track-card-actions">
+                  <button
+                    type="button"
+                    class="btn-track-action"
+                    title="Endre spor"
+                    aria-label="Endre spor"
+                    @click="isTrackPickerOpen = true"
+                  >
+                    Bytt
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-track-action remove"
+                    title="Fjern tilknyttet spor"
+                    aria-label="Fjern spor"
+                    @click="removeTrack"
+                  >
+                    <X :size="14" />
+                  </button>
+                </div>
+              </div>
+
+              <button
+                v-else
+                type="button"
+                class="btn-add-track"
+                aria-label="Koble til eller last opp GPS-spor"
+                @click="isTrackPickerOpen = true"
+              >
+                <Route :size="16" />
+                <span>Koble til eller last opp GPS-spor</span>
+              </button>
+            </div>
+
             <!-- Synlighetsvalg -->
             <CheckinVisibilitySelector
               v-model="selectedVisibility"
@@ -583,6 +662,13 @@ onUnmounted(() => {
         </div>
       </div>
     </Transition>
+
+    <TrackPickerModal
+      :is-open="isTrackPickerOpen"
+      :current-track-id="selectedTrackId"
+      @close="isTrackPickerOpen = false"
+      @select="handleTrackSelected"
+    />
   </Teleport>
 </template>
 
@@ -1052,5 +1138,113 @@ onUnmounted(() => {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* GPS Track Styles */
+.attached-track-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(2, 132, 199, 0.08);
+  border: 1px solid rgba(2, 132, 199, 0.25);
+  border-radius: 12px;
+}
+
+.track-card-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.track-badge-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(2, 132, 199, 0.18);
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.track-badge-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.track-badge-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-badge-dist {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.track-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-track-action {
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-track-action:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.btn-track-action.remove {
+  padding: 4px 6px;
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.25);
+}
+
+.btn-track-action.remove:hover {
+  background: rgba(248, 113, 113, 0.15);
+}
+
+.btn-add-track {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1.5px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-add-track:hover {
+  background: rgba(2, 132, 199, 0.08);
+  border-color: #0284c7;
+  color: #38bdf8;
 }
 </style>

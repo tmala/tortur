@@ -12,9 +12,12 @@ import {
   Map as MapIcon,
   Globe,
   Search,
+  Route,
 } from 'lucide-vue-next'
 import type { FirebaseCheckinItem } from '@/composables/useAuth'
 import { useFriends, type FriendUser } from '@/composables/useFriends'
+import { useGpsTrackStore } from '@/stores/gpsTrack'
+import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
 import CheckinSocialSection from './CheckinSocialSection.vue'
 
 const props = defineProps<{
@@ -153,6 +156,24 @@ function isExpanded(id: string): boolean {
 
 function handleViewOnMap(item: FirebaseCheckinItem) {
   emit('view-turpost-on-map', item)
+  emit('close')
+}
+
+async function handleViewTrack(item: FirebaseCheckinItem) {
+  if (!item.trackId) return
+  const trackStore = useGpsTrackStore()
+  const local = trackStore.savedTracks.find((t) => t.id === item.trackId)
+  if (local) {
+    trackStore.viewTrackOnMap(local)
+  } else {
+    const { fetchUserTrackById } = useFirebaseTracks()
+    const remote = await fetchUserTrackById(item.userId, item.trackId)
+    if (remote) {
+      trackStore.viewTrackOnMap(remote)
+    } else {
+      trackStore.viewTrackOnMap(item.trackId)
+    }
+  }
   emit('close')
 }
 
@@ -353,7 +374,7 @@ onUnmounted(() => {
                   Ingen turboknotat eller bilde registrert på denne turen.
                 </p>
 
-                <!-- Handlingsknapper (Vis på kart) -->
+                <!-- Handlingsknapper (Vis på kart og GPS-spor) -->
                 <div class="checkin-actions-bar">
                   <button
                     type="button"
@@ -363,6 +384,16 @@ onUnmounted(() => {
                   >
                     <MapIcon :size="12" />
                     <span>Vis på kart</span>
+                  </button>
+                  <button
+                    v-if="item.trackId"
+                    type="button"
+                    class="btn-checkin-action track-action"
+                    title="Vis tilknyttet GPS-spor på kart"
+                    @click.stop="handleViewTrack(item)"
+                  >
+                    <Route :size="12" />
+                    <span>GPS-spor</span>
                   </button>
                 </div>
 
@@ -865,6 +896,17 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.16);
   border-color: rgba(255, 255, 255, 0.3);
   color: #ffffff;
+}
+
+.btn-checkin-action.track-action {
+  color: #38bdf8;
+  border-color: rgba(2, 132, 199, 0.35);
+  background: rgba(2, 132, 199, 0.12);
+}
+
+.btn-checkin-action.track-action:hover {
+  background: rgba(2, 132, 199, 0.22);
+  color: #7dd3fc;
 }
 
 /* Lightbox */

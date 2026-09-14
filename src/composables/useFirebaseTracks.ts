@@ -49,26 +49,29 @@ export function useFirebaseTracks() {
       const tracks: SavedTrack[] = []
       for (const [key, val] of Object.entries(data)) {
         if (!val || typeof val !== 'object') continue
-        const item = val as any
+        const item = val as Record<string, unknown>
         const parsedTime = parseTrackKeyTimestamp(key)
-        const startTime = item.startTime ?? parsedTime
-        const createdAt = item.createdAt ?? parsedTime
-        const endTime = item.endTime ?? null
+        const startTime = typeof item.startTime === 'number' ? item.startTime : parsedTime
+        const createdAt = typeof item.createdAt === 'number' ? item.createdAt : parsedTime
+        const endTime = typeof item.endTime === 'number' ? item.endTime : null
         const distanceMeters = typeof item.distanceMeters === 'number' ? item.distanceMeters : 0
         const durationMs = typeof item.durationMs === 'number' ? item.durationMs : 0
-        const points = Array.isArray(item.points) ? item.points : []
+        const points = Array.isArray(item.points) ? (item.points as SavedTrack['points']) : []
+        const id = typeof item.id === 'string' ? item.id : `track_${key}`
+        const name = typeof item.name === 'string' ? item.name : `Tur ${new Date(startTime).toLocaleDateString('no-NO')}`
+        const firebaseKey = typeof item.firebaseKey === 'string' ? item.firebaseKey : key
 
         tracks.push({
-          id: item.id || `track_${key}`,
-          userId: item.userId || userId,
-          name: item.name || `Tur ${new Date(startTime).toLocaleDateString('no-NO')}`,
+          id,
+          userId: typeof item.userId === 'string' ? item.userId : userId,
+          name,
           createdAt,
           startTime,
           endTime,
           distanceMeters,
           durationMs,
           points,
-          firebaseKey: item.firebaseKey || key
+          firebaseKey
         })
       }
 
@@ -78,6 +81,15 @@ export function useFirebaseTracks() {
       console.warn('[useFirebaseTracks] Kunne ikke hente spor fra Firebase:', err)
       return []
     }
+  }
+
+  /**
+   * Henter et spesifikt spor for en gitt bruker basert på trackId eller firebaseKey.
+   */
+  async function fetchUserTrackById(userId: string, trackId: string): Promise<SavedTrack | null> {
+    if (!userId || userId === 'guest' || !trackId) return null
+    const tracks = await fetchUserTracksFromFirebase(userId)
+    return tracks.find((t) => t.id === trackId || t.firebaseKey === trackId) || null
   }
 
   /**
@@ -171,6 +183,7 @@ export function useFirebaseTracks() {
     formatTrackKey,
     parseTrackKeyTimestamp,
     fetchUserTracksFromFirebase,
+    fetchUserTrackById,
     saveTrackToFirebase,
     deleteTrackFromFirebase,
     renameTrackInFirebase

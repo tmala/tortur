@@ -1,6 +1,6 @@
-import { describe, it, expect, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import App from '../App.vue'
 import MapView from '../views/MapView.vue'
 import AppHeader from '../components/AppHeader.vue'
@@ -11,6 +11,10 @@ import TurpostCheckinsModal from '../components/TurpostCheckinsModal.vue'
 import UserProfileModal from '../components/UserProfileModal.vue'
 import type { FylkeInfo } from '../composables/useTurposter'
 import type { GoogleUser } from '../composables/useAuth'
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
 
 afterEach(() => {
   document.body.innerHTML = ''

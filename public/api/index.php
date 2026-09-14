@@ -277,16 +277,18 @@ function handleCheckin(GoogleClient $client, array $body, string $ssId, string $
     $checkinId   = 'c_' . round(microtime(true) * 1000);
     $timestamp   = gmdate('Y-m-d\TH:i:s\Z');
     $description = trim((string)($body['description'] ?? ''));
+    $trackId     = trim((string)($body['trackId'] ?? ''));
 
     // Legg til innsjekkingsrad i TurpostInnsjekk:
-    // A: UserID | B: TurpostID | C: TimeStamp | D: Beskrivelse | E: BildeURL | F: CheckinID
+    // A: UserID | B: TurpostID | C: TimeStamp | D: Beskrivelse | E: BildeURL | F: CheckinID | G: TrackID
     $client->appendSheetRow($ssId, $sheetInnsjekk, [
         $userId,
         $turpostId,
         $timestamp,
         $description,
         $imageUrl,
-        $checkinId
+        $checkinId,
+        $trackId
     ]);
 
     echo json_encode([
@@ -299,7 +301,8 @@ function handleCheckin(GoogleClient $client, array $body, string $ssId, string $
             'turpostId'   => $turpostId,
             'timestamp'   => $timestamp,
             'description' => $description,
-            'imageUrl'    => $imageUrl
+            'imageUrl'    => $imageUrl,
+            'trackId'     => $trackId
         ],
         'systemConfig' => $systemConfig
     ]);
@@ -456,12 +459,22 @@ function handleUpdateCheckin(GoogleClient $client, array $body, string $ssId, st
         $client->updateSheetValues($ssId, "{$sheetInnsjekk}!E{$foundRowIndex}", [['']]);
     }
 
-    echo json_encode([
+    $updatedTrackId = null;
+    if (array_key_exists('trackId', $body)) {
+        $updatedTrackId = trim((string)($body['trackId'] ?? ''));
+        $client->updateSheetValues($ssId, "{$sheetInnsjekk}!G{$foundRowIndex}", [[$updatedTrackId]]);
+    }
+
+    $resp = [
         'success'     => true,
         'checkinId'   => $checkinId,
         'description' => $updatedDescription,
         'imageUrl'    => $updatedImageUrl !== null ? $updatedImageUrl : $oldImageUrl
-    ]);
+    ];
+    if ($updatedTrackId !== null) {
+        $resp['trackId'] = $updatedTrackId;
+    }
+    echo json_encode($resp);
 }
 
 function handleGetConfig(GoogleClient $client, array $body, string $ssId, string $sheetSystem): void {
