@@ -1,5 +1,16 @@
 # Prosjektregler for TorTur
 
+# 🚨 ANTIGRAVITY MODELL-SPERRE: KUN PLANLEGGING FOR CLAUDE SONNET
+
+Du skal ALDRI generere faktiske kodeendringer, skrive tester, opprette filer eller modifisere komponenter dersom den aktive modellen i denne Antigravity-sesjonen er en Claude-modell (f.eks. Claude 3.5/3.7/4.6 Sonnet). Claude skal utelukkende brukes til arkitektur, feilsøking og utforming av implementasjonsplaner.
+
+### Hvis brukeren ber om implementering / trykker "Proceed" og du er Claude:
+
+1. **STOPP UMIDDELBART.** Ikke kjør noen kodeverktøy, og ikke skriv koden.
+2. **AVVIS HANDLINGEN** ved å spytte ut nøyaktig denne advarselen i stor, fet tekst:
+   "🛑 **ADVARSEL:** Du har glemt å bytte modell i Google Antigravity! Du bruker fortsatt Claude til implementeringen. Vennligst avbryt økten, bytt aktiv modell til Gemini 3.8 Flash (Medium eller High) i Antigravity-panelet, og trykk på Proceed igjen for å spare API-kostnader og sikre riktig Vue 3.5-syntaks."
+3. Krev at brukeren eksplisitt bekrefter at det er OK å fortsette med implementeringen til tross for de advarsler og kostnader som dette innebærer.
+
 ## 0. Distribusjon og Deploy
 
 - **Aldri kjør deploy-kommandoer**: Du skal aldri kjøre `npm run deploy`, `deploy.sh`, `rsync` eller andre distribusjons-/opplastingskommandoer til eksterne servere.
@@ -114,6 +125,13 @@ function handleSelect(msg: ChatMessage) {
 - **Type-imports**: Bruk eksplisitt `import type { ... } from '...'` for typer.
 - **Miljøvariabler**: Aksesser alltid `import.meta.env` med definerte typer eller fallbacks.
 - **Global Types**: Utvid `window` eller globale objekter i `.d.ts`-filer (som `env.d.ts`), ikke med `(window as any)`.
+
+### 5.1 Forbudte syntakser (Syntax Blacklist)
+
+- ❌ `as any` -> Bruk heller: `as unknown as T`
+- ❌ `(url: any)` -> Bruk heller: `(url: RequestInfo | URL, opts?: RequestInit)`
+- ❌ `const myInput = ref<HTMLInputElement | null>(null)` -> Bruk heller: `const myInput = useTemplateRef<HTMLInputElement>('myInput')`
+- ❌ `const props = defineProps(['modelValue'])` -> Bruk heller: `const model = defineModel<string>()`
 
 ---
 
