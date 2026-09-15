@@ -68,7 +68,7 @@
             ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)"
           },
           "tracks": {
-            ".read": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)",
+            ".read": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid || root.child($prefix).child('brukere').child($userId).child('friends').child(root.child($prefix).child('auth_uids').child(auth.uid).val()).exists())",
             ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)"
           }
         }
