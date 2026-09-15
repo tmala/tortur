@@ -58,6 +58,16 @@ const emit = defineEmits<{
   <transition name="fade-slide">
     <div v-if="isOpen" class="brand-menu-dropdown glass-panel" @click.stop>
       <div class="top-actions">
+        <!-- Kartlag-knapp -->
+        <button
+          class="icon-btn"
+          :class="{ active: showLayerMenu }"
+          @click="emit('toggle-layers')"
+          title="Bytt kartlag"
+        >
+          <Layers :size="18" />
+        </button>
+
         <!-- Turposter-knapp -->
         <button
           class="btn-turposter"
@@ -72,18 +82,6 @@ const emit = defineEmits<{
           <span v-else>Turposter</span>
         </button>
 
-        <!-- Vis turposter der jeg er -->
-        <button
-          class="icon-btn btn-local-turposter"
-          :disabled="isLoadingLocalTurposter"
-          @click="emit('show-local-turposter')"
-          title="Vis turposter der jeg er"
-          aria-label="Vis turposter der jeg er"
-        >
-          <Loader2 v-if="isLoadingLocalTurposter" class="spinner" :size="18" />
-          <MapPin v-else :size="18" />
-        </button>
-
         <!-- Hvor er jeg? -->
         <button
           class="icon-btn btn-locate"
@@ -96,6 +94,29 @@ const emit = defineEmits<{
           <LocateFixed v-else :size="18" />
         </button>
 
+        <!-- Vis turposter der jeg er -->
+        <button
+          class="icon-btn btn-local-turposter"
+          :disabled="isLoadingLocalTurposter"
+          @click="emit('show-local-turposter')"
+          title="Vis turposter der jeg er"
+          aria-label="Vis turposter der jeg er"
+        >
+          <Loader2 v-if="isLoadingLocalTurposter" class="spinner" :size="18" />
+          <MapPin v-else :size="18" />
+        </button>
+
+        <!-- Kommunegrenser-knapp -->
+        <button
+          class="icon-btn btn-municipalities"
+          :class="{ active: showMunicipalities }"
+          @click="emit('toggle-municipalities')"
+          title="Slå av/på visning av kommunegrenser"
+          aria-label="Slå av eller på visning av kommunegrenser"
+        >
+          <MapIcon :size="18" />
+        </button>
+
         <!-- Sporlogg / Følg meg -->
         <button
           class="icon-btn btn-track"
@@ -103,12 +124,12 @@ const emit = defineEmits<{
           @click="emit('toggle-tracking')"
           :title="
             isTracking
-              ? 'Følger deg (sporing aktiv)'
+              ? 'Sporer deg (sporing aktiv)'
               : hasTrack
-                ? 'Sporing stoppet (sporet vises på kartet)'
-                : 'Følg meg'
+                ? 'Sporing stanset (sporet vises på kartet)'
+                : 'Spor meg'
           "
-          aria-label="Følg meg"
+          aria-label="Spor meg"
         >
           <Route :size="18" :class="{ 'pulse-slow': isTracking }" />
         </button>
@@ -143,27 +164,6 @@ const emit = defineEmits<{
             AIS (Zoom inn)
           </span>
           <span v-else class="btn-ais-text">AIS</span>
-        </button>
-
-        <!-- Kommunegrenser-knapp -->
-        <button
-          class="icon-btn btn-municipalities"
-          :class="{ active: showMunicipalities }"
-          @click="emit('toggle-municipalities')"
-          title="Slå av/på visning av kommunegrenser"
-          aria-label="Slå av eller på visning av kommunegrenser"
-        >
-          <MapIcon :size="18" />
-        </button>
-
-        <!-- Kartlag-knapp -->
-        <button
-          class="icon-btn"
-          :class="{ active: showLayerMenu }"
-          @click="emit('toggle-layers')"
-          title="Bytt kartlag"
-        >
-          <Layers :size="18" />
         </button>
 
         <!-- AIS-innstillinger / Kilde-knapp – kun synlig for admin -->
