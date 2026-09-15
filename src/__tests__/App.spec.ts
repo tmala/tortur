@@ -51,7 +51,7 @@ describe('AppHeader', () => {
     expect(wrapper.find('.brand-menu-dropdown').exists()).toBe(false)
   })
 
-  it('hides AIS controls for non-admin users and shows them for admin', async () => {
+  it('hides AIS controls for non-admin users and shows them for admin with active admin mode', async () => {
     const wrapper = mount(AppHeader, {
       props: {
         isLocating: false,
@@ -63,6 +63,7 @@ describe('AppHeader', () => {
         showMunicipalities: true,
         isLoggedIn: true,
         isAdmin: false,
+        isAdminActive: false,
       },
     })
 
@@ -71,10 +72,15 @@ describe('AppHeader', () => {
     expect(wrapper.find('.btn-ais').exists()).toBe(false)
     expect(wrapper.find('button[title="Båttrafikk (AIS) innstillinger"]').exists()).toBe(false)
 
-    // Set isAdmin: true
-    await wrapper.setProps({ isAdmin: true })
+    // Set isAdmin: true with active admin mode
+    await wrapper.setProps({ isAdmin: true, isAdminActive: true })
     expect(wrapper.find('.btn-ais').exists()).toBe(true)
     expect(wrapper.find('button[title="Båttrafikk (AIS) innstillinger"]').exists()).toBe(true)
+
+    // Turn off admin mode -> AIS should be hidden even for admin
+    await wrapper.setProps({ isAdminActive: false })
+    expect(wrapper.find('.btn-ais').exists()).toBe(false)
+    expect(wrapper.find('button[title="Båttrafikk (AIS) innstillinger"]').exists()).toBe(false)
   })
 
   it('does not show Google map layers when user is not logged in', async () => {
@@ -98,9 +104,11 @@ describe('AppHeader', () => {
     expect(wrapper.text()).not.toContain('Google Satellitt')
     expect(wrapper.text()).not.toContain('Google Terreng')
     expect(wrapper.text()).toContain('Standard OpenStreetMap')
+    expect(wrapper.text()).toContain('Kartverket Sjøkart')
+    expect(wrapper.text()).toContain('OpenSeaMap Sjøkart')
   })
 
-  it('shows Google map layers when user is logged in', async () => {
+  it('shows Google map layers only when user is admin, and shows sea maps for all users', async () => {
     const wrapper = mount(AppHeader, {
       props: {
         isLocating: false,
@@ -111,12 +119,24 @@ describe('AppHeader', () => {
         turpostCount: 0,
         showMunicipalities: true,
         isLoggedIn: true,
+        isAdmin: false,
       },
     })
 
     await wrapper.find('.brand-badge-btn').trigger('click')
     await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
 
+    // Google Maps skal ikke være synlig for vanlig innlogget bruker
+    expect(wrapper.text()).not.toContain('Google Veikart')
+    expect(wrapper.text()).not.toContain('Google Satellitt (Hybrid)')
+    expect(wrapper.text()).not.toContain('Google Terreng')
+
+    // Sjøkart skal være tilgjengelig for alle
+    expect(wrapper.text()).toContain('Kartverket Sjøkart')
+    expect(wrapper.text()).toContain('OpenSeaMap Sjøkart')
+
+    // Når brukeren er admin skal Google Maps vises
+    await wrapper.setProps({ isAdmin: true })
     expect(wrapper.text()).toContain('Google Veikart')
     expect(wrapper.text()).toContain('Google Satellitt (Hybrid)')
     expect(wrapper.text()).toContain('Google Terreng')

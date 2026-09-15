@@ -875,9 +875,9 @@ onMounted(() => {
   map.on('moveend', updateMapState)
   map.on('zoomend', updateMapState)
 
-  // Klikk i kartet for admin-modus eller "Legg til egen turpost"-modus
+  // Klikk i kartet for "Legg til egen turpost"-modus
   map.on('click', (e: L.LeafletMouseEvent) => {
-    if (props.isAdmin || props.isAddSpotActive) {
+    if (props.isAddSpotActive) {
       emit('add-turpost-map-click', { lat: e.latlng.lat, lng: e.latlng.lng })
     }
   })
@@ -910,10 +910,6 @@ onUnmounted(() => {
 <template>
   <div class="map-wrapper">
     <div ref="mapContainer" class="map-view"></div>
-    <!-- Admin-modus banner -->
-    <div v-if="props.isAdmin" class="admin-map-banner">
-      🛠️ Admin-modus &ndash; klikk i kartet for å legge til en turpost
-    </div>
   </div>
 </template>
 
@@ -935,23 +931,6 @@ onUnmounted(() => {
   bottom: 0;
   width: 100%;
   height: 100%;
-}
-
-.admin-map-banner {
-  position: absolute;
-  bottom: calc(32px + env(safe-area-inset-bottom, 0px));
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(247, 201, 72, 0.92);
-  color: #1a1a1a;
-  font-size: 0.82rem;
-  font-weight: 700;
-  padding: 8px 18px;
-  border-radius: 24px;
-  pointer-events: none;
-  z-index: 1000;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-  white-space: nowrap;
 }
 
 :deep(.track-interactive-line) {

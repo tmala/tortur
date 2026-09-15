@@ -45,6 +45,7 @@ export const MAP_LAYERS: MapLayerConfig[] = [
     desc: 'Googles klassiske veikart',
     sortnum: 100,
     requiresAuth: true,
+    requiresAdmin: true,
   },
   {
     id: 'google_hybrid',
@@ -52,6 +53,7 @@ export const MAP_LAYERS: MapLayerConfig[] = [
     desc: 'Googles satellittfoto med veinavn og steder',
     sortnum: 110,
     requiresAuth: true,
+    requiresAdmin: true,
   },
   {
     id: 'google_terrain',
@@ -59,21 +61,18 @@ export const MAP_LAYERS: MapLayerConfig[] = [
     desc: 'Googles terrengkart med høydeforskjeller',
     sortnum: 120,
     requiresAuth: true,
+    requiresAdmin: true,
   },
   {
     id: 'kartverket_sjokart',
     name: 'Kartverket Sjøkart',
     desc: 'Offisielt norsk sjøkart med dybder, fyr og merker',
     sortnum: 200,
-    requiresAuth: true,
-    requiresAdmin: true,
   },
   {
     id: 'seamap',
     name: 'OpenSeaMap Sjøkart',
     desc: 'Globalt sjøkart med fyr, bøyer og sjømerker',
     sortnum: 210,
-    requiresAuth: true,
-    requiresAdmin: true,
   },
 ]

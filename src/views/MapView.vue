@@ -309,7 +309,7 @@ const handleBoundsChange = (
 }
 
 const handleToggleAis = () => {
-  if (!isAdmin.value) return
+  if (!isEffectiveAdmin.value) return
   toggleAis()
   if (isAisToggled.value && lastMapBounds.value) {
     fetchVessels(lastMapBounds.value, lastMapZoom.value, true)
@@ -319,17 +319,19 @@ const handleToggleAis = () => {
   }
 }
 
-// Start/stopp poll automatisk dersom AIS blir slått av utenfra eller admin logger ut
+const isEffectiveAdmin = computed(() => isAdmin.value && appState.adminModeActive)
+
+// Start/stopp poll automatisk dersom AIS blir slått av utenfra eller admin deaktiverer admin-modus / logger ut
 watch(isAisToggled, (enabled) => {
-  if (enabled && isAdmin.value) {
+  if (enabled && isEffectiveAdmin.value) {
     startAisPoll()
   } else {
     stopAisPoll()
   }
 })
 
-watch(isAdmin, (admin) => {
-  if (!admin && isAisToggled.value) {
+watch(isEffectiveAdmin, (active) => {
+  if (!active && isAisToggled.value) {
     toggleAis()
     stopAisPoll()
   }
@@ -867,7 +869,6 @@ onUnmounted(() => {
       :is-zoom-sufficient="isZoomSufficient"
       :is-logged-in="isLoggedIn"
       :visited-turpost-ids="visitedTurpostIds"
-      :is-admin="appState.adminModeActive"
       @map-dragged="handleMapDragged"
       @coordinates-change="handleCoordinatesChange"
       @bounds-change="handleBoundsChange"
@@ -897,6 +898,7 @@ onUnmounted(() => {
       :min-zoom-for-ais="minZoomForAis"
       :is-logged-in="isLoggedIn"
       :is-admin="isAdmin"
+      :is-admin-active="appState.adminModeActive"
       :is-loading-local-turposter="isLoadingLocalTurposter"
       :is-locating="isLocating"
       :is-tracking="isTracking"
@@ -993,11 +995,11 @@ onUnmounted(() => {
 
     <!-- Bruker / Admin: Legg til ny turpost -->
     <AddTurpostModal
-      v-if="appState.adminModeActive || appState.isAddSpotModeActive"
+      v-if="appState.isAddSpotModeActive"
       :is-open="!!addTurpostClickCoords"
       :lat="addTurpostClickCoords?.lat ?? 0"
       :lng="addTurpostClickCoords?.lng ?? 0"
-      :is-admin="appState.adminModeActive"
+      :is-admin="isEffectiveAdmin"
       :user-id="user?.userId"
       :user-name="user?.userName"
       :user-email="user?.email"

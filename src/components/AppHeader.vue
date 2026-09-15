@@ -7,32 +7,38 @@ import HeaderActionsDropdown from './header/HeaderActionsDropdown.vue'
 import MapLayerModal from './header/MapLayerModal.vue'
 import AisInfoModal from './header/AisInfoModal.vue'
 
-defineProps<{
-  activeLayer: string
-  isTurposterOpen: boolean
-  activeKommuneName: string | null
-  turpostCount: number
-  showMunicipalities: boolean
-  isAisToggled?: boolean
-  isZoomSufficient?: boolean
-  aisVesselCount?: number
-  isAisLoading?: boolean
-  currentZoom?: number
-  minZoomForAis?: number
-  isLoggedIn?: boolean
-  isAdmin?: boolean
-  isLoadingLocalTurposter?: boolean
-  isLocating?: boolean
-  isTracking?: boolean
-  hasTrack?: boolean
-  savedTracksCount?: number
-  isSavedTracksOpen?: boolean
-  /** true når en ny versjon er tilgjengelig via Service Worker */
-  needsUpdate?: boolean
-  mySpotsCount?: number
-  isMySpotsOpen?: boolean
-  isAddSpotModeActive?: boolean
-}>()
+withDefaults(
+  defineProps<{
+    activeLayer: string
+    isTurposterOpen: boolean
+    activeKommuneName: string | null
+    turpostCount: number
+    showMunicipalities: boolean
+    isAisToggled?: boolean
+    isZoomSufficient?: boolean
+    aisVesselCount?: number
+    isAisLoading?: boolean
+    currentZoom?: number
+    minZoomForAis?: number
+    isLoggedIn?: boolean
+    isAdmin?: boolean
+    isAdminActive?: boolean
+    isLoadingLocalTurposter?: boolean
+    isLocating?: boolean
+    isTracking?: boolean
+    hasTrack?: boolean
+    savedTracksCount?: number
+    isSavedTracksOpen?: boolean
+    /** true når en ny versjon er tilgjengelig via Service Worker */
+    needsUpdate?: boolean
+    mySpotsCount?: number
+    isMySpotsOpen?: boolean
+    isAddSpotModeActive?: boolean
+  }>(),
+  {
+    isAdminActive: true,
+  }
+)
 
 const emit = defineEmits<{
   (e: 'locate'): void
@@ -173,9 +179,7 @@ const handleInstallClick = async () => {
       :is-locating="isLocating"
       :is-tracking="isTracking"
       :has-track="hasTrack"
-      :is-saved-tracks-open="isSavedTracksOpen"
-      :saved-tracks-count="savedTracksCount"
-      :is-admin="isAdmin"
+      :is-admin="isAdmin && isAdminActive"
       :is-ais-toggled="isAisToggled"
       :is-zoom-sufficient="isZoomSufficient"
       :ais-vessel-count="aisVesselCount"
@@ -191,7 +195,6 @@ const handleInstallClick = async () => {
       @locate="emit('locate')"
       @toggle-tracking="emit('toggle-tracking')"
       @open-track-modal="emit('open-track-modal')"
-      @open-saved-tracks="emit('open-saved-tracks')"
       @toggle-ais="emit('toggle-ais')"
       @toggle-municipalities="emit('toggle-municipalities')"
       @toggle-layers="showLayerMenu = !showLayerMenu"
@@ -201,10 +204,10 @@ const handleInstallClick = async () => {
       @apply-update="emit('apply-update')"
     />
 
-    <!-- AIS Modal – kun synlig for admin -->
+    <!-- AIS Modal – kun synlig for admin med aktiv admin-modus -->
     <AisInfoModal
       :is-open="showAisModal"
-      :is-admin="isAdmin"
+      :is-admin="isAdmin && isAdminActive"
       :is-logged-in="isLoggedIn"
       :current-zoom="currentZoom"
       :min-zoom-for-ais="minZoomForAis"

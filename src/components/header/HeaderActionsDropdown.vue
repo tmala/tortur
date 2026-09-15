@@ -13,7 +13,6 @@ import {
   Radio,
   MapPin,
   X,
-  FolderHeart,
   RefreshCw,
 } from 'lucide-vue-next'
 
@@ -26,8 +25,6 @@ defineProps<{
   isLocating?: boolean
   isTracking?: boolean
   hasTrack?: boolean
-  isSavedTracksOpen?: boolean
-  savedTracksCount?: number
   isAdmin?: boolean
   isAisToggled?: boolean
   isZoomSufficient?: boolean
@@ -47,7 +44,6 @@ const emit = defineEmits<{
   (e: 'locate'): void
   (e: 'toggle-tracking'): void
   (e: 'open-track-modal'): void
-  (e: 'open-saved-tracks'): void
   (e: 'toggle-ais'): void
   (e: 'toggle-municipalities'): void
   (e: 'toggle-layers'): void
@@ -128,20 +124,6 @@ const emit = defineEmits<{
           <FileDown :size="18" />
         </button>
 
-        <!-- Mine lagrede GPS-spor -->
-        <button
-          class="icon-btn btn-saved-tracks"
-          :class="{ active: isSavedTracksOpen }"
-          @click="emit('open-saved-tracks')"
-          title="Mine lagrede GPS-spor"
-          aria-label="Mine lagrede GPS-spor"
-        >
-          <FolderHeart :size="18" />
-          <span v-if="savedTracksCount && savedTracksCount > 0" class="btn-badge-count">
-            {{ savedTracksCount }}
-          </span>
-        </button>
-
         <!-- AIS Båttrafikk-knapp – kun synlig for admin -->
         <button
           v-if="isAdmin"
@@ -165,15 +147,13 @@ const emit = defineEmits<{
 
         <!-- Kommunegrenser-knapp -->
         <button
-          class="btn-municipalities"
+          class="icon-btn btn-municipalities"
           :class="{ active: showMunicipalities }"
           @click="emit('toggle-municipalities')"
           title="Slå av/på visning av kommunegrenser"
           aria-label="Slå av eller på visning av kommunegrenser"
         >
-          <MapIcon :size="16" class="map-icon" />
-          <span v-if="showMunicipalities" class="btn-municipalities-text">Grenser (På)</span>
-          <span v-else class="btn-municipalities-text">Grenser</span>
+          <MapIcon :size="18" />
         </button>
 
         <!-- Kartlag-knapp -->
@@ -210,12 +190,12 @@ const emit = defineEmits<{
         <!-- PWA Install-knapp (vises hvis tilgjengelig) -->
         <button
           v-if="showInstallPrompt"
-          class="btn-install"
+          class="icon-btn btn-install"
           @click="emit('install')"
           title="Installer som app på enheten"
+          aria-label="Installer som app på enheten"
         >
-          <Download :size="15" />
-          <span>Installer</span>
+          <Download :size="18" />
         </button>
 
         <div class="menu-divider" />
@@ -380,41 +360,6 @@ const emit = defineEmits<{
   border-color: #38bdf8;
 }
 
-.icon-btn.btn-saved-tracks {
-  position: relative;
-  color: #cbd5e1;
-}
-
-.icon-btn.btn-saved-tracks:hover {
-  color: #f97316;
-  border-color: rgba(249, 115, 22, 0.5);
-  background: rgba(249, 115, 22, 0.1);
-}
-
-.icon-btn.btn-saved-tracks.active {
-  background: rgba(249, 115, 22, 0.2);
-  border-color: #f97316;
-  color: #f97316;
-}
-
-.icon-btn.btn-saved-tracks .btn-badge-count {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  background: #ea580c;
-  color: white;
-  font-size: 10px;
-  font-weight: 700;
-  min-width: 15px;
-  height: 15px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 3px;
-  border: 1px solid #0f172a;
-}
-
 .btn-ais {
   display: flex;
   align-items: center;
@@ -449,51 +394,16 @@ const emit = defineEmits<{
   color: #fde68a;
 }
 
-.btn-municipalities {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #1e293b;
-  border: 1px solid #334155;
-  color: #94a3b8;
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-municipalities:hover {
-  background: #0284c7;
-  border-color: #38bdf8;
-  color: #ffffff;
-}
-
-.btn-municipalities.active {
-  background: linear-gradient(135deg, #0284c7, #0284c7);
-  border-color: #38bdf8;
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
-}
-
-.map-icon {
-  flex-shrink: 0;
-}
-
-.btn-install {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.icon-btn.btn-install {
   background: linear-gradient(135deg, #0284c7, #0369a1);
-  border: none;
+  border: 1px solid #38bdf8;
   color: white;
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
   box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
+}
+
+.icon-btn.btn-install:hover {
+  background: linear-gradient(135deg, #0369a1, #0284c7);
+  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.6);
 }
 
 .update-banner {
