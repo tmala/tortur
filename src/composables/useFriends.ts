@@ -577,6 +577,7 @@ export async function setCheckinVisibility(
       if (promises.length > 0) {
         await Promise.all(promises)
       }
+      clearFriendsCheckinsCache()
     }
   } catch (err) {
     console.warn('[useFriends] Kunne ikke lagre innsjekk-synlighet:', err)
@@ -708,6 +709,71 @@ export async function fetchFriendCheckins(friendUserId: string): Promise<Firebas
   }
 }
 
+interface CachedFriendCheckins {
+  checkins: FirebaseCheckinItem[]
+  fetchedAt: number
+}
+
+const friendCheckinsCache = new Map<string, CachedFriendCheckins>()
+const FRIEND_CHECKINS_CACHE_TTL_MS = 2 * 60 * 1000 // 2 minutter
+
+/**
+ * Tømmer hurtigbufferet for venners innsjekkinger (f.eks. ved endring av venner eller synlighet).
+ */
+export function clearFriendsCheckinsCache(): void {
+  friendCheckinsCache.clear()
+}
+
+/**
+ * Henter innsjekkinger for en venn, med minne-cache for å unngå gjentatte REST-kall.
+ */
+export async function fetchCachedFriendCheckins(
+  friendUserId: string,
+  forceRefresh = false
+): Promise<FirebaseCheckinItem[]> {
+  const now = Date.now()
+  const cached = friendCheckinsCache.get(friendUserId)
+  if (!forceRefresh && cached && now - cached.fetchedAt < FRIEND_CHECKINS_CACHE_TTL_MS) {
+    return cached.checkins
+  }
+  const checkins = await fetchFriendCheckins(friendUserId)
+  friendCheckinsCache.set(friendUserId, { checkins, fetchedAt: now })
+  return checkins
+}
+
+/**
+ * Henter alle innsjekkinger fra brukerens venner for en spesifikk turpost.
+ * Bruker minne-cache så oppslag mot venners noder ikke gjentas for hver turpost.
+ */
+export async function fetchFriendsCheckinsForTurpost(
+  turpostId: string | number,
+  friendUserIds?: string[]
+): Promise<FirebaseCheckinItem[]> {
+  if (!turpostId) return []
+
+  const targetIds = friendUserIds && friendUserIds.length > 0
+    ? friendUserIds
+    : friends.value.map(f => f.userId)
+
+  if (!targetIds || targetIds.length === 0) return []
+
+  const targetStr = String(turpostId)
+  const results = await Promise.all(
+    targetIds.map(fId => fetchCachedFriendCheckins(fId))
+  )
+
+  const matching: FirebaseCheckinItem[] = []
+  for (const list of results) {
+    for (const c of list) {
+      if (String(c.turpostId) === targetStr) {
+        matching.push(c)
+      }
+    }
+  }
+
+  return matching
+}
+
 export function useFriends() {
   const friendUserIds = computed(() => new Set(friends.value.map(f => f.userId)))
   const hasPendingRequests = computed(() => incomingRequests.value.length > 0)
@@ -739,6 +805,8 @@ export function useFriends() {
     setDefaultVisibility,
     setCheckinVisibility,
     getCheckinVisibility,
-    fetchFriendCheckins
+    fetchFriendCheckins,
+    fetchFriendsCheckinsForTurpost,
+    clearFriendsCheckinsCache
   }
 }

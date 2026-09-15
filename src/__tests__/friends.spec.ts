@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
-import { useFriends, registerPublicUser, searchPublicUsers, fetchFriendCheckins, type CheckinVisibility, type FriendUser, type FriendRequest } from '../composables/useFriends'
+import { useFriends, registerPublicUser, searchPublicUsers, fetchFriendCheckins, fetchFriendsCheckinsForTurpost, clearFriendsCheckinsCache, type CheckinVisibility, type FriendUser, type FriendRequest } from '../composables/useFriends'
 import * as friendsModule from '../composables/useFriends'
 import { useAuth } from '../composables/useAuth'
 import FriendProfileModal from '../components/FriendProfileModal.vue'
@@ -426,6 +426,66 @@ describe('useFriends - Friends system and check-in visibility', () => {
     expect(result[0]?.comments?.comm_1).toBeDefined()
     expect(result[0]?.comments?.comm_1?.text).toBe('Bra jobba!')
     expect(result[0]?.userId).toBe('friend_50')
+  })
+
+  it('fetchFriendsCheckinsForTurpost henter og cacher venners innsjekkinger for en gitt turpost', async () => {
+    clearFriendsCheckinsCache()
+    const trillebarCheckins = {
+      chk_rolland: {
+        id: 'chk_rolland',
+        userId: 'trillebar',
+        userName: 'Trillebar',
+        turpostId: 'tp_rollandsoksen',
+        turpostName: 'Rollandsoksen',
+        visibility: 'friends',
+        timestamp: '2026-09-12T10:00:00Z'
+      },
+      chk_annet: {
+        id: 'chk_annet',
+        userId: 'trillebar',
+        userName: 'Trillebar',
+        turpostId: 'tp_gavelen',
+        turpostName: 'Gavelen',
+        visibility: 'friends',
+        timestamp: '2026-09-12T11:00:00Z'
+      }
+    }
+
+    let fetchCount = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url)
+      if (urlStr.includes('/brukere/trillebar/friends_checkins.json')) {
+        fetchCount++
+        return { ok: true, json: async () => trillebarCheckins } as unknown as Response
+      }
+      return { ok: false, json: async () => ({}) } as unknown as Response
+    })
+
+    const { systemConfig } = useAuth()
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const { fetchFriendsCheckinsForTurpost } = useFriends()
+
+    // 1. Første oppslag for Rollandsoksen
+    const result1 = await fetchFriendsCheckinsForTurpost('tp_rollandsoksen', ['trillebar'])
+    expect(result1.length).toBe(1)
+    expect(result1[0]?.id).toBe('chk_rolland')
+    expect(result1[0]?.turpostId).toBe('tp_rollandsoksen')
+    expect(fetchCount).toBe(1)
+
+    // 2. Andre oppslag for annen turpost (Gavelen) – skal treffe minne-cache uten nytt REST-kall
+    const result2 = await fetchFriendsCheckinsForTurpost('tp_gavelen', ['trillebar'])
+    expect(result2.length).toBe(1)
+    expect(result2[0]?.id).toBe('chk_annet')
+    expect(fetchCount).toBe(1) // Fremdeles 1, fordi trillebars data var cachet!
+
+    // 3. Tøm cache og hent igjen – skal utløse nytt fetch
+    clearFriendsCheckinsCache()
+    await fetchFriendsCheckinsForTurpost('tp_rollandsoksen', ['trillebar'])
+    expect(fetchCount).toBe(2)
   })
 
   it('FriendProfileModal: starts with all check-ins minimized and expands on click', async () => {

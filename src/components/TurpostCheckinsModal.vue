@@ -39,7 +39,7 @@ const emit = defineEmits<{
 
 const { fetchTurpostCheckins } = useAuth()
 const { fetchPrivateCheckinsForSpot } = usePrivateTurposter()
-const { friends, isFriend } = useFriends()
+const { friends, isFriend, loadFriends, fetchFriendsCheckinsForTurpost } = useFriends()
 
 const checkins = ref<FirebaseCheckinItem[]>([])
 const privateCheckins = ref<FirebaseCheckinItem[]>([])
@@ -156,9 +156,36 @@ const loadCheckins = async () => {
   }
 
   try {
+    const currentPostId = props.turpost.id
+    const currentUid = props.currentUserId
+
     const promises: Promise<unknown>[] = []
     if (!props.turpost.isPrivate) {
-      promises.push(fetchTurpostCheckins(props.turpost.id).then((data) => (checkins.value = data)))
+      promises.push(
+        fetchTurpostCheckins(currentPostId).then((data) => {
+          data.forEach((item) => {
+            if (!checkins.value.some((c) => c.id === item.id)) {
+              checkins.value.push(item)
+            }
+          })
+        })
+      )
+
+      if (currentUid && currentUid !== 'guest') {
+        promises.push(
+          (async () => {
+            if (friends.value.length === 0) {
+              await loadFriends(currentUid)
+            }
+            const friendItems = await fetchFriendsCheckinsForTurpost(currentPostId)
+            friendItems.forEach((item) => {
+              if (!checkins.value.some((c) => c.id === item.id)) {
+                checkins.value.push(item)
+              }
+            })
+          })()
+        )
+      }
     }
     if (props.currentUserId && props.currentUserId !== 'guest') {
       const privateSpotIds = new Set<string>()
