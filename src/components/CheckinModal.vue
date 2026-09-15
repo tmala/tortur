@@ -209,7 +209,8 @@ const handleSubmit = async () => {
         turpostName: props.turpost.name,
         description: description.value.trim(),
         imageFile: fileToUpload,
-        trackId: selectedTrackId.value || undefined
+        trackId: selectedTrackId.value || undefined,
+        visibility: selectedVisibility.value
       })
       if (result.id) {
         await setCheckinVisibility(result.id, selectedVisibility.value, {

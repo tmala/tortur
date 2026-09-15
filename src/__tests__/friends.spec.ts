@@ -235,9 +235,9 @@ describe('useFriends - Friends system and check-in visibility', () => {
     expect(loaded).toBe('friends')
   })
 
-  it('setCheckinVisibility writes to checkins_visibility and patches checkin', async () => {
+  it('setCheckinVisibility writes to checkins_visibility, private_checkins and deletes from turposter when private', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      return { ok: true, json: async () => ({}) } as unknown as Response
+      return { ok: true, json: async () => ({ id: 'c_999', turpostId: 'tp_50' }) } as unknown as Response
     })
 
     const { systemConfig } = useAuth()
@@ -259,17 +259,17 @@ describe('useFriends - Friends system and check-in visibility', () => {
     )
     expect(visCall).toBeDefined()
 
-    // turposter/tp_50/c_999.json PATCH
+    // private_checkins/c_999.json
+    const privCall = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/brukere/user_me/private_checkins/c_999.json')
+    )
+    expect(privCall).toBeDefined()
+
+    // turposter/tp_50/c_999.json DELETE (skal slettes fra turpost når den er privat)
     const tpCall = fetchSpy.mock.calls.find(c =>
-      String(c[0]).includes('/turposter/tp_50/c_999.json') && c[1]?.method === 'PATCH'
+      String(c[0]).includes('/turposter/tp_50/c_999.json') && c[1]?.method === 'DELETE'
     )
     expect(tpCall).toBeDefined()
-
-    // brukere/user_me/checkins/c_999.json PATCH
-    const userCall = fetchSpy.mock.calls.find(c =>
-      String(c[0]).includes('/brukere/user_me/checkins/c_999.json') && c[1]?.method === 'PATCH'
-    )
-    expect(userCall).toBeDefined()
   })
 
   it('fetchFriendCheckins henter vennens innsjekkinger og ekskluderer private', async () => {
@@ -336,6 +336,48 @@ describe('useFriends - Friends system and check-in visibility', () => {
     // Ingen private
     expect(result.some(c => c.id === 'chk_secret')).toBe(false)
     expect(result.some(c => c.id === 'chk_spot')).toBe(false)
+  })
+
+  it('fetchFriendCheckins henter fra friends_checkins.json og kaller aldri rotnoden til brukeren', async () => {
+    const friendCheckinsData: Record<string, unknown> = {
+      chk_pub: {
+        id: 'chk_pub',
+        userId: 'friend_99',
+        turpostId: 'tp_1',
+        turpostName: 'Ulriken',
+        timestamp: '2026-09-10T10:00:00Z',
+        visibility: 'all'
+      }
+    }
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url)
+      if (urlStr.includes('/brukere/friend_99/friends_checkins.json')) {
+        return {
+          ok: true,
+          json: async () => friendCheckinsData
+        } as unknown as Response
+      }
+      return { ok: false, json: async () => ({}) } as unknown as Response
+    })
+
+    const { systemConfig } = useAuth()
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const { fetchFriendCheckins } = useFriends()
+    const result = await fetchFriendCheckins('friend_99')
+
+    expect(result.length).toBe(1)
+    expect(result[0]?.id).toBe('chk_pub')
+
+    // Sjekk at rotnoden ALDRI ble kalt
+    const rootCall = fetchSpy.mock.calls.find(c =>
+      String(c[0]).endsWith('/brukere/friend_99.json') || String(c[0]).includes('/brukere/friend_99.json?')
+    )
+    expect(rootCall).toBeUndefined()
   })
 
   it('fetchFriendCheckins fletter inn likes og kommentarer fra turposten', async () => {

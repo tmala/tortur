@@ -101,12 +101,13 @@ export async function loadFriends(userId: string): Promise<FriendUser[]> {
     for (const [fId, val] of Object.entries(data)) {
       if (!val) continue
       if (typeof val === 'object') {
+        const item = val as Record<string, unknown>
         list.push({
-          userId: (val as any).userId || fId,
-          userName: (val as any).userName || 'Venn',
-          email: (val as any).email || (val as any).userEmail || '',
-          avatarUrl: (val as any).avatarUrl || '',
-          since: (val as any).since || ''
+          userId: (typeof item.userId === 'string' ? item.userId : '') || fId,
+          userName: (typeof item.userName === 'string' ? item.userName : '') || 'Venn',
+          email: (typeof item.email === 'string' ? item.email : '') || (typeof item.userEmail === 'string' ? item.userEmail : '') || '',
+          avatarUrl: (typeof item.avatarUrl === 'string' ? item.avatarUrl : '') || '',
+          since: (typeof item.since === 'string' ? item.since : '') || ''
         })
       } else if (val === true) {
         list.push({
@@ -153,13 +154,14 @@ export async function loadFriendRequests(userId: string): Promise<{
     if (data.incoming && typeof data.incoming === 'object') {
       for (const [reqId, val] of Object.entries(data.incoming)) {
         if (val && typeof val === 'object') {
+          const item = val as Record<string, unknown>
           incoming.push({
-            fromUserId: (val as any).fromUserId || reqId,
-            toUserId: (val as any).toUserId || userId,
-            userName: (val as any).userName || 'Ukjent bruker',
-            userAvatar: (val as any).userAvatar || '',
-            userEmail: (val as any).userEmail || '',
-            timestamp: (val as any).timestamp || ''
+            fromUserId: (typeof item.fromUserId === 'string' ? item.fromUserId : '') || reqId,
+            toUserId: (typeof item.toUserId === 'string' ? item.toUserId : '') || userId,
+            userName: (typeof item.userName === 'string' ? item.userName : '') || 'Ukjent bruker',
+            userAvatar: (typeof item.userAvatar === 'string' ? item.userAvatar : '') || '',
+            userEmail: (typeof item.userEmail === 'string' ? item.userEmail : '') || '',
+            timestamp: (typeof item.timestamp === 'string' ? item.timestamp : '') || ''
           })
         }
       }
@@ -169,13 +171,14 @@ export async function loadFriendRequests(userId: string): Promise<{
     if (data.outgoing && typeof data.outgoing === 'object') {
       for (const [targetId, val] of Object.entries(data.outgoing)) {
         if (val && typeof val === 'object') {
+          const item = val as Record<string, unknown>
           outgoing.push({
-            fromUserId: (val as any).fromUserId || userId,
-            toUserId: (val as any).toUserId || targetId,
-            userName: (val as any).userName || 'Ukjent bruker',
-            userAvatar: (val as any).userAvatar || '',
-            userEmail: (val as any).userEmail || '',
-            timestamp: (val as any).timestamp || ''
+            fromUserId: (typeof item.fromUserId === 'string' ? item.fromUserId : '') || userId,
+            toUserId: (typeof item.toUserId === 'string' ? item.toUserId : '') || targetId,
+            userName: (typeof item.userName === 'string' ? item.userName : '') || 'Ukjent bruker',
+            userAvatar: (typeof item.userAvatar === 'string' ? item.userAvatar : '') || '',
+            userEmail: (typeof item.userEmail === 'string' ? item.userEmail : '') || '',
+            timestamp: (typeof item.timestamp === 'string' ? item.timestamp : '') || ''
           })
         }
       }
@@ -395,9 +398,9 @@ export async function searchPublicUsers(query: string = ''): Promise<PublicUser[
     if (!data || typeof data !== 'object') return []
 
     const q = query.trim().toLowerCase()
-    const allUsers: PublicUser[] = Object.values(data).filter(
-      (u: any) => u && typeof u === 'object' && u.userId
-    ) as PublicUser[]
+    const allUsers: PublicUser[] = (Object.values(data) as unknown[]).filter(
+      (u): u is PublicUser => Boolean(u && typeof u === 'object' && 'userId' in u && (u as Record<string, unknown>).userId)
+    )
 
     if (!q) return allUsers
 
@@ -497,7 +500,7 @@ export async function setCheckinVisibility(
       body: patchBody
     })
 
-    // 2. Patch også inn på selve sjekk-inn-objektene for rask lesing
+    // 2. Patch eller flytt til rett node basert på synlighet
     const jsonPatch = JSON.stringify({ visibility })
 
     if (opts?.isPrivate && opts?.userId && opts?.spotId) {
@@ -507,28 +510,70 @@ export async function setCheckinVisibility(
         headers: { 'Content-Type': 'application/json' },
         body: jsonPatch
       })
-    } else {
-      const promises: Promise<any>[] = []
-      if (opts?.turpostId) {
-        const turpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(opts.turpostId))}/${encodeURIComponent(checkinId)}.json`
-        promises.push(
-          fetchFirebase(turpostUrl, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: jsonPatch
-          })
-        )
+    } else if (opts?.userId) {
+      const uId = opts.userId
+      const turpostUrl = opts.turpostId ? `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(opts.turpostId))}/${encodeURIComponent(checkinId)}.json` : null
+      const friendsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(uId)}/friends_checkins/${encodeURIComponent(checkinId)}.json`
+      const privateUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(uId)}/private_checkins/${encodeURIComponent(checkinId)}.json`
+      const legacyCheckinsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(uId)}/checkins/${encodeURIComponent(checkinId)}.json`
+
+      const promises: Promise<unknown>[] = []
+
+      if (visibility === 'private') {
+        let itemToSave: FirebaseCheckinItem | null = null
+        const r1 = await fetchFirebase(friendsUrl)
+        if (r1.ok) itemToSave = (await r1.json()) as FirebaseCheckinItem | null
+        if (!itemToSave) {
+          const r2 = await fetchFirebase(legacyCheckinsUrl)
+          if (r2.ok) itemToSave = (await r2.json()) as FirebaseCheckinItem | null
+        }
+        if (itemToSave) {
+          itemToSave.visibility = 'private'
+          promises.push(fetchFirebase(privateUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(itemToSave) }))
+        } else {
+          promises.push(fetchFirebase(privateUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: jsonPatch }))
+        }
+        promises.push(fetchFirebase(friendsUrl, { method: 'DELETE' }).catch(() => {}))
+        promises.push(fetchFirebase(legacyCheckinsUrl, { method: 'DELETE' }).catch(() => {}))
+        if (turpostUrl) promises.push(fetchFirebase(turpostUrl, { method: 'DELETE' }).catch(() => {}))
+      } else if (visibility === 'friends') {
+        let itemToSave: FirebaseCheckinItem | null = null
+        const r1 = await fetchFirebase(privateUrl)
+        if (r1.ok) itemToSave = (await r1.json()) as FirebaseCheckinItem | null
+        if (!itemToSave) {
+          const r2 = await fetchFirebase(legacyCheckinsUrl)
+          if (r2.ok) itemToSave = (await r2.json()) as FirebaseCheckinItem | null
+        }
+        if (itemToSave) {
+          itemToSave.visibility = 'friends'
+          promises.push(fetchFirebase(friendsUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(itemToSave) }))
+          promises.push(fetchFirebase(privateUrl, { method: 'DELETE' }).catch(() => {}))
+        } else {
+          promises.push(fetchFirebase(friendsUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: jsonPatch }))
+        }
+        promises.push(fetchFirebase(legacyCheckinsUrl, { method: 'DELETE' }).catch(() => {}))
+        if (turpostUrl) promises.push(fetchFirebase(turpostUrl, { method: 'DELETE' }).catch(() => {}))
+      } else if (visibility === 'all') {
+        let itemToSave: FirebaseCheckinItem | null = null
+        const r1 = await fetchFirebase(privateUrl)
+        if (r1.ok) itemToSave = (await r1.json()) as FirebaseCheckinItem | null
+        if (!itemToSave) {
+          const r2 = await fetchFirebase(legacyCheckinsUrl)
+          if (r2.ok) itemToSave = (await r2.json()) as FirebaseCheckinItem | null
+        }
+        if (itemToSave) {
+          itemToSave.visibility = 'all'
+          const itemJson = JSON.stringify(itemToSave)
+          promises.push(fetchFirebase(friendsUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }))
+          if (turpostUrl) promises.push(fetchFirebase(turpostUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }))
+          promises.push(fetchFirebase(privateUrl, { method: 'DELETE' }).catch(() => {}))
+        } else {
+          promises.push(fetchFirebase(friendsUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: jsonPatch }))
+          if (turpostUrl) promises.push(fetchFirebase(turpostUrl, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: jsonPatch }))
+        }
+        promises.push(fetchFirebase(legacyCheckinsUrl, { method: 'DELETE' }).catch(() => {}))
       }
-      if (opts?.userId) {
-        const userUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(opts.userId)}/checkins/${encodeURIComponent(checkinId)}.json`
-        promises.push(
-          fetchFirebase(userUrl, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: jsonPatch
-          })
-        )
-      }
+
       if (promises.length > 0) {
         await Promise.all(promises)
       }
@@ -559,20 +604,10 @@ export async function getCheckinVisibility(checkinId: string): Promise<CheckinVi
   }
 }
 
-const RESERVED_USER_SUBKEYS = new Set([
-  'checkins',
-  'my_spots',
-  'my_spots_checkins',
-  'tracks',
-  'friends',
-  'friend_requests',
-  'settings'
-])
-
 /**
  * Henter innsjekkinger for en gitt venn fra Firebase.
- * Filtrerer ut private innsjekkinger (visibility: 'private' eller spot_).
- * Viser 'all' og 'friends' innsjekkinger.
+ * Henter primært fra /friends_checkins/ (med fallback til /checkins/).
+ * Filtrerer ut eventuelle private innsjekkinger som forsvar.
  */
 export async function fetchFriendCheckins(friendUserId: string): Promise<FirebaseCheckinItem[]> {
   if (!friendUserId) return []
@@ -582,41 +617,32 @@ export async function fetchFriendCheckins(friendUserId: string): Promise<Firebas
   try {
     const checkinMap = new Map<string, FirebaseCheckinItem>()
 
-    // 1. Hent fra /checkins/
-    const checkinsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}/checkins.json`
-    const res = await fetchFirebase(checkinsUrl)
-    if (res.ok) {
-      const rawData = await res.json()
-      if (rawData && typeof rawData === 'object') {
-        for (const [key, val] of Object.entries(rawData)) {
+    // 1. Hent fra friends_checkins.json (delte turer)
+    const friendsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}/friends_checkins.json`
+    const friendsRes = await fetchFirebase(friendsUrl)
+    if (friendsRes.ok) {
+      const data = (await friendsRes.json()) as Record<string, Record<string, unknown>> | null
+      if (data && typeof data === 'object') {
+        for (const [key, val] of Object.entries(data)) {
           if (val && typeof val === 'object') {
-            const item = { ...(val as any), id: (val as any).id || key }
+            const item = { ...val, id: (val.id as string) || key } as unknown as FirebaseCheckinItem
             checkinMap.set(key, item)
           }
         }
       }
     }
 
-    // 2. Hent også fra rotnivå (hvis vennen har legacy innsjekkinger som ikke er flyttet enda)
-    const rootUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}.json`
-    const rootRes = await fetchFirebase(rootUrl)
-    if (rootRes.ok) {
-      const rootData = await rootRes.json()
-      if (rootData && typeof rootData === 'object') {
-        for (const [key, val] of Object.entries(rootData)) {
-          if (RESERVED_USER_SUBKEYS.has(key)) continue
-          if (val && typeof val === 'object') {
-            const existing = checkinMap.get(key)
-            if (existing) {
-              checkinMap.set(key, {
-                ...val,
-                ...existing,
-                id: existing.id || (val as any).id || key,
-                likes: existing.likes || (val as any).likes,
-                comments: existing.comments || (val as any).comments
-              })
-            } else {
-              checkinMap.set(key, { ...(val as any), id: (val as any).id || key })
+    // 2. Hvis friends_checkins var tom, prøv fallback til legacy checkins.json
+    if (checkinMap.size === 0) {
+      const legacyUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}/checkins.json`
+      const legacyRes = await fetchFirebase(legacyUrl)
+      if (legacyRes.ok) {
+        const rawData = (await legacyRes.json()) as Record<string, Record<string, unknown>> | null
+        if (rawData && typeof rawData === 'object') {
+          for (const [key, val] of Object.entries(rawData)) {
+            if (val && typeof val === 'object') {
+              const item = { ...val, id: (val.id as string) || key } as unknown as FirebaseCheckinItem
+              checkinMap.set(key, item)
             }
           }
         }

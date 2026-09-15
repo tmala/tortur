@@ -260,18 +260,46 @@ export function usePrivateTurposter() {
     if (!config) return []
 
     try {
+      const items: FirebaseCheckinItem[] = []
+
+      // 1. my_spots_checkins (for egne opprettede private turposter)
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}.json`
       const res = await fetchFirebase(url)
-      if (!res.ok) return []
-      const data = await res.json()
-      if (!data || typeof data !== 'object') return []
-      return Object.values(data)
-        .filter((item): item is FirebaseCheckinItem => Boolean(item && typeof item === 'object' && (item as Record<string, unknown>).turpostId != null))
-        .map(item => ({
-          ...item,
-          isPrivate: true,
-          spotId: spotId
-        }))
+      if (res.ok) {
+        const data = await res.json()
+        if (data && typeof data === 'object') {
+          const spotItems = Object.values(data)
+            .filter((item): item is FirebaseCheckinItem => Boolean(item && typeof item === 'object' && (item as Record<string, unknown>).turpostId != null))
+            .map(item => ({
+              ...item,
+              isPrivate: true,
+              spotId: spotId
+            }))
+          items.push(...spotItems)
+        }
+      }
+
+      // 2. private_checkins (for private innsjekkinger på offentlige turposter)
+      const privUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/private_checkins.json`
+      const privRes = await fetchFirebase(privUrl)
+      if (privRes.ok) {
+        const privData = await privRes.json()
+        if (privData && typeof privData === 'object') {
+          for (const item of Object.values(privData)) {
+            if (item && typeof item === 'object') {
+              const chk = item as unknown as FirebaseCheckinItem
+              if (String(chk.turpostId) === String(spotId) && !items.some(c => c.id === chk.id)) {
+                items.push({
+                  ...chk,
+                  isPrivate: true
+                })
+              }
+            }
+          }
+        }
+      }
+
+      return items
     } catch (err) {
       console.warn('[usePrivateTurposter] Kunne ikke hente innsjekkinger for spot:', err)
       return []
