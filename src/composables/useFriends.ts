@@ -610,8 +610,11 @@ export async function getCheckinVisibility(checkinId: string): Promise<CheckinVi
  * Henter primært fra /friends_checkins/ (med fallback til /checkins/).
  * Filtrerer ut eventuelle private innsjekkinger som forsvar.
  */
-export async function fetchFriendCheckins(friendUserId: string): Promise<FirebaseCheckinItem[]> {
-  if (!friendUserId) return []
+export async function fetchFriendCheckins(
+  friendUserId: string,
+  options?: { enrichTurposts?: boolean; targetTurpostId?: string | number }
+): Promise<FirebaseCheckinItem[]> {
+  if (!friendUserId || friendUserId === 'guest') return []
   const config = await getFirebaseConfig()
   if (!config) return []
 
@@ -671,31 +674,41 @@ export async function fetchFriendCheckins(friendUserId: string): Promise<Firebas
 
     // 5. Hent ferske reaksjoner og kommentarer direkte fra turpost-noden i Firebase
     // Slik at likes/kommentarer lagt inn på turposten alltid vises i venneprofilen
-    await Promise.all(
-      filtered.map(async (item) => {
-        if (!item.turpostId || item.isPrivate) return
-        try {
-          const turpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`
-          const tpRes = await fetchFirebase(turpostUrl)
-          if (tpRes.ok) {
-            const tpData = await tpRes.json()
-            if (tpData && typeof tpData === 'object') {
-              if (tpData.likes) {
-                item.likes = { ...(item.likes || {}), ...tpData.likes }
-              }
-              if (tpData.comments) {
-                item.comments = { ...(item.comments || {}), ...tpData.comments }
-              }
-              if (!item.turpostName && tpData.turpostName) {
-                item.turpostName = tpData.turpostName
+    // For optimal ytelse berikes kun relevante turposter hvis targetTurpostId er angitt.
+    const shouldEnrich = options?.enrichTurposts !== false
+    const targetTurpostIdStr = options?.targetTurpostId != null ? String(options.targetTurpostId) : null
+
+    if (shouldEnrich) {
+      const itemsToEnrich = targetTurpostIdStr
+        ? filtered.filter(item => String(item.turpostId) === targetTurpostIdStr)
+        : filtered
+
+      await Promise.all(
+        itemsToEnrich.map(async (item) => {
+          if (!item.turpostId || item.isPrivate) return
+          try {
+            const turpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`
+            const tpRes = await fetchFirebase(turpostUrl)
+            if (tpRes.ok) {
+              const tpData = await tpRes.json()
+              if (tpData && typeof tpData === 'object') {
+                if (tpData.likes) {
+                  item.likes = { ...(item.likes || {}), ...tpData.likes }
+                }
+                if (tpData.comments) {
+                  item.comments = { ...(item.comments || {}), ...tpData.comments }
+                }
+                if (!item.turpostName && tpData.turpostName) {
+                  item.turpostName = tpData.turpostName
+                }
               }
             }
+          } catch {
+            // Ignorer nettverksfeil per post
           }
-        } catch {
-          // Ignorer nettverksfeil per post
-        }
-      })
-    )
+        })
+      )
+    }
 
     // Sorter nyeste først
     return filtered.sort((a, b) => {
@@ -729,14 +742,15 @@ export function clearFriendsCheckinsCache(): void {
  */
 export async function fetchCachedFriendCheckins(
   friendUserId: string,
-  forceRefresh = false
+  forceRefresh = false,
+  targetTurpostId?: string | number
 ): Promise<FirebaseCheckinItem[]> {
   const now = Date.now()
   const cached = friendCheckinsCache.get(friendUserId)
   if (!forceRefresh && cached && now - cached.fetchedAt < FRIEND_CHECKINS_CACHE_TTL_MS) {
     return cached.checkins
   }
-  const checkins = await fetchFriendCheckins(friendUserId)
+  const checkins = await fetchFriendCheckins(friendUserId, { targetTurpostId })
   friendCheckinsCache.set(friendUserId, { checkins, fetchedAt: now })
   return checkins
 }
@@ -759,7 +773,7 @@ export async function fetchFriendsCheckinsForTurpost(
 
   const targetStr = String(turpostId)
   const results = await Promise.all(
-    targetIds.map(fId => fetchCachedFriendCheckins(fId))
+    targetIds.map(fId => fetchCachedFriendCheckins(fId, false, targetStr))
   )
 
   const matching: FirebaseCheckinItem[] = []

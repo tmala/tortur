@@ -217,7 +217,7 @@ const onDragMove = (e: PointerEvent) => {
 
     const minX = -currentLeft + 10
     const maxX = window.innerWidth - (currentLeft + 80)
-    const minY = -currentTop + 10
+    const minY = 0
     const maxY = window.innerHeight - (currentTop + 40)
 
     newX = Math.max(minX, Math.min(maxX, newX))
@@ -344,9 +344,10 @@ onUnmounted(() => {
                 :disabled="isRefreshing"
                 @click="handleForceRefresh"
                 title="Søk etter ny versjon og last inn på nytt"
+                aria-label="Søk etter ny versjon og last inn på nytt"
               >
                 <RotateCw :size="14" :class="{ 'spin-refresh': isRefreshing }" />
-                <span>{{ isRefreshing ? 'Laster...' : 'Oppdater' }}</span>
+                <span class="btn-text">{{ isRefreshing ? 'Laster...' : 'Oppdater' }}</span>
               </button>
 
               <!-- Admin-modus toggle (kun synlig for admin-brukere) -->
@@ -356,15 +357,21 @@ onUnmounted(() => {
                 :class="{ active: props.isAdminModeActive }"
                 @click="emit('toggle-admin-mode')"
                 :title="props.isAdminModeActive ? 'Deaktiver admin-modus' : 'Aktiver admin-modus'"
+                :aria-label="props.isAdminModeActive ? 'Deaktiver admin-modus' : 'Aktiver admin-modus'"
               >
                 <ShieldCheck :size="15" />
-                <span>{{ props.isAdminModeActive ? 'Admin: PÅ' : 'Admin: AV' }}</span>
+                <span class="btn-text">{{ props.isAdminModeActive ? 'Admin: PÅ' : 'Admin: AV' }}</span>
               </button>
 
               <!-- Logg ut -->
-              <button class="btn-profile-logout" @click="emit('logout')" title="Logg ut av TorTur">
+              <button
+                class="btn-profile-logout"
+                @click="emit('logout')"
+                title="Logg ut av TorTur"
+                aria-label="Logg ut av TorTur"
+              >
                 <LogOut :size="14" />
-                <span>Logg ut</span>
+                <span class="btn-text">Logg ut</span>
               </button>
             </div>
           </div>
@@ -481,15 +488,16 @@ onUnmounted(() => {
   z-index: 10000;
   background: rgba(0, 0, 0, 0.3);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 16px;
+  padding: calc(76px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px;
+  box-sizing: border-box;
 }
 
 .profile-modal-card {
   width: 100%;
   max-width: 580px;
-  max-height: 90vh;
+  max-height: calc(100dvh - 76px - env(safe-area-inset-top, 0px) - 16px - env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   background: rgba(26, 35, 50, 0.95);
@@ -873,6 +881,32 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+@media (max-width: 480px) {
+  .profile-modal-header {
+    padding: 11px 14px 5px;
+    gap: 7px;
+  }
+
+  .profile-header-actions .btn-text {
+    display: none;
+  }
+
+  .btn-profile-refresh,
+  .btn-admin-toggle,
+  .btn-profile-logout {
+    padding: 5px 8px;
+    justify-content: center;
+  }
+
+  .section-divider {
+    padding: 10px 14px 3px;
+  }
+
+  .checkins-scroll-area {
+    padding: 4px 14px 14px;
+  }
 }
 
 

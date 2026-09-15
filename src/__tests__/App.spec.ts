@@ -642,6 +642,95 @@ describe('TurpostCheckinsModal', () => {
     const quickCheckinBtn = document.body.querySelector('.btn-checkin-quick') as HTMLButtonElement
     expect(quickCheckinBtn.disabled).toBe(true)
   })
+
+  it('displays user own checkin with visibility friends immediately without showing empty state', async () => {
+    const { useAppStateStore } = await import('../stores/appState')
+    const appState = useAppStateStore()
+    appState.myCheckins = [
+      {
+        id: 'chk_rollandsoksen_user',
+        turpostId: 'tp_rollandsoksen',
+        turpostName: 'Rollandsoksen',
+        userId: 'user_me',
+        userName: 'Min Bruker',
+        userAvatar: '',
+        imageUrl: '',
+        timestamp: '2026-09-15T12:00:00Z',
+        visibility: 'friends',
+        description: 'Fin tur til Rollandsoksen i solnedgang'
+      }
+    ]
+
+    const samplePost = {
+      id: 'tp_rollandsoksen',
+      name: 'Rollandsoksen',
+      lat: 60.4545,
+      lng: 5.3262,
+      alt: 186
+    }
+
+    mount(TurpostCheckinsModal, {
+      props: {
+        isOpen: true,
+        turpost: samplePost,
+        isLoggedIn: true,
+        hasVisited: true,
+        currentUserId: 'user_me'
+      }
+    })
+
+    await flushPromises()
+    const text = document.body.textContent || ''
+    expect(text).not.toContain('Ingen innsjekkinger enda')
+    expect(text).toContain('Rollandsoksen')
+    expect(text).toContain('Fin tur til Rollandsoksen i solnedgang')
+    expect(text).toContain('Deg')
+    expect(text).toContain('Venner')
+  })
+
+  it('displays user own checkin with visibility private with Kun meg tag', async () => {
+    const { useAppStateStore } = await import('../stores/appState')
+    const appState = useAppStateStore()
+    appState.myCheckins = [
+      {
+        id: 'chk_priv_user',
+        turpostId: 'tp_rollandsoksen',
+        turpostName: 'Rollandsoksen',
+        userId: 'user_me',
+        userName: 'Min Bruker',
+        userAvatar: '',
+        imageUrl: '',
+        timestamp: '2026-09-15T12:00:00Z',
+        visibility: 'private',
+        description: 'Hemmelig tur til toppen'
+      }
+    ]
+
+    const samplePost = {
+      id: 'tp_rollandsoksen',
+      name: 'Rollandsoksen',
+      lat: 60.4545,
+      lng: 5.3262,
+      alt: 186
+    }
+
+    mount(TurpostCheckinsModal, {
+      props: {
+        isOpen: true,
+        turpost: samplePost,
+        isLoggedIn: true,
+        hasVisited: true,
+        currentUserId: 'user_me'
+      }
+    })
+
+    await flushPromises()
+    const text = document.body.textContent || ''
+    expect(text).not.toContain('Ingen innsjekkinger enda')
+    expect(text).toContain('Hemmelig tur til toppen')
+    expect(text).toContain('Deg')
+    expect(text).toContain('Kun meg')
+  })
 })
 
 describe('UserProfileModal', () => {

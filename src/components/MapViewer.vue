@@ -817,8 +817,6 @@ onMounted(() => {
     zoomControl: false
   })
 
-  L.control.zoom({ position: 'topright' }).addTo(map)
-
   switchLayer(props.activeLayer || 'norgeskart')
 
   turpostsLayerGroup = L.layerGroup().addTo(map)

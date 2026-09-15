@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted, nextTick } from 'vue'
-import { ThumbsUp, MessageSquare, Send, Trash2, User, Loader2 } from 'lucide-vue-next'
+import { ThumbsUp, MessageSquare, Send, Trash2, User, Loader2, Pencil } from 'lucide-vue-next'
 import type {
   FirebaseCheckinItem,
   CheckinReactionType,
@@ -9,15 +9,23 @@ import type {
 } from '@/composables/useAuth'
 import { useCheckinSocial, REACTION_OPTIONS } from '@/composables/useCheckinSocial'
 
-const props = defineProps<{
-  checkin: FirebaseCheckinItem
-  currentUserId?: string
-  isPrivate?: boolean
-  spotId?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    checkin: FirebaseCheckinItem
+    currentUserId?: string
+    isPrivate?: boolean
+    spotId?: string
+    showEditButton?: boolean
+  }>(),
+  {
+    isPrivate: false,
+    showEditButton: false,
+  }
+)
 
 const emit = defineEmits<{
   (e: 'updated', updatedCheckin: FirebaseCheckinItem): void
+  (e: 'edit'): void
 }>()
 
 const {
@@ -330,6 +338,19 @@ onUnmounted(() => {
       >
         <MessageSquare :size="13" />
         <span>Kommenter</span>
+      </button>
+
+      <!-- Rediger-knapp for egne innsjekkinger -->
+      <button
+        v-if="showEditButton && isOwnCheckin"
+        type="button"
+        class="btn-social-action btn-edit-action"
+        title="Rediger eller slett denne innsjekkingen"
+        aria-label="Rediger eller slett denne innsjekkingen"
+        @click="emit('edit')"
+      >
+        <Pencil :size="13" />
+        <span>Edit</span>
       </button>
     </div>
 

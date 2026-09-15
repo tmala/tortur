@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
-import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Trash2, Pencil, Globe, Users, Lock, ChevronDown, Route } from 'lucide-vue-next'
+import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Trash2, Globe, Users, Lock, ChevronDown, Route } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
@@ -37,9 +37,11 @@ const emit = defineEmits<{
   (e: 'checkin-updated'): void
 }>()
 
-const { fetchTurpostCheckins } = useAuth()
+const { fetchTurpostCheckins, fetchMyCheckins } = useAuth()
 const { fetchPrivateCheckinsForSpot } = usePrivateTurposter()
 const { friends, isFriend, loadFriends, fetchFriendsCheckinsForTurpost } = useFriends()
+const trackStore = useGpsTrackStore()
+const appState = useAppStateStore()
 
 const checkins = ref<FirebaseCheckinItem[]>([])
 const privateCheckins = ref<FirebaseCheckinItem[]>([])
@@ -155,11 +157,33 @@ const loadCheckins = async () => {
     activeTab.value = 'public'
   }
 
-  try {
-    const currentPostId = props.turpost.id
-    const currentUid = props.currentUserId
+  const currentPostId = props.turpost.id
+  const currentUid = props.currentUserId
+  const matchingPrivateSpotId = props.matchingPrivateSpot?.id
 
+  // 1. Umiddelbar visning av innlogget brukers egne innsjekkinger fra appState.myCheckins (0 ms forsinkelse)
+  if (currentUid && currentUid !== 'guest') {
+    const myMatching = appState.myCheckins.filter((c) => {
+      const pId = String(c.turpostId)
+      return pId === String(currentPostId) || (matchingPrivateSpotId && pId === String(matchingPrivateSpotId))
+    })
+
+    myMatching.forEach((item) => {
+      if (!checkins.value.some((c) => c.id === item.id)) {
+        checkins.value.push(item)
+      }
+      if (item.isPrivate || (matchingPrivateSpotId && String(item.turpostId) === String(matchingPrivateSpotId))) {
+        if (!privateCheckins.value.some((c) => c.id === item.id)) {
+          privateCheckins.value.push(item)
+        }
+      }
+    })
+  }
+
+  try {
     const promises: Promise<unknown>[] = []
+
+    // 2. Offentlige innsjekkinger for turposten
     if (!props.turpost.isPrivate) {
       promises.push(
         fetchTurpostCheckins(currentPostId).then((data) => {
@@ -171,6 +195,7 @@ const loadCheckins = async () => {
         })
       )
 
+      // 3. Venners innsjekkinger for turposten
       if (currentUid && currentUid !== 'guest') {
         promises.push(
           (async () => {
@@ -187,6 +212,8 @@ const loadCheckins = async () => {
         )
       }
     }
+
+    // 4. Private innsjekkinger fra databasen for dette punktet
     if (props.currentUserId && props.currentUserId !== 'guest') {
       const privateSpotIds = new Set<string>()
       if (props.turpost.isPrivate) {
@@ -205,11 +232,35 @@ const loadCheckins = async () => {
               if (!privateCheckins.value.some((c) => c.id === item.id)) {
                 privateCheckins.value.push(item)
               }
+              // Egne private innsjekkinger på dette punktet skal også vises i feeden for turposten for forfatteren selv
+              if (!checkins.value.some((c) => c.id === item.id)) {
+                checkins.value.push(item)
+              }
+            })
+          })
+        )
+      }
+
+      // Hvis appState.myCheckins var tom, oppfrisk i bakgrunnen
+      if (appState.myCheckins.length === 0) {
+        promises.push(
+          fetchMyCheckins().then((myItems) => {
+            myItems.forEach((item) => {
+              if (!appState.myCheckins.some((c) => c.id === item.id)) {
+                appState.myCheckins.push(item)
+              }
+              const pId = String(item.turpostId)
+              if (pId === String(currentPostId) || (matchingPrivateSpotId && pId === String(matchingPrivateSpotId))) {
+                if (!checkins.value.some((c) => c.id === item.id)) {
+                  checkins.value.push(item)
+                }
+              }
             })
           })
         )
       }
     }
+
     await Promise.all(promises)
 
     // Hvis brukeren åpner en turpost der det kun er private innsjekkinger og ingen fane ble spesifisert:
@@ -231,6 +282,15 @@ function handleCheckinEdited(updatedItem: FirebaseCheckinItem) {
   if (idx !== -1) {
     targetArray.value[idx] = { ...targetArray.value[idx], ...updatedItem }
   }
+  const otherArray = activeTab.value === 'private' ? checkins : privateCheckins
+  const otherIdx = otherArray.value.findIndex((c) => c.id === updatedItem.id)
+  if (otherIdx !== -1) {
+    otherArray.value[otherIdx] = { ...otherArray.value[otherIdx], ...updatedItem }
+  }
+  const appIdx = appState.myCheckins.findIndex((c) => c.id === updatedItem.id)
+  if (appIdx !== -1) {
+    appState.myCheckins[appIdx] = { ...appState.myCheckins[appIdx], ...updatedItem }
+  }
   emit('checkin-updated')
   editingCheckin.value = null
 }
@@ -241,12 +301,22 @@ function handleSocialUpdated(updatedItem: FirebaseCheckinItem) {
   if (idx !== -1) {
     targetArray.value[idx] = { ...targetArray.value[idx], ...updatedItem }
   }
+  const otherArray = activeTab.value === 'private' ? checkins : privateCheckins
+  const otherIdx = otherArray.value.findIndex((c) => c.id === updatedItem.id)
+  if (otherIdx !== -1) {
+    otherArray.value[otherIdx] = { ...otherArray.value[otherIdx], ...updatedItem }
+  }
+  const appIdx = appState.myCheckins.findIndex((c) => c.id === updatedItem.id)
+  if (appIdx !== -1) {
+    appState.myCheckins[appIdx] = { ...appState.myCheckins[appIdx], ...updatedItem }
+  }
   emit('checkin-updated')
 }
 
 function handleCheckinDeleted(deletedId: string) {
   checkins.value = checkins.value.filter((c) => c.id !== deletedId)
   privateCheckins.value = privateCheckins.value.filter((c) => c.id !== deletedId)
+  appState.myCheckins = appState.myCheckins.filter((c) => c.id !== deletedId)
   editingCheckin.value = null
   emit('checkin-deleted', deletedId)
   if (activeTab.value === 'private') {
@@ -265,8 +335,6 @@ function handleDeletePrivateTurpost() {
 
 const modalRef = ref<HTMLElement | null>(null)
 const dragPosition = ref({ x: 0, y: 0 })
-const trackStore = useGpsTrackStore()
-const appState = useAppStateStore()
 
 async function handleViewTrackOnMap(item: FirebaseCheckinItem) {
   if (!item.trackId) return
@@ -362,6 +430,25 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => appState.myCheckins.length,
+  () => {
+    if (props.isOpen && props.turpost && props.currentUserId) {
+      const currentPostId = String(props.turpost.id)
+      const matchingId = props.matchingPrivateSpot ? String(props.matchingPrivateSpot.id) : null
+      const myMatching = appState.myCheckins.filter((c) => {
+        const pId = String(c.turpostId)
+        return pId === currentPostId || (matchingId && pId === matchingId)
+      })
+      myMatching.forEach((item) => {
+        if (!checkins.value.some((c) => c.id === item.id)) {
+          checkins.value.push(item)
+        }
+      })
+    }
+  }
 )
 
 watch(
@@ -582,32 +669,6 @@ onUnmounted(() => {
                   </div>
 
                   <div class="item-header-right">
-                    <!-- Hurtigknapp for tilknyttet GPS-spor -->
-                    <button
-                      v-if="item.trackId"
-                      type="button"
-                      class="btn-track-header-badge"
-                      title="Vis tilknyttet GPS-spor på kartet"
-                      aria-label="Vis GPS-spor på kart"
-                      @click.stop="handleViewTrackOnMap(item)"
-                    >
-                      <Route :size="12" />
-                      <span>GPS-spor</span>
-                    </button>
-
-                    <!-- Handlinger for egne innsjekkinger (både felles og private) -->
-                    <div v-if="item.userId === currentUserId" class="checkin-item-actions">
-                      <button
-                        type="button"
-                        class="btn-item-action"
-                        @click.stop="editingCheckin = item"
-                        title="Rediger eller slett denne innsjekkingen"
-                      >
-                        <Pencil :size="12" />
-                        <span>Edit</span>
-                      </button>
-                    </div>
-
                     <!-- Chevron for ekspandér / minimer -->
                     <ChevronDown
                       :size="16"
@@ -627,12 +688,12 @@ onUnmounted(() => {
                     <button
                       type="button"
                       class="btn-view-attached-track"
-                      title="Vis tilknyttet GPS-spor på kartet"
-                      aria-label="Vis GPS-spor på kart"
+                      title="Vis spor på kart"
+                      aria-label="Vis spor på kart"
                       @click.stop="handleViewTrackOnMap(item)"
                     >
                       <Route :size="13" />
-                      <span>Vis tilknyttet GPS-spor på kart</span>
+                      <span>Vis spor på kart</span>
                     </button>
                   </div>
 
@@ -644,13 +705,15 @@ onUnmounted(() => {
                     </div>
                   </div>
 
-                  <!-- Reaksjoner og kommentarer -->
+                  <!-- Reaksjoner, kommentarer og handlinger -->
                   <CheckinSocialSection
                     :checkin="item"
                     :current-user-id="currentUserId"
                     :is-private="activeTab === 'private'"
                     :spot-id="matchingPrivateSpot ? String(matchingPrivateSpot.id) : (turpost?.isPrivate ? String(turpost.id) : undefined)"
+                    :show-edit-button="true"
                     @updated="handleSocialUpdated"
+                    @edit="editingCheckin = item"
                   />
                 </div>
               </div>
@@ -714,17 +777,17 @@ onUnmounted(() => {
   inset: 0;
   z-index: 1300;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: rgba(0, 0, 0, 0.3);
-  padding: 16px;
+  padding: calc(env(safe-area-inset-top, 0px) + clamp(60px, 8vh, 80px)) 16px 16px 16px;
   box-sizing: border-box;
 }
 
 .checkins-card {
   width: 100%;
   max-width: 500px;
-  max-height: 85vh;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - clamp(60px, 8vh, 80px) - 24px);
   background: #0f172a;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
@@ -1293,82 +1356,7 @@ onUnmounted(() => {
   color: #fca5a5;
 }
 
-.checkin-item-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
 
-.btn-track-header-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  border-radius: 6px;
-  color: #34d399;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-track-header-badge:hover {
-  background: rgba(16, 185, 129, 0.28);
-  color: #6ee7b7;
-  border-color: rgba(16, 185, 129, 0.5);
-}
-
-.btn-item-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 7px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  color: #e2e8f0;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-item-action:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: #ffffff;
-}
-
-.btn-item-action:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-item-action.danger-subtle {
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
-}
-
-.btn-item-action.danger-subtle:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.18);
-  border-color: rgba(239, 68, 68, 0.4);
-}
-
-.btn-item-action.danger {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #f87171;
-}
-
-.btn-item-action.danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: #ef4444;
-  color: #fef2f2;
-}
 
 .user-details .date {
   font-size: 11px;

@@ -54,54 +54,51 @@ const formatDate = (isoString?: string) => {
         @click="emit('toggle-expand')"
         title="Klikk for å vise/skjule detaljer og bilde"
       >
-        <div class="turpost-name-row">
-          <CheckCircle2 :size="16" class="check-icon" />
-          <span
-            class="turpost-heading"
-            :title="item.turpostName || 'Turpost ' + item.turpostId"
-          >
-            {{ item.turpostName || 'Turpost ' + item.turpostId }}
-          </span>
+        <div class="checkin-header-content">
+          <!-- Linje 1: Ikon + Navn på turposten -->
+          <div class="turpost-name-row">
+            <CheckCircle2 :size="16" class="check-icon" />
+            <span
+              class="turpost-heading"
+              :title="item.turpostName || 'Turpost ' + item.turpostId"
+            >
+              {{ item.turpostName || 'Turpost ' + item.turpostId }}
+            </span>
+          </div>
+
+          <!-- Linje 2: Dato og tid under navnet -->
+          <div class="checkin-meta-row">
+            <span class="checkin-date-text">{{ formatDate(item.timestamp) }}</span>
+          </div>
+        </div>
+
+        <!-- Helt til høyre i panelet: Ikon for synlighet og pil -->
+        <div class="checkin-header-right">
           <span v-if="item.isPrivate" class="private-badge-pill" title="Privat turpost">
-            <Lock :size="10" />
-            <span>Privat</span>
+            <Lock :size="11" />
+            <span class="badge-text">Privat</span>
           </span>
           <span
             v-else-if="item.visibility === 'private'"
             class="visibility-badge-pill private"
             title="Synlighet: Kun meg"
           >
-            <Lock :size="10" />
-            <span>Kun meg</span>
+            <Lock :size="11" />
+            <span class="badge-text">Kun meg</span>
           </span>
           <span
             v-else-if="item.visibility === 'friends'"
             class="visibility-badge-pill friends"
             title="Synlighet: Mine venner"
           >
-            <Users :size="10" />
-            <span>Venner</span>
+            <Users :size="11" />
+            <span class="badge-text">Venner</span>
           </span>
           <span v-else class="visibility-badge-pill all" title="Synlighet: Alle">
-            <Globe :size="10" />
-            <span>Alle</span>
+            <Globe :size="11" />
+            <span class="badge-text">Alle</span>
           </span>
-        </div>
-        <div class="checkin-header-right">
-          <button
-            v-if="item.trackId"
-            type="button"
-            class="header-track-badge"
-            title="Vis tilknyttet GPS-spor på kart"
-            aria-label="Vis GPS-spor på kart"
-            @click.stop="emit('view-track', item)"
-          >
-            <Route :size="11" />
-            <span>GPS-spor</span>
-          </button>
-          <div class="checkin-date-badge">
-            <span>{{ formatDate(item.timestamp) }}</span>
-          </div>
+
           <ChevronDown
             :size="16"
             class="chevron-expand"
@@ -155,9 +152,10 @@ const formatDate = (isoString?: string) => {
             class="btn-checkin-action"
             @click.stop="emit('view-on-map', item)"
             title="Vis og flytt kartet til denne turposten"
+            aria-label="Vis turpost på kart"
           >
             <MapIcon :size="12" />
-            <span>Vis på kart</span>
+            <span class="action-btn-text">Vis på kart</span>
           </button>
           <button
             v-if="item.trackId"
@@ -165,18 +163,20 @@ const formatDate = (isoString?: string) => {
             class="btn-checkin-action track-action"
             @click.stop="emit('view-track', item)"
             title="Vis tilknyttet GPS-spor på kart"
+            aria-label="Vis GPS-spor på kart"
           >
             <Route :size="12" />
-            <span>GPS-spor</span>
+            <span class="action-btn-text">GPS-spor</span>
           </button>
           <button
             type="button"
             class="btn-checkin-action"
             @click.stop="emit('edit', item)"
             title="Rediger eller slett denne innsjekkingen"
+            aria-label="Rediger eller slett innsjekking"
           >
             <Pencil :size="12" />
-            <span>Edit</span>
+            <span class="action-btn-text">Edit</span>
           </button>
         </div>
       </div>
@@ -189,7 +189,7 @@ const formatDate = (isoString?: string) => {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   transition:
     transform 0.15s ease,
     background 0.15s ease,
@@ -288,12 +288,19 @@ const formatDate = (isoString?: string) => {
   padding: 4px 0;
 }
 
+.checkin-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
 .turpost-name-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
-  flex: 1;
 }
 
 .check-icon {
@@ -311,14 +318,27 @@ const formatDate = (isoString?: string) => {
   min-width: 0;
 }
 
+.checkin-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 23px;
+}
+
+.checkin-date-text {
+  font-size: 11px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
 .private-badge-pill {
   font-size: 10px;
   font-weight: 600;
   background: rgba(245, 158, 11, 0.2);
   color: #fbbf24;
   border: 1px solid rgba(245, 158, 11, 0.4);
-  padding: 1px 5px;
-  border-radius: 4px;
+  padding: 3px 6px;
+  border-radius: 6px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -328,8 +348,8 @@ const formatDate = (isoString?: string) => {
 .visibility-badge-pill {
   font-size: 10px;
   font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 4px;
+  padding: 3px 6px;
+  border-radius: 6px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -456,5 +476,26 @@ const formatDate = (isoString?: string) => {
 
 .photo-thumb-btn:hover .checkin-photo-thumb {
   transform: scale(1.06);
+}
+
+@media (max-width: 480px) {
+  .badge-text {
+    display: none;
+  }
+
+  .private-badge-pill,
+  .visibility-badge-pill {
+    padding: 3px 5px;
+    gap: 0;
+  }
+
+  .action-btn-text {
+    display: none;
+  }
+
+  .btn-checkin-action {
+    padding: 6px 10px;
+    justify-content: center;
+  }
 }
 </style>

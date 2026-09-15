@@ -29,6 +29,7 @@ const emit = defineEmits<{
       class="profile-shortcut-card profile-tracks-card"
       @click="emit('open-saved-tracks')"
       title="Se og administrer dine lagrede GPS-spor"
+      aria-label="Mine spor"
     >
       <div class="shortcut-icon-wrap tracks-icon">
         <Route :size="17" />
@@ -36,7 +37,8 @@ const emit = defineEmits<{
       <div class="shortcut-texts">
         <span class="shortcut-title">Mine spor</span>
         <span class="shortcut-sub">
-          {{ savedTracksCount || 0 }} spor
+          <span class="shortcut-count">{{ savedTracksCount || 0 }}</span>
+          <span class="shortcut-unit">{{ ' spor' }}</span>
         </span>
       </div>
     </button>
@@ -46,6 +48,7 @@ const emit = defineEmits<{
       class="profile-shortcut-card profile-spots-card"
       @click="emit('open-my-spots')"
       title="Se og administrer dine private turposter"
+      aria-label="Private turposter"
     >
       <div class="shortcut-icon-wrap spots-icon">
         <Star :size="17" />
@@ -53,7 +56,10 @@ const emit = defineEmits<{
       <div class="shortcut-texts">
         <span class="shortcut-title">Private turposter</span>
         <span class="shortcut-sub">
-          {{ mySpotsCount || 0 }} {{ (mySpotsCount || 0) === 1 ? 'turpost' : 'turposter' }}
+          <span class="shortcut-count">{{ mySpotsCount || 0 }}</span>
+          <span class="shortcut-unit">{{
+            ' ' + ((mySpotsCount || 0) === 1 ? 'turpost' : 'turposter')
+          }}</span>
         </span>
       </div>
     </button>
@@ -63,6 +69,7 @@ const emit = defineEmits<{
       class="profile-shortcut-card profile-friends-card"
       @click="emit('open-friends')"
       title="Se dine venner og administrer synlighet"
+      aria-label="Venner"
     >
       <div class="shortcut-icon-wrap friends-icon">
         <Users :size="17" />
@@ -73,7 +80,10 @@ const emit = defineEmits<{
       <div class="shortcut-texts">
         <span class="shortcut-title">Venner</span>
         <span class="shortcut-sub">
-          {{ friendsCount || 0 }} {{ (friendsCount || 0) === 1 ? 'venn' : 'venner' }}
+          <span class="shortcut-count">{{ friendsCount || 0 }}</span>
+          <span class="shortcut-unit">{{
+            ' ' + ((friendsCount || 0) === 1 ? 'venn' : 'venner')
+          }}</span>
         </span>
       </div>
     </button>
@@ -84,6 +94,7 @@ const emit = defineEmits<{
       class="profile-shortcut-card profile-suggestions-card"
       @click="emit('open-spot-suggestions')"
       title="Se innkommende forslag til turposter"
+      aria-label="Forslag til turposter"
     >
       <div class="shortcut-icon-wrap suggestions-icon">
         <ClipboardList :size="17" />
@@ -94,7 +105,10 @@ const emit = defineEmits<{
       <div class="shortcut-texts">
         <span class="shortcut-title">Forslag</span>
         <span class="shortcut-sub">
-          {{ spotSuggestionsCount }} {{ spotSuggestionsCount === 1 ? 'nytt' : 'nye' }}
+          <span class="shortcut-count">{{ spotSuggestionsCount }}</span>
+          <span class="shortcut-unit">{{
+            ' ' + (spotSuggestionsCount === 1 ? 'nytt' : 'nye')
+          }}</span>
         </span>
       </div>
     </button>
@@ -103,6 +117,7 @@ const emit = defineEmits<{
 
 <style scoped>
 .profile-shortcuts-grid {
+  container-type: inline-size;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
@@ -111,18 +126,6 @@ const emit = defineEmits<{
 
 .profile-shortcuts-grid.has-4-cols {
   grid-template-columns: repeat(4, 1fr);
-}
-
-@media (max-width: 480px) {
-  .profile-shortcuts-grid.has-4-cols {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 360px) {
-  .profile-shortcuts-grid:not(.has-4-cols) {
-    grid-template-columns: 1fr;
-  }
 }
 
 .profile-shortcut-card {
@@ -276,11 +279,159 @@ const emit = defineEmits<{
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
   }
   50% {
     transform: scale(1.15);
+  }
+}
+
+/* Kompakt visning på smale skjermer (kun ikon og tall, balansert vertikal luft) */
+@container (max-width: 480px) {
+  .profile-shortcuts-grid {
+    margin: 8px 14px 4px 14px;
+    gap: 8px;
+  }
+
+  .profile-shortcut-card {
+    justify-content: center;
+    padding: 4px 6px;
+    gap: 5px;
+    border-radius: 6px;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    min-height: unset;
+    line-height: 1;
+  }
+
+  .profile-shortcut-card:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: none !important;
+    transform: translateY(-1px);
+  }
+
+  .shortcut-icon-wrap {
+    width: auto;
+    height: auto;
+    background: transparent !important;
+    box-shadow: none !important;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .shortcut-icon-wrap :deep(svg),
+  .shortcut-icon-wrap svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+  }
+
+  .shortcut-title {
+    display: none;
+  }
+
+  .shortcut-unit {
+    display: none;
+  }
+
+  .shortcut-texts {
+    line-height: 1;
+    justify-content: center;
+  }
+
+  .shortcut-sub {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f8fafc;
+    line-height: 1;
+    margin: 0;
+    padding: 0;
+  }
+
+  .shortcut-count {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f8fafc;
+    line-height: 1;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .profile-shortcuts-grid {
+    margin: 8px 14px 4px 14px;
+    gap: 8px;
+  }
+
+  .profile-shortcut-card {
+    justify-content: center;
+    padding: 4px 6px;
+    gap: 5px;
+    border-radius: 6px;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    min-height: unset;
+    line-height: 1;
+  }
+
+  .profile-shortcut-card:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: none !important;
+    transform: translateY(-1px);
+  }
+
+  .shortcut-icon-wrap {
+    width: auto;
+    height: auto;
+    background: transparent !important;
+    box-shadow: none !important;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .shortcut-icon-wrap :deep(svg),
+  .shortcut-icon-wrap svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+  }
+
+  .shortcut-title {
+    display: none;
+  }
+
+  .shortcut-unit {
+    display: none;
+  }
+
+  .shortcut-texts {
+    line-height: 1;
+    justify-content: center;
+  }
+
+  .shortcut-sub {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f8fafc;
+    line-height: 1;
+    margin: 0;
+    padding: 0;
+  }
+
+  .shortcut-count {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f8fafc;
+    line-height: 1;
+    margin: 0;
+    padding: 0;
   }
 }
 </style>
