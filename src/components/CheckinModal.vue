@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, useTemplateRef } from 'vue'
 import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon, Route } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type GoogleUser, type CheckinResult } from '@/composables/useAuth'
@@ -57,8 +57,8 @@ function removeTrack() {
   selectedTrackId.value = null
 }
 
-const cameraInputRef = ref<HTMLInputElement | null>(null)
-const galleryInputRef = ref<HTMLInputElement | null>(null)
+const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef')
+const lastSubmittedResult = ref<CheckinResult | null>(null)
 const isWebcamActive = ref(false)
 const isProcessingImage = ref(false)
 
@@ -102,6 +102,7 @@ watch(
       }
       selectedTrackId.value = null
       isTrackPickerOpen.value = false
+      lastSubmittedResult.value = null
     } else {
       isWebcamActive.value = false
     }
@@ -111,7 +112,7 @@ watch(
 const handleTakePhoto = () => {
   errorMessage.value = null
   if (isMobileDevice.value) {
-    cameraInputRef.value?.click()
+    fileInputRef.value?.click()
   } else {
     isWebcamActive.value = true
   }
@@ -166,11 +167,8 @@ const clearFile = () => {
   }
   selectedFile.value = null
   previewUrl.value = null
-  if (galleryInputRef.value) {
-    galleryInputRef.value.value = ''
-  }
-  if (cameraInputRef.value) {
-    cameraInputRef.value.value = ''
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
   }
 }
 
@@ -221,6 +219,7 @@ const handleSubmit = async () => {
     }
 
     result.visibility = selectedVisibility.value
+    lastSubmittedResult.value = result
     isSuccess.value = true
     emit('submitted', result)
 
@@ -309,6 +308,9 @@ onUnmounted(() => {
             </div>
             <h4>Innsjekking fullført!</h4>
             <p>Du er nå registrert på {{ turpost?.name }}. God tur videre!</p>
+            <p v-if="selectedFile && !lastSubmittedResult?.imageUrl" class="image-warning-text">
+              ⚠️ Innsjekkingen ble registrert, men bildet kunne ikke lagres på serveren.
+            </p>
           </div>
 
           <!-- Skjema -->
@@ -375,49 +377,61 @@ onUnmounted(() => {
               />
 
               <!-- Valg mellom å ta nytt bilde eller velge eksisterende bilde -->
-              <div v-else class="photo-choice-grid">
+              <div v-else class="photo-choice-grid" :class="{ 'single-choice': isMobileDevice }">
+                <!-- På mobil/nettbrett: Enkel felles knapp som åpner enhetens native dialog (kamera/galleri) -->
                 <button
+                  v-if="isMobileDevice"
                   type="button"
                   class="photo-choice-btn"
                   :disabled="isSubmitting"
-                  @click="handleTakePhoto"
+                  @click="fileInputRef?.click()"
                 >
                   <div class="photo-choice-icon camera">
                     <Camera :size="20" />
                   </div>
                   <div class="photo-choice-text">
-                    <strong>Ta bilde</strong>
-                    <span>{{ isMobileDevice ? 'Bruk kamera' : 'Webkamera' }}</span>
+                    <strong>Ta eller velg bilde</strong>
+                    <span>Kamera eller bildegalleri</span>
                   </div>
                 </button>
 
-                <button
-                  type="button"
-                  class="photo-choice-btn"
-                  :disabled="isSubmitting"
-                  @click="galleryInputRef?.click()"
-                >
-                  <div class="photo-choice-icon gallery">
-                    <ImageIcon :size="20" />
-                  </div>
-                  <div class="photo-choice-text">
-                    <strong>Velg bilde</strong>
-                    <span>{{ isMobileDevice ? 'Fra galleri' : 'Fra filer' }}</span>
-                  </div>
-                </button>
+                <!-- På PC/Mac: To valg – Webkamera eller filvelger -->
+                <template v-else>
+                  <button
+                    type="button"
+                    class="photo-choice-btn"
+                    :disabled="isSubmitting"
+                    @click="handleTakePhoto"
+                  >
+                    <div class="photo-choice-icon camera">
+                      <Camera :size="20" />
+                    </div>
+                    <div class="photo-choice-text">
+                      <strong>Webkamera</strong>
+                      <span>Ta bilde nå</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="photo-choice-btn"
+                    :disabled="isSubmitting"
+                    @click="fileInputRef?.click()"
+                  >
+                    <div class="photo-choice-icon gallery">
+                      <ImageIcon :size="20" />
+                    </div>
+                    <div class="photo-choice-text">
+                      <strong>Velg bilde</strong>
+                      <span>Fra datamaskin</span>
+                    </div>
+                  </button>
+                </template>
               </div>
 
-              <!-- Skjulte fil-innganger (én med capture for direkte kamera på mobil, én uten for galleri/filer) -->
+              <!-- Skjult fil-inngang (uten capture, slik at mobil lagrer til kamerarull og gir valg mellom kamera/galleri) -->
               <input
-                ref="cameraInputRef"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                class="hidden-file-input"
-                @change="handleFileInputChange"
-              />
-              <input
-                ref="galleryInputRef"
+                ref="fileInputRef"
                 type="file"
                 accept="image/*"
                 class="hidden-file-input"
@@ -749,6 +763,20 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.photo-choice-grid.single-choice {
+  grid-template-columns: 1fr;
+}
+
+.image-warning-text {
+  font-size: 12px;
+  color: #fcd34d;
+  margin-top: 6px;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .photo-choice-btn {

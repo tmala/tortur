@@ -595,12 +595,17 @@ function uploadCheckinImage(ss, turpostId, imageObj) {
       ? folderIterator.next()
       : baseFolder.createFolder(subfolderName)
 
-    targetFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+    try {
+      targetFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+    } catch (folderShareErr) {
+      Logger.log('Advarsel ved deling av mappe: ' + folderShareErr.message)
+    }
 
     var base64Data = imageObj.base64
     if (base64Data.indexOf(',') > -1) {
       base64Data = base64Data.split(',')[1]
     }
+    base64Data = base64Data.trim().replace(/\s/g, '')
 
     var mimeType = imageObj.mimeType || 'image/jpeg'
     var ext =
@@ -611,7 +616,11 @@ function uploadCheckinImage(ss, turpostId, imageObj) {
     var blob = Utilities.newBlob(decodedBytes, mimeType, fileName)
     var driveFile = targetFolder.createFile(blob)
 
-    driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+    try {
+      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+    } catch (fileShareErr) {
+      Logger.log('Advarsel ved deling av fil: ' + fileShareErr.message)
+    }
     return 'https://lh3.googleusercontent.com/d/' + driveFile.getId()
   } catch (driveErr) {
     Logger.log('Feil ved bildeopplasting til Drive: ' + driveErr.message)

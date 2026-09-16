@@ -194,6 +194,14 @@ export async function compressImageWithExif(
   let exifObj: ReturnType<typeof piexif.load>
   try {
     exifObj = piexif.load(originalDataUrl)
+    // Fjern eventuell innebygd forhåndsvisning/thumbnail fra originalbildet
+    // for å unngå at EXIF-seksjonen overskrider JPEGs 64KB APP1-grense
+    if (exifObj.thumbnail) {
+      delete exifObj.thumbnail
+    }
+    if (exifObj['1st']) {
+      delete exifObj['1st']
+    }
   } catch {
     return compressed
   }

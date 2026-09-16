@@ -352,5 +352,69 @@ post_102;Hafskorsundet;61.42;7.25;210;Vestland;Luster`
     const nonExistent = await lookupTurpost('does_not_exist')
     expect(nonExistent).toBeNull()
   })
+
+  it('submitCheckin sender bilde som base64 data-URL og oppretter innsjekk', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL, opts?: RequestInit) => {
+      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/'))) {
+        return {
+          ok: true,
+          text: async () =>
+            JSON.stringify({
+              success: true,
+              checkin: {
+                id: 'c_test_image',
+                turpostId: '101',
+                turpostName: 'Fjelltopp',
+                timestamp: '2026-09-16T12:00:00.000Z',
+                description: 'Flott tur',
+                imageUrl: 'https://lh3.googleusercontent.com/d/newimage123',
+                userId: 'test_user_sub'
+              }
+            }),
+          json: async () => ({})
+        } as unknown as Response
+      }
+      return {
+        ok: true,
+        text: async () => JSON.stringify({}),
+        json: async () => ({})
+      } as unknown as Response
+    })
+
+    const { user, systemConfig, submitCheckin } = useAuth()
+    user.value = {
+      userId: 'test_user_sub',
+      userName: 'Test Turgåer',
+      email: 'tur@example.com',
+      avatarUrl: '',
+      lastLogin: new Date().toISOString()
+    }
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const testFile = new File(['bilde-innhold-test'], 'tur.jpg', { type: 'image/jpeg' })
+    const res = await submitCheckin({
+      turpostId: '101',
+      turpostName: 'Fjelltopp',
+      description: 'Flott tur',
+      imageFile: testFile
+    })
+
+    expect(res.id).toBe('c_test_image')
+    expect(res.imageUrl).toBe('https://lh3.googleusercontent.com/d/newimage123')
+
+    // Verifiser payload sendt til Apps Script
+    const appsScriptCall = fetchSpy.mock.calls.find(c => {
+      const body = typeof c[1]?.body === 'string' ? JSON.parse(c[1].body) : null
+      return body?.action === 'checkin'
+    })
+    expect(appsScriptCall).toBeDefined()
+    const callBody = JSON.parse(appsScriptCall![1]?.body as string)
+    expect(callBody.image).toBeDefined()
+    expect(callBody.image.mimeType).toBe('image/jpeg')
+    expect(callBody.image.base64).toMatch(/^data:image\/jpeg;base64,/)
+  })
 })
 

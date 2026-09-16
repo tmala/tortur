@@ -288,15 +288,19 @@ function logout(): void {
 // =============================================================================
 // Konverter bildefil til base64 data-URL
 // =============================================================================
-async function fileToBase64(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer()
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  const chunkSize = 32768 // 32 KB bolker for å unngå call stack- og minnebegrensninger
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
-  }
-  return 'data:' + (file.type || 'image/jpeg') + ';base64,' + btoa(binary)
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+      } else {
+        reject(new Error('Kunne ikke lese bildefil som data-URL.'))
+      }
+    }
+    reader.onerror = () => reject(new Error('Kunne ikke lese bildefil.'))
+    reader.readAsDataURL(file)
+  })
 }
 
 // =============================================================================
@@ -332,11 +336,24 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
     trackId: params.trackId || undefined
   }
 
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(payload)
-  })
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 45_000)
+  let response: Response
+  try {
+    response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    })
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Nettverksforespørselen tok for lang tid (tidsavbrudd etter 45 sekunder). Sjekk internettforbindelsen og prøv igjen.')
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (!response.ok) {
     throw new Error(`Tjeneren svarte med feilstatus ${response.status}`)
@@ -517,11 +534,24 @@ async function updatePublicCheckin(params: {
       trackId: params.trackId !== undefined ? (params.trackId === null ? '' : params.trackId) : undefined
     }
 
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(payload)
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 45_000)
+    let response: Response
+    try {
+      response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      })
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('Nettverksforespørselen tok for lang tid (tidsavbrudd etter 45 sekunder). Sjekk internettforbindelsen og prøv igjen.')
+      }
+      throw err
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     if (!response.ok) {
       throw new Error(`Tjeneren svarte med feilstatus ${response.status}`)
