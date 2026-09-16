@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -e
+
+# Naviger til katalogen der dette skriptet ligger
+cd "$(dirname "$0")"
+
+echo "🚀 Deployer uploadCheckinImage til Google Cloud Functions (europe-west1)..."
+
+gcloud functions deploy uploadCheckinImage \
+  --gen2 \
+  --runtime=nodejs22 \
+  --region=europe-west1 \
+  --source=. \
+  --entry-point=uploadCheckinImage \
+  --trigger-http \
+  --allow-unauthenticated \
+  --memory=256MiB \
+  --timeout=30s \
+  --set-secrets 'REFRESH_TOKEN=tortur-drive-refresh-token:latest,CLIENT_ID=tortur-oauth-client-id:latest,CLIENT_SECRET=tortur-oauth-client-secret:latest' \
+  --set-env-vars INNSJEKK_FOLDER_ID="DIN_INNSJEKK_FOLDER_ID_HER"
+
+echo "✅ Deploy fullført!"

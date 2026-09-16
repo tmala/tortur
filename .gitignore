@@ -47,3 +47,6 @@ __screenshots__/
 test-results/
 playwright-report/
 tracks/
+
+# Cloud Function deploy scripts
+scripts/drive-upload-function/deploy.sh
