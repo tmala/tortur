@@ -292,8 +292,8 @@ function handleCheckin(body) {
   }
 
   // 3. Handter bildeopplasting til Google Drive
-  var imageUrl = ''
-  if (body.image && body.image.base64) {
+  var imageUrl = (body.imageUrl || '').toString().trim()
+  if (!imageUrl && body.image && body.image.base64) {
     imageUrl = uploadCheckinImage(ss, turpostId, body.image)
   }
 
@@ -528,7 +528,16 @@ function handleUpdateCheckin(body) {
   }
 
   // 2. Bildehåndtering
-  if (body.image && body.image.base64) {
+  if (body.imageUrl !== undefined && body.imageUrl !== '') {
+    if (oldImageUrl && oldImageUrl !== body.imageUrl) {
+      var oldFileId = extractDriveFileId(oldImageUrl)
+      if (oldFileId) deleteDriveFile(oldFileId)
+    }
+    updatedImageUrl = body.imageUrl.toString().trim()
+    if (foundRowIndex > 0 && innsjekkSheet) {
+      innsjekkSheet.getRange(foundRowIndex, COL_INNSJEKK_IMAGE_URL).setValue(updatedImageUrl)
+    }
+  } else if (body.image && body.image.base64) {
     if (oldImageUrl) {
       var oldFileId = extractDriveFileId(oldImageUrl)
       if (oldFileId) deleteDriveFile(oldFileId)

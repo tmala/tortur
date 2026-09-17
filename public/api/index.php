@@ -268,9 +268,11 @@ function handleCheckin(GoogleClient $client, array $body, string $ssId, string $
     $systemConfig = fetchSystemConfig($client, $ssId, $sheetSystem);
     $effectiveAppsScriptUrl = $appsScriptUrl ?: (!empty($systemConfig['APPSCRIPT_URL']) ? trim($systemConfig['APPSCRIPT_URL']) : null);
 
-    // Håndter bildeopplasting til Google Drive via Apps Script
+    // Håndter bildeopplasting til Google Drive via Apps Script eller direkte fra Cloud Function
     $imageUrl = '';
-    if (!empty($body['image']['base64'])) {
+    if (!empty($body['imageUrl'])) {
+        $imageUrl = trim((string)$body['imageUrl']);
+    } elseif (!empty($body['image']['base64'])) {
         $imageUrl = handleImageUpload($turpostId, $body['image'], $client, $effectiveAppsScriptUrl);
     }
 
@@ -443,7 +445,13 @@ function handleUpdateCheckin(GoogleClient $client, array $body, string $ssId, st
     $systemConfig = fetchSystemConfig($client, $ssId, $sheetSystem);
     $effectiveAppsScriptUrl = $appsScriptUrl ?: (!empty($systemConfig['APPSCRIPT_URL']) ? trim($systemConfig['APPSCRIPT_URL']) : null);
 
-    if (!empty($body['image']['base64'])) {
+    if (!empty($body['imageUrl'])) {
+        if ($oldImageUrl && $oldImageUrl !== $body['imageUrl']) {
+            deleteCheckinImage($oldImageUrl, $client, $effectiveAppsScriptUrl);
+        }
+        $updatedImageUrl = trim((string)$body['imageUrl']);
+        $client->updateSheetValues($ssId, "{$sheetInnsjekk}!E{$foundRowIndex}", [[$updatedImageUrl]]);
+    } elseif (!empty($body['image']['base64'])) {
         if ($oldImageUrl) {
             deleteCheckinImage($oldImageUrl, $client, $effectiveAppsScriptUrl);
         }

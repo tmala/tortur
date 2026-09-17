@@ -416,5 +416,92 @@ post_102;Hafskorsundet;61.42;7.25;210;Vestland;Luster`
     expect(callBody.image.mimeType).toBe('image/jpeg')
     expect(callBody.image.base64).toMatch(/^data:image\/jpeg;base64,/)
   })
+
+  it('submitCheckin laster opp bilde direkte via Cloud Function multipart og sender imageUrl til backend', async () => {
+    vi.stubEnv('VITE_DRIVE_UPLOAD_URL', 'https://europe-west1-test.cloudfunctions.net/uploadCheckinImage')
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL, opts?: RequestInit) => {
+      const urlStr = typeof url === 'string' ? url : url.toString()
+      if (urlStr.includes('uploadCheckinImage')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            imageUrl: 'https://lh3.googleusercontent.com/d/cloudimage999',
+            fileId: 'cloudimage999'
+          })
+        } as unknown as Response
+      }
+      if (urlStr.includes('script.google.com') || urlStr.includes('/api/')) {
+        return {
+          ok: true,
+          text: async () =>
+            JSON.stringify({
+              success: true,
+              checkin: {
+                id: 'c_test_cloud_upload',
+                turpostId: '202',
+                turpostName: 'Utsikten',
+                timestamp: '2026-09-17T10:00:00.000Z',
+                description: 'Nydelig vær',
+                imageUrl: 'https://lh3.googleusercontent.com/d/cloudimage999',
+                userId: 'test_user_sub'
+              }
+            }),
+          json: async () => ({})
+        } as unknown as Response
+      }
+      return {
+        ok: true,
+        text: async () => JSON.stringify({}),
+        json: async () => ({})
+      } as unknown as Response
+    })
+
+    const { user, systemConfig, submitCheckin } = useAuth()
+    user.value = {
+      userId: 'test_user_sub',
+      userName: 'Test Turgåer',
+      email: 'tur@example.com',
+      avatarUrl: '',
+      lastLogin: new Date().toISOString()
+    }
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const testFile = new File(['bilde-innhold-multipart'], 'utsikt.jpg', { type: 'image/jpeg' })
+    const res = await submitCheckin({
+      turpostId: '202',
+      turpostName: 'Utsikten',
+      description: 'Nydelig vær',
+      imageFile: testFile
+    })
+
+    expect(res.id).toBe('c_test_cloud_upload')
+    expect(res.imageUrl).toBe('https://lh3.googleusercontent.com/d/cloudimage999')
+
+    // Verifiser at Cloud Function ble kalt med multipart FormData
+    const cloudCall = fetchSpy.mock.calls.find(c => {
+      const u = typeof c[0] === 'string' ? c[0] : c[0].toString()
+      return u.includes('uploadCheckinImage')
+    })
+    expect(cloudCall).toBeDefined()
+    expect(cloudCall![1]?.body).toBeInstanceOf(FormData)
+
+    // Verifiser payload sendt til backend: har imageUrl og ingen tung base64-body
+    const backendCall = fetchSpy.mock.calls.find(c => {
+      const body = typeof c[1]?.body === 'string' ? JSON.parse(c[1].body) : null
+      return body?.action === 'checkin'
+    })
+    expect(backendCall).toBeDefined()
+    const callBody = JSON.parse(backendCall![1]?.body as string)
+    expect(callBody.imageUrl).toBe('https://lh3.googleusercontent.com/d/cloudimage999')
+    expect(callBody.image).toBeUndefined()
+
+    vi.unstubAllEnvs()
+  })
 })
+
 

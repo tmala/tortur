@@ -85,6 +85,9 @@ const STORAGE_KEY_TOKEN  = 'tortur_id_token'
 
 const API_URL = import.meta.env.VITE_API_URL as string
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
+function getDriveUploadUrl(): string | undefined {
+  return (import.meta.env.VITE_DRIVE_UPLOAD_URL as string | undefined)?.trim()
+}
 
 // Singleton state – delt på tvers av alle useAuth()-kall
 const user           = ref<GoogleUser | null>(null)
@@ -304,7 +307,48 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 // =============================================================================
-// Send innsjekk til Google Apps Script
+// Last opp bilde direkte til Google Cloud Function (multipart/form-data)
+// =============================================================================
+async function uploadImageToDrive(
+  file: File,
+  turpostId: string | number,
+  idToken?: string
+): Promise<string> {
+  const driveUploadUrl = getDriveUploadUrl()
+  if (!driveUploadUrl) {
+    throw new Error('VITE_DRIVE_UPLOAD_URL er ikke konfigurert.')
+  }
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('turpostId', String(turpostId))
+  if (idToken) {
+    formData.append('idToken', idToken)
+  }
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 35_000)
+  try {
+    const res = await fetch(driveUploadUrl, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal
+    })
+    if (!res.ok) {
+      const errData = (await res.json().catch(() => ({}))) as Record<string, unknown>
+      throw new Error((errData.error as string) || `Opplasting til Google Drive feilet med status ${res.status}`)
+    }
+    const data = (await res.json()) as { success?: boolean; imageUrl?: string; error?: string }
+    if (!data.success || !data.imageUrl) {
+      throw new Error(data.error || 'Mangler bilde-URL fra opplastingstjenesten.')
+    }
+    return data.imageUrl
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+// =============================================================================
+// Send innsjekk til backend (Google Apps Script / PHP API)
 // =============================================================================
 async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
   if (!API_URL) {
@@ -314,13 +358,34 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
     throw new Error('Du må være innlogget for å sjekke inn.')
   }
 
+  let uploadedImageUrl: string | undefined = undefined
   let imagePayload: { base64: string; mimeType: string; fileName: string } | undefined
+
   if (params.imageFile) {
-    const base64 = await fileToBase64(params.imageFile)
-    imagePayload = {
-      base64,
-      mimeType: params.imageFile.type || 'image/jpeg',
-      fileName: params.imageFile.name || `innsjekk_${Date.now()}.jpg`
+    const driveUploadUrl = getDriveUploadUrl()
+    if (driveUploadUrl) {
+      try {
+        uploadedImageUrl = await uploadImageToDrive(
+          params.imageFile,
+          params.turpostId,
+          currentIdToken.value || undefined
+        )
+      } catch (uploadErr: unknown) {
+        console.warn('Bildeopplasting via Cloud Function feilet, bruker fallback til API/AppsScript:', uploadErr)
+        const base64 = await fileToBase64(params.imageFile)
+        imagePayload = {
+          base64,
+          mimeType: params.imageFile.type || 'image/jpeg',
+          fileName: params.imageFile.name || `innsjekk_${Date.now()}.jpg`
+        }
+      }
+    } else {
+      const base64 = await fileToBase64(params.imageFile)
+      imagePayload = {
+        base64,
+        mimeType: params.imageFile.type || 'image/jpeg',
+        fileName: params.imageFile.name || `innsjekk_${Date.now()}.jpg`
+      }
     }
   }
 
@@ -332,6 +397,7 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
     turpostId: String(params.turpostId),
     turpostName: params.turpostName || '',
     description: params.description || '',
+    imageUrl: uploadedImageUrl,
     image: imagePayload,
     trackId: params.trackId || undefined
   }
@@ -511,13 +577,34 @@ async function updatePublicCheckin(params: {
   let finalImageUrl: string | undefined = undefined
 
   if (API_URL) {
+    let uploadedImageUrl: string | undefined = undefined
     let imagePayload: { base64: string; mimeType: string; fileName: string } | null = null
+
     if (params.imageFile) {
-      const base64 = await fileToBase64(params.imageFile)
-      imagePayload = {
-        base64,
-        mimeType: params.imageFile.type || 'image/jpeg',
-        fileName: params.imageFile.name || `innsjekk_${Date.now()}.jpg`
+      const driveUploadUrl = getDriveUploadUrl()
+      if (driveUploadUrl) {
+        try {
+          uploadedImageUrl = await uploadImageToDrive(
+            params.imageFile,
+            params.turpostId,
+            currentIdToken.value || undefined
+          )
+        } catch (uploadErr: unknown) {
+          console.warn('Bildeopplasting via Cloud Function feilet ved oppdatering, prøver fallback:', uploadErr)
+          const base64 = await fileToBase64(params.imageFile)
+          imagePayload = {
+            base64,
+            mimeType: params.imageFile.type || 'image/jpeg',
+            fileName: params.imageFile.name || `innsjekk_${Date.now()}.jpg`
+          }
+        }
+      } else {
+        const base64 = await fileToBase64(params.imageFile)
+        imagePayload = {
+          base64,
+          mimeType: params.imageFile.type || 'image/jpeg',
+          fileName: params.imageFile.name || `innsjekk_${Date.now()}.jpg`
+        }
       }
     }
 
@@ -529,6 +616,7 @@ async function updatePublicCheckin(params: {
       checkinId: params.checkinId,
       timestamp: params.timestamp,
       description: params.description,
+      imageUrl: uploadedImageUrl,
       image: imagePayload,
       removeImage: params.removeImage,
       trackId: params.trackId !== undefined ? (params.trackId === null ? '' : params.trackId) : undefined
@@ -572,7 +660,7 @@ async function updatePublicCheckin(params: {
     if (params.removeImage) {
       finalImageUrl = ''
     } else {
-      finalImageUrl = typeof data.imageUrl === 'string' ? data.imageUrl : undefined
+      finalImageUrl = (typeof data.imageUrl === 'string' && data.imageUrl) ? data.imageUrl : uploadedImageUrl
     }
   }
 
