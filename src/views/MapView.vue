@@ -907,8 +907,9 @@ onUnmounted(() => {
           class="lightbox-image"
           @error="(e) => {
             const target = e.target as HTMLImageElement
-            if (selectedPhotoForModal?.thumbnailDataUrl && target.src !== selectedPhotoForModal.thumbnailDataUrl) {
-              target.src = selectedPhotoForModal.thumbnailDataUrl
+            const fallback = selectedPhotoForModal?.thumbnailUrl || selectedPhotoForModal?.thumbnailDataUrl
+            if (fallback && target.src !== fallback) {
+              target.src = fallback
             }
           }"
         />

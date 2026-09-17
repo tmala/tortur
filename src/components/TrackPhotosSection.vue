@@ -179,7 +179,21 @@ async function onFilesSelected(event: Event): Promise<void> {
 }
 
 async function handleDelete(photo: TrackPhoto): Promise<void> {
-  if (!confirm(`Vil du fjerne bildet «${photo.filename}» fra turen?`)) return
+  if (!isDriveAuthorized.value) {
+    const connect = confirm(
+      'Du må koble til Google Drive for å kunne slette bildet (slik at det også fjernes fra din Google Drive).\n\nVil du koble til Google Drive nå?'
+    )
+    if (!connect) return
+
+    try {
+      await requestDriveAccess()
+    } catch (err) {
+      uploadError.value = err instanceof Error ? err.message : 'Google Drive-innlogging feilet'
+      return
+    }
+  }
+
+  if (!confirm(`Vil du fjerne bildet «${photo.filename}» fra turen og slette det fra Google Drive?`)) return
 
   const ok = await deleteTrackPhoto(props.userId, trackKey.value, photo)
   if (ok) {
@@ -188,7 +202,7 @@ async function handleDelete(photo: TrackPhoto): Promise<void> {
       selectedPhotoForModal.value = null
     }
   } else {
-    alert('Kunne ikke slette bildet. Prøv igjen senere.')
+    alert('Kunne ikke slette bildet fra Google Drive og databasen. Sjekk Google Drive-tilkoblingen og prøv igjen.')
   }
 }
 
@@ -299,7 +313,7 @@ onMounted(() => {
         >
           <div class="photo-thumbnail-wrap" @click="openLightbox(photo)">
             <img
-              :src="photo.thumbnailDataUrl || photo.thumbnailUrl || photo.url"
+              :src="photo.thumbnailUrl || photo.thumbnailDataUrl || photo.url"
               :alt="photo.filename"
               loading="lazy"
               class="photo-thumbnail"
@@ -329,8 +343,9 @@ onMounted(() => {
             </a>
             <button
               class="btn-photo-delete"
+              :class="{ 'is-not-connected': !isDriveAuthorized }"
               @click="handleDelete(photo)"
-              title="Fjern bilde fra turen"
+              :title="isDriveAuthorized ? 'Fjern bilde fra turen og Google Drive' : 'Koble til Google Drive for å slette bilde'"
               aria-label="Slett bilde"
             >
               <Trash2 :size="12" />
@@ -366,8 +381,9 @@ onMounted(() => {
           class="lightbox-image"
           @error="(e) => {
             const target = e.target as HTMLImageElement
-            if (selectedPhotoForModal?.thumbnailDataUrl && target.src !== selectedPhotoForModal.thumbnailDataUrl) {
-              target.src = selectedPhotoForModal.thumbnailDataUrl
+            const fallback = selectedPhotoForModal?.thumbnailUrl || selectedPhotoForModal?.thumbnailDataUrl
+            if (fallback && target.src !== fallback) {
+              target.src = fallback
             }
           }"
         />
@@ -651,6 +667,15 @@ onMounted(() => {
 
 .btn-photo-delete:hover {
   color: #f87171;
+}
+
+.btn-photo-delete.is-not-connected {
+  opacity: 0.5;
+}
+
+.btn-photo-delete.is-not-connected:hover {
+  opacity: 0.9;
+  color: #fbbf24;
 }
 
 .photos-empty-state {

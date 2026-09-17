@@ -396,7 +396,7 @@ describe('useTrackPhotos', () => {
       const saved = await savePhotoToFirebase('user_456', 'track_iso_key', {
         fileId: 'f1',
         url: 'https://lh3.googleusercontent.com/d/f1',
-        thumbnailDataUrl: 'data:image/jpeg;base64,mockCanvasThumb100',
+        thumbnailUrl: 'data:image/jpeg;base64,mockCanvasThumb100',
         filename: 'foto1.jpg',
         uploadedAt: 1000,
         exifTimestamp: 500
@@ -404,16 +404,20 @@ describe('useTrackPhotos', () => {
 
       expect(saved).toBeDefined()
       expect(saved?.id).toBe('-OpMockPushKey123')
+      expect(saved?.thumbnailUrl).toBe('data:image/jpeg;base64,mockCanvasThumb100')
       expect(saved?.thumbnailDataUrl).toBe('data:image/jpeg;base64,mockCanvasThumb100')
 
       const list = await fetchTrackPhotos('user_456', 'track_iso_key')
       expect(list.length).toBe(1)
       expect(list[0]?.fileId).toBe('f1')
       expect(list[0]?.id).toBe('-OpMockPushKey123')
+      expect(list[0]?.thumbnailUrl).toBe('data:image/jpeg;base64,mockCanvasThumb100')
       expect(list[0]?.thumbnailDataUrl).toBe('data:image/jpeg;base64,mockCanvasThumb100')
     })
 
-    it('uploadSingleTrackPhoto orkestrerer opplasting, EXIF, deling og lagring', async () => {
+    it('uploadSingleTrackPhoto orkestrerer opplasting og lagrer kun thumbnailUrl i Firebase (ingen duplikat dataUrl)', async () => {
+      let capturedFirebasePayload: Record<string, unknown> | null = null
+
       fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL, opts?: RequestInit) => {
         const urlStr = String(url)
 
@@ -430,6 +434,7 @@ describe('useTrackPhotos', () => {
           } as unknown as Response
         }
         if (urlStr.includes('/track_photos/') && opts?.method === 'POST') {
+          capturedFirebasePayload = typeof opts.body === 'string' ? (JSON.parse(opts.body) as Record<string, unknown>) : null
           return {
             ok: true,
             json: async () => ({ name: 'firebase_push_id' })
@@ -457,9 +462,87 @@ describe('useTrackPhotos', () => {
       expect(result?.id).toBe('firebase_push_id')
       expect(result?.fileId).toBe('full_flow_file_id')
       expect(result?.url).toBe('https://lh3.googleusercontent.com/d/full_flow_file_id')
+      expect(result?.thumbnailUrl).toBe('data:image/jpeg;base64,mockCanvasThumb100')
       expect(result?.thumbnailDataUrl).toBe('data:image/jpeg;base64,mockCanvasThumb100')
       expect(result?.lat).toBe(59.9139)
       expect(result?.lng).toBe(10.7522)
+
+      // Verifiser at Firebase IKKE mottok duplikat thumbnailDataUrl
+      expect(capturedFirebasePayload).not.toBeNull()
+      const payload = capturedFirebasePayload as unknown as Record<string, unknown>
+      expect(payload.thumbnailDataUrl).toBeUndefined()
+      expect(payload.thumbnailUrl).toBe('data:image/jpeg;base64,mockCanvasThumb100')
+    })
+
+    describe('deleteTrackPhoto', () => {
+      const mockPhoto: TrackPhoto = {
+        id: 'firebase_photo_1',
+        fileId: 'drive_file_999',
+        url: 'https://example.com/p1',
+        filename: 'slett_meg.jpg',
+        uploadedAt: 12345
+      }
+
+      it('nekter å slette og kaller ikke Firebase dersom Google Drive ikke er tilkoblet', async () => {
+        let firebaseDeleteCalled = false
+        fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+          if (String(url).includes('/track_photos/')) {
+            firebaseDeleteCalled = true
+          }
+          return { ok: true } as unknown as Response
+        })
+
+        const { deleteTrackPhoto } = useTrackPhotos()
+        // Ingen aktiv driveAccessToken satt
+        const success = await deleteTrackPhoto('user_1', 'track_key_1', mockPhoto)
+
+        expect(success).toBe(false)
+        expect(firebaseDeleteCalled).toBe(false)
+      })
+
+      it('sletter fra Google Drive først, og deretter fra Firebase ved aktiv tilgang', async () => {
+        const calls: string[] = []
+        fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL, opts?: RequestInit) => {
+          const urlStr = String(url)
+          if (urlStr.includes('/files/drive_file_999') && opts?.method === 'DELETE') {
+            calls.push('drive')
+            return { ok: true, status: 204 } as unknown as Response
+          }
+          if (urlStr.includes('/track_photos/') && opts?.method === 'DELETE') {
+            calls.push('firebase')
+            return { ok: true, status: 200 } as unknown as Response
+          }
+          return { ok: false } as unknown as Response
+        })
+
+        const { deleteTrackPhoto } = useTrackPhotos()
+        const success = await deleteTrackPhoto('user_1', 'track_key_1', mockPhoto, 'valid_drive_token')
+
+        expect(success).toBe(true)
+        expect(calls).toEqual(['drive', 'firebase'])
+      })
+
+      it('avbryter og sletter ikke fra Firebase dersom Google Drive feiler med feilkode', async () => {
+        const calls: string[] = []
+        fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL, opts?: RequestInit) => {
+          const urlStr = String(url)
+          if (urlStr.includes('/files/drive_file_999') && opts?.method === 'DELETE') {
+            calls.push('drive')
+            return { ok: false, status: 403 } as unknown as Response
+          }
+          if (urlStr.includes('/track_photos/') && opts?.method === 'DELETE') {
+            calls.push('firebase')
+            return { ok: true } as unknown as Response
+          }
+          return { ok: false } as unknown as Response
+        })
+
+        const { deleteTrackPhoto } = useTrackPhotos()
+        const success = await deleteTrackPhoto('user_1', 'track_key_1', mockPhoto, 'valid_drive_token')
+
+        expect(success).toBe(false)
+        expect(calls).toEqual(['drive'])
+      })
     })
   })
 

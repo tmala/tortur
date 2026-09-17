@@ -596,7 +596,8 @@ export function useTrackPhotos() {
       const resData = (await res.json()) as { name?: string }
       return {
         ...photoData,
-        id: resData.name || undefined
+        id: resData.name || undefined,
+        thumbnailDataUrl: photoData.thumbnailUrl?.startsWith('data:') ? photoData.thumbnailUrl : photoData.thumbnailDataUrl
       }
     } catch (err) {
       console.warn('[useTrackPhotos] Feil ved lagring i Firebase:', err)
@@ -627,12 +628,17 @@ export function useTrackPhotos() {
         const item = val as Record<string, unknown>
         if (typeof item.fileId !== 'string' || typeof item.url !== 'string') continue
 
+        const thumbUrl = typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : undefined
+        const thumbData = typeof item.thumbnailDataUrl === 'string'
+          ? item.thumbnailDataUrl
+          : (thumbUrl?.startsWith('data:') ? thumbUrl : undefined)
+
         photos.push({
           id,
           fileId: item.fileId,
           url: item.url,
-          thumbnailUrl: typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : undefined,
-          thumbnailDataUrl: typeof item.thumbnailDataUrl === 'string' ? item.thumbnailDataUrl : undefined,
+          thumbnailUrl: thumbUrl || thumbData,
+          thumbnailDataUrl: thumbData,
           driveViewUrl: typeof item.driveViewUrl === 'string' ? item.driveViewUrl : undefined,
           filename: typeof item.filename === 'string' ? item.filename : 'Bilde',
           uploadedAt: typeof item.uploadedAt === 'number' ? item.uploadedAt : Date.now(),
@@ -650,40 +656,56 @@ export function useTrackPhotos() {
   }
 
   /**
-   * Sletter et turbilde fra Firebase RTDB og forsøker å slette filen fra Google Drive.
+   * Sletter et turbilde fra Google Drive og deretter fra Firebase RTDB.
+   * Krever aktiv Google Drive-tilkobling dersom bildet har en fil i Drive,
+   * for å forhindre at metadata slettes mens filen blir liggende igjen i Google Drive.
    */
   async function deleteTrackPhoto(
     userId: string,
     trackKey: string,
-    photo: TrackPhoto
+    photo: TrackPhoto,
+    accessToken?: string
   ): Promise<boolean> {
     if (!userId || userId === 'guest' || !trackKey || !photo.id) return false
 
     const config = await getFirebaseConfig()
     if (!config) return false
 
+    const token = accessToken || driveAccessToken.value
+
+    // Krev at Google Drive er tilkoblet dersom bildet har en filId
+    if (photo.fileId && !token) {
+      console.warn('[useTrackPhotos] Kan ikke slette turbilde uten aktiv tilkobling til Google Drive')
+      return false
+    }
+
     try {
-      // 1. Slett fra Firebase RTDB
+      // 1. Slett filen fra Google Drive først
+      if (photo.fileId && token) {
+        try {
+          const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.fileId)}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+          })
+          // Hvis filen allerede er slettet fra Drive (404), eller sletting var vellykket (200/204), fortsett.
+          // Hvis Google Drive returnerer en annen feil (f.eks. 401/403/500), avbryt så vi ikke fjerner metadata alene.
+          if (!driveRes.ok && driveRes.status !== 404) {
+            console.warn(`[useTrackPhotos] Feil ved sletting i Google Drive: HTTP ${driveRes.status}`)
+            return false
+          }
+        } catch (driveErr) {
+          console.warn('[useTrackPhotos] Feil ved sletting i Google Drive:', driveErr)
+          return false
+        }
+      }
+
+      // 2. Slett fra Firebase RTDB kun etter vellykket Drive-sletting
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/track_photos/${encodeURIComponent(trackKey)}/${encodeURIComponent(photo.id)}.json`
       const res = await fetchFirebase(url, {
         method: 'DELETE'
       })
 
-      if (!res.ok) return false
-
-      // 2. Hvis vi har aktiv Drive-tilgang, slett også filen fra Drive
-      if (driveAccessToken.value && photo.fileId) {
-        try {
-          await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.fileId)}`, {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${driveAccessToken.value}` }
-          })
-        } catch {
-          // Ignorer slettefeil i Drive
-        }
-      }
-
-      return true
+      return res.ok
     } catch (err) {
       console.warn('[useTrackPhotos] Feil ved sletting av turbilde:', err)
       return false
@@ -722,7 +744,6 @@ export function useTrackPhotos() {
       fileId: driveUpload.fileId,
       url: `https://lh3.googleusercontent.com/d/${driveUpload.fileId}`,
       thumbnailUrl: thumbnailDataUrl || `https://drive.google.com/thumbnail?id=${driveUpload.fileId}&sz=w600`,
-      thumbnailDataUrl,
       driveViewUrl: driveUpload.webViewLink || `https://drive.google.com/file/d/${driveUpload.fileId}/view`,
       filename: file.name,
       uploadedAt: Date.now(),

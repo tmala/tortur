@@ -23,7 +23,7 @@ const escapeTrackHtml = (str: string): string => {
 }
 
 function createPhotoMarkerIcon(photo: TrackPhoto): L.DivIcon {
-  const src = photo.thumbnailDataUrl || photo.thumbnailUrl || photo.url
+  const src = photo.thumbnailUrl || photo.thumbnailDataUrl || photo.url
   const html = `
     <div class="track-photo-map-pin" title="${escapeTrackHtml(photo.filename)}">
       <img src="${escapeTrackHtml(src)}" alt="${escapeTrackHtml(photo.filename)}" class="track-photo-pin-img" loading="lazy" />
