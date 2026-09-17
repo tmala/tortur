@@ -1,5 +1,5 @@
 // =============================================================================
-// TorTur – Google Apps Script Backend v14
+// TorTur – Google Apps Script Backend v15
 // =============================================================================
 // Instruksjoner:
 //  1. Gå til Google Regneark → Extensions → Apps Script
