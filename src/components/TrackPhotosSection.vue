@@ -299,7 +299,7 @@ onMounted(() => {
         >
           <div class="photo-thumbnail-wrap" @click="openLightbox(photo)">
             <img
-              :src="photo.thumbnailUrl || photo.url"
+              :src="photo.thumbnailDataUrl || photo.thumbnailUrl || photo.url"
               :alt="photo.filename"
               loading="lazy"
               class="photo-thumbnail"
@@ -364,6 +364,12 @@ onMounted(() => {
           :src="selectedPhotoForModal.url"
           :alt="selectedPhotoForModal.filename"
           class="lightbox-image"
+          @error="(e) => {
+            const target = e.target as HTMLImageElement
+            if (selectedPhotoForModal?.thumbnailDataUrl && target.src !== selectedPhotoForModal.thumbnailDataUrl) {
+              target.src = selectedPhotoForModal.thumbnailDataUrl
+            }
+          }"
         />
 
         <div class="lightbox-footer">

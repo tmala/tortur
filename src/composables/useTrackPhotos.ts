@@ -9,6 +9,7 @@ export interface TrackPhoto {
   fileId: string
   url: string
   thumbnailUrl?: string
+  thumbnailDataUrl?: string
   driveViewUrl?: string
   filename: string
   uploadedAt: number
@@ -58,6 +59,116 @@ function loadGIS(): Promise<void> {
     script.onerror = () => reject(new Error('Klarte ikke laste Google Identity Services'))
     document.head.appendChild(script)
   })
+}
+
+/**
+ * Genererer en lettvektig JPEG thumbnail-data-URL direkte i nettleseren ved hjelp av Canvas API.
+ * Standardstørrelse er maks 100x100 piksler for å minimere lagret datamengde i Firebase RTDB (ca. 2–4 KB).
+ */
+export async function createThumbnailDataUrl(
+  file: File,
+  maxWidth = 100,
+  maxHeight = 100,
+  quality = 0.72
+): Promise<string | undefined> {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return undefined
+
+  try {
+    let imgWidth = 0
+    let imgHeight = 0
+    let source: CanvasImageSource | null = null
+
+    // 1. Prøv createImageBitmap først (håndterer automatisk EXIF-orientering i moderne nettlesere)
+    if (typeof createImageBitmap !== 'undefined') {
+      try {
+        const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' })
+        imgWidth = bmp.width
+        imgHeight = bmp.height
+        source = bmp
+      } catch {
+        // Fallback til HTMLImageElement
+      }
+    }
+
+    // 2. Fallback via Image og ObjectURL dersom createImageBitmap ikke støttes
+    if (!source) {
+      source = await new Promise<HTMLImageElement | null>((resolve) => {
+        const img = new Image()
+        let objectUrl = ''
+        try {
+          objectUrl = URL.createObjectURL(file)
+        } catch {
+          resolve(null)
+          return
+        }
+
+        const cleanup = () => {
+          if (objectUrl) {
+            try {
+              URL.revokeObjectURL(objectUrl)
+            } catch {
+              // Ignorer opprydningsfeil
+            }
+          }
+        }
+
+        const timer = setTimeout(() => {
+          cleanup()
+          resolve(null)
+        }, 2000)
+
+        img.onload = () => {
+          clearTimeout(timer)
+          cleanup()
+          resolve(img)
+        }
+        img.onerror = () => {
+          clearTimeout(timer)
+          cleanup()
+          resolve(null)
+        }
+        img.src = objectUrl
+      })
+
+      if (!source) return undefined
+      const imgEl = source as HTMLImageElement
+      imgWidth = imgEl.naturalWidth || imgEl.width
+      imgHeight = imgEl.naturalHeight || imgEl.height
+    }
+
+    if (!imgWidth || !imgHeight) return undefined
+
+    // Beregn skalerte proporsjoner med maks 100x100
+    let width = imgWidth
+    let height = imgHeight
+
+    if (width > height) {
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width)
+        width = maxWidth
+      }
+    } else {
+      if (height > maxHeight) {
+        width = Math.round((width * maxHeight) / height)
+        height = maxHeight
+      }
+    }
+
+    width = Math.max(1, width)
+    height = Math.max(1, height)
+
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return undefined
+
+    ctx.drawImage(source, 0, 0, width, height)
+    return canvas.toDataURL('image/jpeg', quality)
+  } catch (err) {
+    console.warn('[useTrackPhotos] Kunne ikke generere thumbnail for', file.name, err)
+    return undefined
+  }
 }
 
 /**
@@ -362,6 +473,8 @@ export function useTrackPhotos() {
 
     const newFolder = (await createRes.json()) as { id: string }
     localStorage.setItem(cacheKey, newFolder.id)
+    // Del også spormappen slik at filer automatisk arver lesetilgang
+    makeFileAccessible(newFolder.id, accessToken).catch(() => {})
     return newFolder.id
   }
 
@@ -414,23 +527,42 @@ export function useTrackPhotos() {
   }
 
   /**
-   * Setter lesetilgang for 'anyone with link' på filen slik at bildet kan vises i <img>-tag.
+   * Setter lesetilgang for 'anyone with link' på filen/mappen slik at bildet kan vises i <img>-tag.
+   * Inkluderer enkel retry ved rate-limiting (403/429) fra Google Drive API.
    */
-  async function makeFileAccessible(fileId: string, accessToken: string): Promise<void> {
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/permissions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        role: 'reader',
-        type: 'anyone'
-      })
-    })
+  async function makeFileAccessible(fileId: string, accessToken: string, retries = 2): Promise<void> {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/permissions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            role: 'reader',
+            type: 'anyone'
+          })
+        })
 
-    if (!res.ok) {
-      console.warn(`[useTrackPhotos] Kunne ikke sette deling for fil ${fileId}: HTTP ${res.status}`)
+        if (res.ok) {
+          return
+        }
+
+        if ((res.status === 403 || res.status === 429) && attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)))
+          continue
+        }
+
+        console.warn(`[useTrackPhotos] Kunne ikke sette deling for fil ${fileId}: HTTP ${res.status}`)
+        return
+      } catch (err) {
+        if (attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)))
+          continue
+        }
+        console.warn(`[useTrackPhotos] Feil ved deling av fil ${fileId}:`, err)
+      }
     }
   }
 
@@ -500,6 +632,7 @@ export function useTrackPhotos() {
           fileId: item.fileId,
           url: item.url,
           thumbnailUrl: typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : undefined,
+          thumbnailDataUrl: typeof item.thumbnailDataUrl === 'string' ? item.thumbnailDataUrl : undefined,
           driveViewUrl: typeof item.driveViewUrl === 'string' ? item.driveViewUrl : undefined,
           filename: typeof item.filename === 'string' ? item.filename : 'Bilde',
           uploadedAt: typeof item.uploadedAt === 'number' ? item.uploadedAt : Date.now(),
@@ -558,7 +691,11 @@ export function useTrackPhotos() {
   }
 
   /**
-   * Laster opp ett bilde: leser EXIF -> laster opp til Drive -> setter deling -> lagrer i Firebase RTDB.
+   * Laster opp ett bilde:
+   * 1. Genererer lettvektig thumbnail (maks 100x100) og leser EXIF i nettleseren
+   * 2. Laster opp uendret originalfil til Google Drive
+   * 3. Setter lesetilgang for filen i Google Drive
+   * 4. Lagrer metadata og thumbnailDataUrl i Firebase RTDB
    */
   async function uploadSingleTrackPhoto(
     file: File,
@@ -567,8 +704,11 @@ export function useTrackPhotos() {
     folderId: string,
     accessToken: string
   ): Promise<TrackPhoto | null> {
-    // 1. Les EXIF-data i nettleseren før opplasting
-    const exif = await readPhotoExif(file)
+    // 1. Generer thumbnail (maks 100x100, kun ~2-4 KB) og les EXIF-data i nettleseren
+    const [thumbnailDataUrl, exif] = await Promise.all([
+      createThumbnailDataUrl(file, 100, 100),
+      readPhotoExif(file)
+    ])
 
     // 2. Last opp uendret fil til Google Drive
     const driveUpload = await uploadFileToDrive(file, folderId, accessToken)
@@ -581,7 +721,8 @@ export function useTrackPhotos() {
     const photoData: Omit<TrackPhoto, 'id'> = {
       fileId: driveUpload.fileId,
       url: `https://lh3.googleusercontent.com/d/${driveUpload.fileId}`,
-      thumbnailUrl: `https://drive.google.com/thumbnail?id=${driveUpload.fileId}&sz=w600`,
+      thumbnailUrl: thumbnailDataUrl || `https://drive.google.com/thumbnail?id=${driveUpload.fileId}&sz=w600`,
+      thumbnailDataUrl,
       driveViewUrl: driveUpload.webViewLink || `https://drive.google.com/file/d/${driveUpload.fileId}/view`,
       filename: file.name,
       uploadedAt: Date.now(),
@@ -602,6 +743,7 @@ export function useTrackPhotos() {
     getOrCreateTrackFolder,
     uploadFileToDrive,
     makeFileAccessible,
+    createThumbnailDataUrl,
     savePhotoToFirebase,
     fetchTrackPhotos,
     deleteTrackPhoto,

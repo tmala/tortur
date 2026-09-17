@@ -5,6 +5,7 @@ import {
   formatTrackFolderName,
   isPhotoNearTrack,
   readPhotoExif,
+  createThumbnailDataUrl,
   useTrackPhotos,
   type TrackPhoto
 } from '../composables/useTrackPhotos'
@@ -53,6 +54,27 @@ describe('useTrackPhotos', () => {
       FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
       FIREBASE_SECRET_PREFIX: 'test_prefix'
     }
+
+    // Mock createImageBitmap og Canvas for kjapp og stabil thumbnail-testing i jsdom
+    if (typeof globalThis.createImageBitmap === 'undefined') {
+      globalThis.createImageBitmap = vi.fn().mockImplementation(async () => {
+        return {
+          width: 800,
+          height: 600,
+          close: vi.fn()
+        } as unknown as ImageBitmap
+      })
+    }
+
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
+      return {
+        drawImage: vi.fn()
+      } as unknown as CanvasRenderingContext2D
+    })
+
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockImplementation(() => {
+      return 'data:image/jpeg;base64,mockCanvasThumb100'
+    })
   })
 
   describe('isFileWithinTrackTime', () => {
@@ -160,6 +182,44 @@ describe('useTrackPhotos', () => {
       expect(exif.timestamp).toBeUndefined()
       expect(exif.lat).toBeUndefined()
       expect(exif.lng).toBeUndefined()
+    })
+  })
+
+  describe('createThumbnailDataUrl', () => {
+    it('genererer en data-URL for bilde med standard maks 100x100', async () => {
+      const file = new File(['fake-image-bytes'], 'tur.jpg', { type: 'image/jpeg' })
+      const thumb = await createThumbnailDataUrl(file)
+      expect(thumb).toBe('data:image/jpeg;base64,mockCanvasThumb100')
+    })
+
+    it('respekterer egne dimensjoner (f.eks. maxWidth/maxHeight 100)', async () => {
+      let capturedWidth = 0
+      let capturedHeight = 0
+
+      const drawImageSpy = vi.fn().mockImplementation((_img: CanvasImageSource, _sx: number, _sy: number, sw?: number, sh?: number) => {
+        capturedWidth = typeof sw === 'number' ? sw : 0
+        capturedHeight = typeof sh === 'number' ? sh : 0
+      })
+
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
+        return {
+          drawImage: drawImageSpy
+        } as unknown as CanvasRenderingContext2D
+      })
+
+      const file = new File(['fake-image-bytes'], 'panoramabilde.jpg', { type: 'image/jpeg' })
+      const thumb = await createThumbnailDataUrl(file, 100, 100)
+      expect(thumb).toBe('data:image/jpeg;base64,mockCanvasThumb100')
+      // 800x600 skalert til maks 100 bredde -> bredde 100, høyde 75
+      expect(capturedWidth).toBe(100)
+      expect(capturedHeight).toBe(75)
+    })
+
+    it('returnerer undefined dersom canvas-kontekst ikke er tilgjengelig', async () => {
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+      const file = new File(['fake'], 'broken.jpg', { type: 'image/jpeg' })
+      const thumb = await createThumbnailDataUrl(file)
+      expect(thumb).toBeUndefined()
     })
   })
 
@@ -336,6 +396,7 @@ describe('useTrackPhotos', () => {
       const saved = await savePhotoToFirebase('user_456', 'track_iso_key', {
         fileId: 'f1',
         url: 'https://lh3.googleusercontent.com/d/f1',
+        thumbnailDataUrl: 'data:image/jpeg;base64,mockCanvasThumb100',
         filename: 'foto1.jpg',
         uploadedAt: 1000,
         exifTimestamp: 500
@@ -343,11 +404,13 @@ describe('useTrackPhotos', () => {
 
       expect(saved).toBeDefined()
       expect(saved?.id).toBe('-OpMockPushKey123')
+      expect(saved?.thumbnailDataUrl).toBe('data:image/jpeg;base64,mockCanvasThumb100')
 
       const list = await fetchTrackPhotos('user_456', 'track_iso_key')
       expect(list.length).toBe(1)
       expect(list[0]?.fileId).toBe('f1')
       expect(list[0]?.id).toBe('-OpMockPushKey123')
+      expect(list[0]?.thumbnailDataUrl).toBe('data:image/jpeg;base64,mockCanvasThumb100')
     })
 
     it('uploadSingleTrackPhoto orkestrerer opplasting, EXIF, deling og lagring', async () => {
@@ -394,6 +457,7 @@ describe('useTrackPhotos', () => {
       expect(result?.id).toBe('firebase_push_id')
       expect(result?.fileId).toBe('full_flow_file_id')
       expect(result?.url).toBe('https://lh3.googleusercontent.com/d/full_flow_file_id')
+      expect(result?.thumbnailDataUrl).toBe('data:image/jpeg;base64,mockCanvasThumb100')
       expect(result?.lat).toBe(59.9139)
       expect(result?.lng).toBe(10.7522)
     })
