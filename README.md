@@ -43,7 +43,7 @@ En moderne, rask og installérbar **Progressive Web App (PWA)** bygget med **Vue
   - 🟡 Tankskip
   - 🟠 Slepebåter og arbeidsbåter
   - 🔴 Redningsskøyter og Kystvakt
-- **Smart Zoom-grense (Zoom $\ge$ 12)**: For å forhindre overbelastning og sikre lynrask ytelse, vises fartøyene kun når brukeren har zoomet inn på et nærområde (under ca. 20–30 km utsnitt). Zoomet lenger ut vises en hjelpetekst: *«AIS (Zoom inn)»*.
+- **Smart Zoom-grense (Zoom $\ge$ 12)**: For å forhindre overbelastning og sikre lynrask ytelse, vises fartøyene kun når brukeren har zoomet inn på et nærområde (under ca. 20–30 km utsnitt). Zoomet lenger ut vises en hjelpetekst: _«AIS (Zoom inn)»_.
 - **Fleksibel datakilde**: Støtter direkte tilkobling til Kystverkets/BarentsWatch API med egne gratis API-nøkler, eller en integrert demonstrasjonsstrøm.
 
 ### 5. 🗺️ Interaktive kommunegrenser & Klikk i kartet
@@ -58,40 +58,55 @@ En moderne, rask og installérbar **Progressive Web App (PWA)** bygget med **Vue
 - **Installérbar**: Kan installeres som frittstående app på mobil (iOS Safari, Android Chrome) og skrivebord (Chrome, Edge, Safari).
 - **Service Worker Cache**: Cacher automatisk kartfliser, kommunegrenser og turpostdata for rask oppstart og bruk uten stabil nettforbindelse.
 
+### 7. 📸 Innsjekking & Turbilder (Google Drive via Cloud Function)
+
+- **Innsjekk på turposter**: Registrer besøk med dato, klokkeslett, personlig turbeskrivelse og bilde.
+- **Rask Cloud Function-opplasting**: Bildet sendes som rå binærfil via `multipart/form-data` direkte til en dedikert Google Cloud Function (Node.js 22 i `europe-west1`), som lagrer det strukturert i en egen undermappe for turposten i Google Drive.
+- **Null belastning på webhotellet**: Bilder rutes rett til Google Drive – webhotellets båndbredde og opplastingskvote belastes ikke.
+- **Full støtte for norske tegn**: Håndterer filnavn med `æ`, `ø`, `å` rent og pent via Unicode-normalisering.
+
+### 8. 👥 Autentisering, Venner & Sanntidssynkronisering
+
+- **Google-innlogging (GIS)**: Enkel og sikker innlogging med din Google-konto.
+- **Dobbelt lagringslag**: Innsjekkingen lagres sikkert i Google Regneark (via webhotellets PHP API / Apps Script) og synkroniseres umiddelbart til **Firebase Realtime Database**.
+- **Sosiale funksjoner**: Se egne og venners innsjekkinger, gi emoji-reaksjoner og legg igjen turkommentarer.
+
 ---
 
 ## 🏗️ Arkitektur og Prosjektstruktur
 
+> [!TIP]
+> For en komplett visuell fremstilling med Mermaid-diagrammer over dataflyt, sikkerhet og skytjenester, se **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
 ```
 tortur/
+├── ARCHITECTURE.md            # Visuell arkitekturrapport og sekvensdiagrammer
 ├── data/
 │   └── mountains.csv          # Rådata med 15 292 turposter (semikolon-separert)
 ├── public/
+│   ├── api/                   # PHP Backend for webhotell (Google Sheets REST API)
+│   │   ├── index.php          # Hovedendepunkt for innsjekking og brukere
+│   │   └── GoogleClient.php   # Service Account REST-klient
 │   ├── icon.svg               # App-ikon for PWA
 │   └── data/                  # Generert og optimalisert data for webappen
 │       ├── hierarchy.json     # Indeks over fylker, kommuner og postantall (~12 KB)
 │       ├── kommuner.geojson   # Kartverkets kommunegrenser i GeoJSON-format (~1.2 MB)
 │       └── turposter/         # Individuelle JSON-filer per kommune (5–30 KB)
-│           ├── vestland/
-│           │   ├── luster.json
-│           │   └── sogndal.json
-│           └── ...
 ├── scripts/
+│   ├── drive-upload-function/ # Google Cloud Function (Node.js 22, Secret Manager, Drive API)
+│   │   ├── src/index.js       # HTTP-endepunkt for multipart-opplasting
+│   │   ├── deploy.sh          # Deploy-skript til europe-west1
+│   │   └── test/upload.html   # Frittstående testside for bildeopplasting
+│   ├── appscript/             # Google Apps Script v15 (historisk/alternativ backend)
 │   └── build-data.js          # Byggeskript som parser CSV og genererer ren JSON
 ├── src/
 │   ├── assets/
 │   │   └── main.css           # Styling, mørkt tema, pulsanimasjoner og popup-stil
-│   ├── components/
-│   │   ├── MapViewer.vue      # Leaflet kartkomponent, markører, fliser og GeoJSON-lag
-│   │   ├── LocationControls.vue # Flytende topp- og bunnpanel, GPS- og lagkontroller
-│   │   └── TurposterPanel.vue # Slide-in panel for valg av fylke/kommune og søk i topper
-│   ├── composables/
-│   │   ├── useGeolocation.ts  # Henting av GPS-posisjon og kontinuerlig sporing
-│   │   └── useTurposter.ts    # Laste- og oppslagslogikk for turposter og kommuner
-│   ├── router/
-│   │   └── index.ts           # Vue Router-konfigurasjon
-│   ├── App.vue                # Hovedkomponent som binder kart, panel og logikk sammen
-│   └── main.ts                # Applikasjonsinitialisering og Pinia/Router-oppsett
+│   ├── components/            # Vue-komponenter (MapViewer, CheckinModal, TurposterPanel)
+│   ├── composables/           # useAuth.ts, useGeolocation.ts, useTurposter.ts
+│   ├── services/              # firebase.ts (Firebase SDK og sanntidskonfigurasjon)
+│   ├── App.vue                # Hovedkomponent
+│   └── main.ts                # App-initialisering
 ├── vite.config.ts             # Vite + VitePWA-oppsett med Workbox runtime caching
 └── package.json
 ```
