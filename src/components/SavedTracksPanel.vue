@@ -20,6 +20,7 @@ import {
 } from 'lucide-vue-next'
 import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import { formatDistance, type TrackPoint } from '@/composables/useGeolocation'
+import TrackPhotosSection from '@/components/TrackPhotosSection.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -527,6 +528,13 @@ const handleConfirmSaveLiveTrack = () => {
               <Trash2 :size="14" />
             </button>
           </div>
+
+          <!-- Turbilder for sporet (kun for egne spor når innlogget) -->
+          <TrackPhotosSection
+            v-if="isLoggedIn && track.userId === trackStore.currentUserId"
+            :track="track"
+            :user-id="trackStore.currentUserId"
+          />
         </div>
       </div>
     </div>

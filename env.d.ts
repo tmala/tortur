@@ -26,6 +26,16 @@ interface Window {
         renderButton: (parent: HTMLElement, options: { theme?: string; size?: string }) => void
         disableAutoSelect: () => void
       }
+      oauth2?: {
+        initTokenClient: (config: {
+          client_id: string
+          scope: string
+          callback: (response: { access_token?: string; error?: string; error_description?: string; expires_in?: number }) => void
+          prompt?: string
+        }) => {
+          requestAccessToken: (overrideConfig?: { prompt?: string }) => void
+        }
+      }
     }
   }
 }

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import MapViewer from '@/components/MapViewer.vue'
 import AppHeader from '@/components/AppHeader.vue'
+import TrackPlaybackPanel from '@/components/TrackPlaybackPanel.vue'
 import LocationControls from '@/components/LocationControls.vue'
 import TurposterPanel from '@/components/TurposterPanel.vue'
 import CheckinModal from '@/components/CheckinModal.vue'
@@ -11,10 +12,11 @@ import AddTurpostModal from '@/components/AddTurpostModal.vue'
 import {
   useGeolocation,
   calculateDistanceMeters,
-  formatDistance,
   type GeoLocationState,
 } from '@/composables/useGeolocation'
-import { Route, X as CloseIcon, Navigation, Play, Pause, RotateCcw } from 'lucide-vue-next'
+import { X as CloseIcon } from 'lucide-vue-next'
+import { useTrackPhotos, type TrackPhoto, isPhotoNearTrack } from '@/composables/useTrackPhotos'
+import { formatTrackKey } from '@/composables/useFirebaseTracks'
 import {
   useTurposter,
   findKommuneInHierarchy,
@@ -419,7 +421,7 @@ const handleViewSavedTrack = (track: SavedTrack | null) => {
 
 // Zoom til spor når aktivt spor endres (f.eks. valgt fra en innsjekking)
 const isReplayingTrack = ref(false)
-const replaySpeedOptions = [10, 20, 40, 80]
+const replaySpeedOptions = [10, 20, 40, 80, 120, 160]
 const currentReplaySpeed = ref(40)
 
 const handleCycleReplaySpeed = () => {
@@ -429,8 +431,30 @@ const handleCycleReplaySpeed = () => {
   mapViewerRef.value?.setTrackReplaySpeed(currentReplaySpeed.value)
 }
 
-const handleToggleTrackReplay = () => {
-  mapViewerRef.value?.toggleTrackReplay(currentReplaySpeed.value)
+const handleIncreaseSpeed = () => {
+  const currentIndex = replaySpeedOptions.indexOf(currentReplaySpeed.value)
+  if (currentIndex < replaySpeedOptions.length - 1) {
+    currentReplaySpeed.value = replaySpeedOptions[currentIndex + 1]!
+    mapViewerRef.value?.setTrackReplaySpeed(currentReplaySpeed.value)
+  }
+}
+
+const handleDecreaseSpeed = () => {
+  const currentIndex = replaySpeedOptions.indexOf(currentReplaySpeed.value)
+  if (currentIndex > 0) {
+    currentReplaySpeed.value = replaySpeedOptions[currentIndex - 1]!
+    mapViewerRef.value?.setTrackReplaySpeed(currentReplaySpeed.value)
+  }
+}
+
+const handlePlayTrackReplay = () => {
+  mapViewerRef.value?.startTrackReplay(currentReplaySpeed.value)
+  isReplayingTrack.value = true
+}
+
+const handlePauseTrackReplay = () => {
+  mapViewerRef.value?.pauseTrackReplay()
+  isReplayingTrack.value = false
 }
 
 const handleStopTrackReplay = () => {
@@ -442,17 +466,51 @@ const handleTrackReplayChange = (isPlaying: boolean) => {
   isReplayingTrack.value = isPlaying
 }
 
+// Visningstilstander for sporet på kartet
+const showKmMarkers = ref(true)
+const showPhotosOnMap = ref(true)
+const activeTrackPhotos = ref<TrackPhoto[]>([])
+const selectedPhotoForModal = ref<TrackPhoto | null>(null)
+
+const { fetchTrackPhotos } = useTrackPhotos()
+
 watch(
   () => trackStore.activeTrack,
-  (track) => {
+  async (track) => {
     mapViewerRef.value?.stopTrackReplay()
     isReplayingTrack.value = false
     if (track) {
       handleViewSavedTrack(track)
+      if (track.userId && track.userId !== 'guest') {
+        const key = track.firebaseKey || formatTrackKey(track.startTime || track.createdAt)
+        activeTrackPhotos.value = await fetchTrackPhotos(track.userId, key)
+      } else {
+        activeTrackPhotos.value = []
+      }
+    } else {
+      activeTrackPhotos.value = []
     }
   },
   { immediate: true },
 )
+
+// Beregn turbilder som er på/nær sporet (innenfor 300m)
+const onTrackPhotos = computed(() => {
+  if (!trackStore.activeTrack || !trackStore.activeTrack.points) return []
+  return activeTrackPhotos.value.filter((photo) =>
+    isPhotoNearTrack(photo, trackStore.activeTrack!.points, 300)
+  )
+})
+
+// Bilder som faktisk sendes til kartet
+const displayedTrackPhotos = computed(() => {
+  if (!showPhotosOnMap.value) return []
+  return onTrackPhotos.value
+})
+
+const handlePhotoClick = (photo: TrackPhoto) => {
+  selectedPhotoForModal.value = photo
+}
 
 // Håndter åpning og lukking av turpost-panel
 const handleToggleTurposter = () => {
@@ -771,82 +829,27 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <!-- Flytende banner når et lagret GPS-spor vises på kartet -->
+    <!-- Flytende sporvisningspanel når et lagret GPS-spor vises på kartet -->
     <transition name="fade-slide">
-      <div v-if="trackStore.activeTrack" class="active-track-banner">
-        <div
-          class="active-track-content"
-          @click="handleViewSavedTrack(trackStore.activeTrack)"
-          title="Klikk for å sentrere kartet på sporet"
-        >
-          <Route :size="16" class="track-banner-icon" />
-          <div class="active-track-text">
-            <span class="active-track-label">Spor:</span>
-            <span class="active-track-title">{{ trackStore.activeTrack.name }}</span>
-            <span v-if="trackStore.activeTrack.distanceMeters" class="active-track-dist">
-              ({{ formatDistance(trackStore.activeTrack.distanceMeters) }})
-            </span>
-          </div>
-        </div>
-        <div class="active-track-actions">
-          <!-- Avspilling -->
-          <button
-            type="button"
-            class="btn-track-banner-play"
-            :class="{ 'is-playing': isReplayingTrack }"
-            @click="handleToggleTrackReplay"
-            :title="isReplayingTrack ? 'Pause avspilling av ruten' : `Spill av ruten med animert retningspil (${currentReplaySpeed}x fart)`"
-            :aria-label="isReplayingTrack ? 'Pause avspilling' : 'Spill av ruten'"
-          >
-            <Pause v-if="isReplayingTrack" :size="12" />
-            <Play v-else :size="12" />
-            <span>{{ isReplayingTrack ? 'Pause' : 'Spill av' }}</span>
-          </button>
-
-          <!-- Hastighetsvelger -->
-          <button
-            type="button"
-            class="btn-track-banner-speed"
-            @click="handleCycleReplaySpeed"
-            :title="`Klikk for å endre fart (nå: ${currentReplaySpeed}x)`"
-            :aria-label="`Endre fart, nå ${currentReplaySpeed}x`"
-          >
-            <span>{{ currentReplaySpeed }}x</span>
-          </button>
-
-          <button
-            v-if="isReplayingTrack"
-            type="button"
-            class="btn-track-banner-reset"
-            @click="handleStopTrackReplay"
-            title="Stopp og nullstill avspilling"
-            aria-label="Stopp avspilling"
-          >
-            <RotateCcw :size="12" />
-          </button>
-
-          <!-- Sentrér -->
-          <button
-            type="button"
-            class="btn-track-banner-focus"
-            @click="handleViewSavedTrack(trackStore.activeTrack)"
-            title="Sentrér og zoom til sporet"
-            aria-label="Sentrér på sporet"
-          >
-            <Navigation :size="12" />
-            <span>Sentrér</span>
-          </button>
-          <!-- Skjul -->
-          <button
-            type="button"
-            class="btn-track-banner-close"
-            @click="trackStore.clearActiveTrack()"
-            title="Skjul sporet fra kartet"
-            aria-label="Skjul spor"
-          >
-            <CloseIcon :size="14" />
-          </button>
-        </div>
+      <div v-if="trackStore.activeTrack" class="track-control-panel-wrapper">
+        <TrackPlaybackPanel
+          :track="trackStore.activeTrack"
+          :is-replaying="isReplayingTrack"
+          :replay-speed="currentReplaySpeed"
+          :show-km-markers="showKmMarkers"
+          :show-photos-on-map="showPhotosOnMap"
+          :on-track-photos-count="onTrackPhotos.length"
+          @focus-track="handleViewSavedTrack(trackStore.activeTrack)"
+          @close="trackStore.clearActiveTrack()"
+          @update:show-km-markers="showKmMarkers = $event"
+          @update:show-photos-on-map="showPhotosOnMap = $event"
+          @play="handlePlayTrackReplay"
+          @pause="handlePauseTrackReplay"
+          @increase-speed="handleIncreaseSpeed"
+          @decrease-speed="handleDecreaseSpeed"
+          @cycle-speed="handleCycleReplaySpeed"
+          @stop-replay="handleStopTrackReplay"
+        />
       </div>
     </transition>
 
@@ -858,6 +861,8 @@ onUnmounted(() => {
       :track-points="displayedTrackPoints"
       :track-name="displayedTrackTitle"
       :track-distance-meters="displayedTrackDistance"
+      :show-km-markers="showKmMarkers"
+      :track-photos="displayedTrackPhotos"
       :turposter="turposter"
       :private-turposter="appState.mySpots"
       :is-add-spot-active="appState.isAddSpotModeActive"
@@ -880,9 +885,50 @@ onUnmounted(() => {
       @add-turpost-map-click="handleAddTurpostMapClick"
       @delete-private-spot="handleDeletePrivateSpot"
       @click-track="handleTrackClick"
+      @click-track-photo="handlePhotoClick"
       @disable-municipalities="showMunicipalities = false"
       @track-replay-change="handleTrackReplayChange"
     />
+
+    <!-- Lightbox Modal for turbilder klikket på kartet -->
+    <div
+      v-if="selectedPhotoForModal"
+      class="lightbox-backdrop"
+      @click.self="selectedPhotoForModal = null"
+    >
+      <div class="lightbox-content">
+        <button class="btn-lightbox-close" @click="selectedPhotoForModal = null" aria-label="Lukk bildevisning">
+          <CloseIcon :size="20" />
+        </button>
+
+        <img
+          :src="selectedPhotoForModal.url"
+          :alt="selectedPhotoForModal.filename"
+          class="lightbox-image"
+        />
+
+        <div class="lightbox-footer">
+          <span class="lightbox-filename">{{ selectedPhotoForModal.filename }}</span>
+          <div class="lightbox-info">
+            <span v-if="selectedPhotoForModal.exifTimestamp">
+              Tatt: {{ new Date(selectedPhotoForModal.exifTimestamp).toLocaleString('no-NO') }}
+            </span>
+            <span v-if="selectedPhotoForModal.lat && selectedPhotoForModal.lng" class="geo-info">
+              📍 {{ selectedPhotoForModal.lat.toFixed(5) }}, {{ selectedPhotoForModal.lng.toFixed(5) }}
+            </span>
+            <a
+              v-if="selectedPhotoForModal.driveViewUrl"
+              :href="selectedPhotoForModal.driveViewUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="lightbox-drive-link"
+            >
+              Åpne i Google Drive ↗
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <AppHeader
       :active-layer="activeLayer"
@@ -1064,192 +1110,24 @@ onUnmounted(() => {
   color: #ffffff;
 }
 
-.active-track-banner {
+.track-control-panel-wrapper {
   position: absolute;
-  top: 72px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1050;
-  background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  border-radius: 24px;
-  padding: 6px 12px 6px 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(16, 185, 129, 0.2);
-  color: #f8fafc;
-  font-size: 13px;
-  max-width: 90vw;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  right: calc(14px + env(safe-area-inset-right, 0px));
+  z-index: 1060;
+  max-width: 380px;
+  pointer-events: none;
 }
 
-.active-track-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  min-width: 0;
-}
-
-.track-banner-icon {
-  color: #34d399;
-  flex-shrink: 0;
-}
-
-.active-track-text {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.active-track-label {
-  color: #94a3b8;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 600;
-}
-
-.active-track-title {
-  font-weight: 600;
-  color: #f1f5f9;
-}
-
-.active-track-dist {
-  color: #34d399;
-  font-weight: 500;
-  font-size: 12px;
-}
-
-.active-track-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.btn-track-banner-play {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(2, 132, 199, 0.22);
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  color: #38bdf8;
-  border-radius: 14px;
-  padding: 3px 9px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-track-banner-play:hover {
-  background: rgba(2, 132, 199, 0.4);
-  color: #fff;
-  border-color: rgba(56, 189, 248, 0.7);
-}
-
-.btn-track-banner-play.is-playing {
-  background: rgba(249, 115, 22, 0.25);
-  border-color: rgba(249, 115, 22, 0.6);
-  color: #fb923c;
-  animation: play-btn-pulse 1.8s infinite ease-in-out;
-}
-
-@keyframes play-btn-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4);
+@media (max-width: 640px) {
+  .track-control-panel-wrapper {
+    top: calc(56px + env(safe-area-inset-top, 0px));
+    left: 10px;
+    right: 10px;
+    max-width: calc(100vw - 20px);
+    display: flex;
+    justify-content: center;
   }
-  50% {
-    box-shadow: 0 0 0 4px rgba(249, 115, 22, 0);
-  }
-}
-
-.btn-track-banner-speed {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(2, 132, 199, 0.18);
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  color: #38bdf8;
-  border-radius: 12px;
-  padding: 3px 7px;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-variant-numeric: tabular-nums;
-}
-
-.btn-track-banner-speed:hover {
-  background: rgba(2, 132, 199, 0.35);
-  color: #fff;
-  border-color: rgba(56, 189, 248, 0.7);
-}
-
-.btn-track-banner-reset {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #cbd5e1;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-track-banner-reset:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-}
-
-.btn-track-banner-focus {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(16, 185, 129, 0.2);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  color: #6ee7b7;
-  border-radius: 14px;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.btn-track-banner-focus:hover {
-  background: rgba(16, 185, 129, 0.35);
-  color: #fff;
-}
-
-.btn-track-banner-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #94a3b8;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.btn-track-banner-close:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #f87171;
 }
 
 .fade-slide-enter-active,
@@ -1260,6 +1138,109 @@ onUnmounted(() => {
 .fade-slide-enter-from,
 .fade-slide-leave-to {
   opacity: 0;
-  transform: translate(-50%, -10px);
+  transform: translateY(-8px);
+}
+
+/* Lightbox Modal for turbilder */
+.lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  background: rgba(10, 15, 25, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.lightbox-content {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 20px 35px rgba(0, 0, 0, 0.6);
+}
+
+.btn-lightbox-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #f1f5f9;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.15s ease;
+}
+
+.btn-lightbox-close:hover {
+  background: rgba(239, 68, 68, 0.8);
+  color: #ffffff;
+}
+
+.lightbox-image {
+  max-width: 85vw;
+  max-height: 75vh;
+  object-fit: contain;
+  display: block;
+}
+
+.lightbox-footer {
+  width: 100%;
+  padding: 10px 14px;
+  background: #0f172a;
+  border-top: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lightbox-filename {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.lightbox-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.geo-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #38bdf8;
+}
+
+.lightbox-drive-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #38bdf8;
+  text-decoration: none;
+  margin-left: auto;
+}
+
+.lightbox-drive-link:hover {
+  text-decoration: underline;
 }
 </style>

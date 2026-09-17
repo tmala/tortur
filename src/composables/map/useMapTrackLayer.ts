@@ -7,6 +7,7 @@ import {
   getTrackDurationMs,
   interpolatePositionAtElapsedMs
 } from '@/utils/trackPlayback'
+import type { TrackPhoto } from '@/composables/useTrackPhotos'
 
 const escapeTrackHtml = (str: string): string => {
   return str.replace(/[&<>"']/g, (m) => {
@@ -21,14 +22,33 @@ const escapeTrackHtml = (str: string): string => {
   })
 }
 
+function createPhotoMarkerIcon(photo: TrackPhoto): L.DivIcon {
+  const src = photo.thumbnailUrl || photo.url
+  const html = `
+    <div class="track-photo-map-pin" title="${escapeTrackHtml(photo.filename)}">
+      <img src="${escapeTrackHtml(src)}" alt="${escapeTrackHtml(photo.filename)}" class="track-photo-pin-img" loading="lazy" />
+      <span class="track-photo-pin-badge">📷</span>
+    </div>
+  `
+  return L.divIcon({
+    className: 'track-photo-pin-container',
+    html,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    popupAnchor: [0, -18]
+  })
+}
+
 export function useMapTrackLayer(
   getMap: () => L.Map | null,
-  onClickTrack: () => void
+  onClickTrack: () => void,
+  onClickPhoto?: (photo: TrackPhoto) => void
 ) {
   let trackPolyline: L.Polyline | null = null
   let trackBgPolyline: L.Polyline | null = null
   let trackHitPolyline: L.Polyline | null = null
   let kmMarkersLayer: L.LayerGroup | null = null
+  let trackPhotosLayer: L.LayerGroup | null = null
 
   // Tilstand for animert avspilling av sporet
   const isReplaying = ref(false)
@@ -61,7 +81,9 @@ export function useMapTrackLayer(
   const updateTrackLayer = (
     points: TrackPoint[] | undefined,
     trackName?: string,
-    trackDistanceMeters?: number
+    trackDistanceMeters?: number,
+    showKmMarkers: boolean = true,
+    trackPhotos: TrackPhoto[] = []
   ) => {
     const map = getMap()
     if (!map) return
@@ -146,43 +168,88 @@ export function useMapTrackLayer(
     }
 
     // Oppdater kilometermarkører langs sporet
-    const kmMarkers = calculateKmMarkers(pts)
-
-    if (!kmMarkersLayer) {
-      kmMarkersLayer = L.layerGroup().addTo(map)
+    if (!showKmMarkers) {
+      if (kmMarkersLayer) {
+        kmMarkersLayer.clearLayers()
+      }
     } else {
-      kmMarkersLayer.clearLayers()
+      const kmMarkers = calculateKmMarkers(pts)
+
+      if (!kmMarkersLayer) {
+        kmMarkersLayer = L.layerGroup().addTo(map)
+      } else {
+        kmMarkersLayer.clearLayers()
+        if (!map.hasLayer(kmMarkersLayer)) {
+          kmMarkersLayer.addTo(map)
+        }
+      }
+
+      for (const markerInfo of kmMarkers) {
+        const icon = createKmMarkerIcon(markerInfo)
+        const marker = L.marker([markerInfo.lat, markerInfo.lng], {
+          icon,
+          interactive: true,
+          zIndexOffset: 500,
+        })
+
+        let tooltipHtml = `<div class="track-km-tooltip"><strong class="km-tt-title">${markerInfo.km}. kilometer</strong>`
+        if (markerInfo.splitDetailed) {
+          tooltipHtml += `<div class="km-tt-row"><span class="km-tt-label">Splittid:</span> <span class="km-tt-val">${escapeTrackHtml(markerInfo.splitDetailed)}</span></div>`
+        }
+        if (markerInfo.cumulativeDetailed) {
+          tooltipHtml += `<div class="km-tt-row"><span class="km-tt-label">Fra start:</span> <span class="km-tt-val">${escapeTrackHtml(markerInfo.cumulativeDetailed)}</span></div>`
+        }
+        tooltipHtml += `</div>`
+
+        marker.bindTooltip(tooltipHtml, {
+          direction: 'top',
+          offset: [0, -6],
+          className: 'track-km-tooltip-wrap',
+        })
+
+        marker.on('click', (e) => {
+          L.DomEvent.stopPropagation(e)
+          onClickTrack()
+        })
+
+        marker.addTo(kmMarkersLayer)
+      }
     }
 
-    for (const markerInfo of kmMarkers) {
-      const icon = createKmMarkerIcon(markerInfo)
-      const marker = L.marker([markerInfo.lat, markerInfo.lng], {
+    // Oppdater turbilder på kartet
+    if (!trackPhotosLayer) {
+      trackPhotosLayer = L.layerGroup().addTo(map)
+    } else {
+      trackPhotosLayer.clearLayers()
+      if (!map.hasLayer(trackPhotosLayer)) {
+        trackPhotosLayer.addTo(map)
+      }
+    }
+
+    for (const photo of trackPhotos) {
+      if (typeof photo.lat !== 'number' || typeof photo.lng !== 'number') continue
+
+      const icon = createPhotoMarkerIcon(photo)
+      const marker = L.marker([photo.lat, photo.lng], {
         icon,
         interactive: true,
-        zIndexOffset: 500,
+        zIndexOffset: 650,
       })
 
-      let tooltipHtml = `<div class="track-km-tooltip"><strong class="km-tt-title">${markerInfo.km}. kilometer</strong>`
-      if (markerInfo.splitDetailed) {
-        tooltipHtml += `<div class="km-tt-row"><span class="km-tt-label">Splittid:</span> <span class="km-tt-val">${escapeTrackHtml(markerInfo.splitDetailed)}</span></div>`
-      }
-      if (markerInfo.cumulativeDetailed) {
-        tooltipHtml += `<div class="km-tt-row"><span class="km-tt-label">Fra start:</span> <span class="km-tt-val">${escapeTrackHtml(markerInfo.cumulativeDetailed)}</span></div>`
-      }
-      tooltipHtml += `</div>`
-
-      marker.bindTooltip(tooltipHtml, {
+      marker.bindTooltip(escapeTrackHtml(photo.filename), {
         direction: 'top',
-        offset: [0, -6],
+        offset: [0, -18],
         className: 'track-km-tooltip-wrap',
       })
 
       marker.on('click', (e) => {
         L.DomEvent.stopPropagation(e)
-        onClickTrack()
+        if (onClickPhoto) {
+          onClickPhoto(photo)
+        }
       })
 
-      marker.addTo(kmMarkersLayer)
+      marker.addTo(trackPhotosLayer)
     }
   }
 
@@ -324,6 +391,11 @@ export function useMapTrackLayer(
       kmMarkersLayer.clearLayers()
       kmMarkersLayer.remove()
       kmMarkersLayer = null
+    }
+    if (trackPhotosLayer) {
+      trackPhotosLayer.clearLayers()
+      trackPhotosLayer.remove()
+      trackPhotosLayer = null
     }
   }
 

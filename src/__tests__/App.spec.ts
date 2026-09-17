@@ -44,7 +44,7 @@ describe('AppHeader', () => {
     expect(wrapper.text()).toContain('Turposter')
     expect(wrapper.find('.btn-locate').attributes('title')).toBe('Hvor er jeg?')
     expect(wrapper.find('.btn-local-turposter').attributes('title')).toBe('Vis turposter der jeg er')
-    expect(wrapper.find('.btn-track').attributes('title')).toBe('Følg meg')
+    expect(wrapper.find('.btn-track').attributes('title')).toBe('Spor meg')
 
     // Click close button to dismiss menu
     await wrapper.find('.btn-close-menu').trigger('click')

@@ -21,6 +21,7 @@ import {
 import { useMapAisLayer } from '@/composables/map/useMapAisLayer'
 import { useMapTrackLayer } from '@/composables/map/useMapTrackLayer'
 import { useMapMunicipalitiesLayer } from '@/composables/map/useMapMunicipalitiesLayer'
+import type { TrackPhoto } from '@/composables/useTrackPhotos'
 
 const props = defineProps<{
   userLocation: GeoLocationState | null
@@ -41,6 +42,8 @@ const props = defineProps<{
   trackDistanceMeters?: number
   privateTurposter?: TurpostItem[]
   isAddSpotActive?: boolean
+  showKmMarkers?: boolean
+  trackPhotos?: TrackPhoto[]
 }>()
 
 const emit = defineEmits<{
@@ -56,6 +59,7 @@ const emit = defineEmits<{
   (e: 'add-turpost-map-click', coords: { lat: number; lng: number }): void
   (e: 'delete-private-spot', spotId: string): void
   (e: 'click-track'): void
+  (e: 'click-track-photo', photo: TrackPhoto): void
   (e: 'disable-municipalities'): void
   (e: 'track-replay-change', isPlaying: boolean): void
 }>()
@@ -74,7 +78,8 @@ const markerMap = new Map<string, L.Marker>()
 const aisLayer = useMapAisLayer(() => map)
 const trackLayer = useMapTrackLayer(
   () => map,
-  () => emit('click-track')
+  () => emit('click-track'),
+  (photo: TrackPhoto) => emit('click-track-photo', photo)
 )
 const municipalitiesLayer = useMapMunicipalitiesLayer(
   () => map,
@@ -578,9 +583,15 @@ const centerOnUser = (animate = true, zoomLevel?: number) => {
 }
 
 watch(
-  () => props.trackPoints,
-  (points) => {
-    trackLayer.updateTrackLayer(points, props.trackName, props.trackDistanceMeters)
+  () => [props.trackPoints, props.showKmMarkers, props.trackPhotos],
+  () => {
+    trackLayer.updateTrackLayer(
+      props.trackPoints,
+      props.trackName,
+      props.trackDistanceMeters,
+      props.showKmMarkers !== false,
+      props.trackPhotos || []
+    )
   },
   { deep: true }
 )
@@ -845,7 +856,13 @@ onMounted(() => {
     municipalitiesLayer.loadMunicipalitiesGeoJson(true)
   }
 
-  trackLayer.updateTrackLayer(props.trackPoints, props.trackName, props.trackDistanceMeters)
+  trackLayer.updateTrackLayer(
+    props.trackPoints,
+    props.trackName,
+    props.trackDistanceMeters,
+    props.showKmMarkers !== false,
+    props.trackPhotos || []
+  )
 
   map.on('dragstart', () => {
     isAutoCenter.value = false
@@ -1096,6 +1113,49 @@ onUnmounted(() => {
   border: none !important;
   background: transparent !important;
   pointer-events: none !important;
+}
+
+/* Turbilde-pin på kartet */
+:deep(.track-photo-pin-container) {
+  background: transparent !important;
+  border: none !important;
+}
+
+:deep(.track-photo-map-pin) {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 2px solid #38bdf8;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  background: #0f172a;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+:deep(.track-photo-map-pin:hover) {
+  transform: scale(1.18);
+  border-color: #ffffff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.75), 0 0 0 2px #38bdf8;
+  z-index: 1000 !important;
+}
+
+:deep(.track-photo-pin-img) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+:deep(.track-photo-pin-badge) {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: rgba(15, 23, 42, 0.85);
+  font-size: 9px;
+  padding: 1px 3px;
+  border-top-left-radius: 4px;
 }
 
 :deep(.track-replay-avatar) {
