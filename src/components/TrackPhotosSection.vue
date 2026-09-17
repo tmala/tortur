@@ -179,19 +179,7 @@ async function onFilesSelected(event: Event): Promise<void> {
 }
 
 async function handleDelete(photo: TrackPhoto): Promise<void> {
-  if (!isDriveAuthorized.value) {
-    const connect = confirm(
-      'Du må koble til Google Drive for å kunne slette bildet (slik at det også fjernes fra din Google Drive).\n\nVil du koble til Google Drive nå?'
-    )
-    if (!connect) return
-
-    try {
-      await requestDriveAccess()
-    } catch (err) {
-      uploadError.value = err instanceof Error ? err.message : 'Google Drive-innlogging feilet'
-      return
-    }
-  }
+  if (!isDriveAuthorized.value) return
 
   if (!confirm(`Vil du fjerne bildet «${photo.filename}» fra turen og slette det fra Google Drive?`)) return
 
@@ -342,10 +330,10 @@ onMounted(() => {
               <ExternalLink :size="12" />
             </a>
             <button
+              v-if="isDriveAuthorized"
               class="btn-photo-delete"
-              :class="{ 'is-not-connected': !isDriveAuthorized }"
               @click="handleDelete(photo)"
-              :title="isDriveAuthorized ? 'Fjern bilde fra turen og Google Drive' : 'Koble til Google Drive for å slette bilde'"
+              title="Fjern bilde fra turen og Google Drive"
               aria-label="Slett bilde"
             >
               <Trash2 :size="12" />
@@ -667,15 +655,6 @@ onMounted(() => {
 
 .btn-photo-delete:hover {
   color: #f87171;
-}
-
-.btn-photo-delete.is-not-connected {
-  opacity: 0.5;
-}
-
-.btn-photo-delete.is-not-connected:hover {
-  opacity: 0.9;
-  color: #fbbf24;
 }
 
 .photos-empty-state {
