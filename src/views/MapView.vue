@@ -512,13 +512,37 @@ const activePhotoCluster = ref<TrackPhoto[]>([])
 
 const handlePhotoClick = (photo: TrackPhoto, clusterPhotos?: TrackPhoto[]) => {
   selectedPhotoForModal.value = photo
-  activePhotoCluster.value = clusterPhotos && clusterPhotos.length > 1 ? clusterPhotos : [photo]
+
+  // Inkluder alle bildene fra turen i karusellen/stripen
+  const allPhotos =
+    activeTrackPhotos.value.length > 0
+      ? activeTrackPhotos.value
+      : displayedTrackPhotos.value.length > 0
+        ? displayedTrackPhotos.value
+        : clusterPhotos && clusterPhotos.length > 0
+          ? clusterPhotos
+          : [photo]
+
+  activePhotoCluster.value = allPhotos
 }
 
 const currentPhotoIndex = computed(() => {
   if (!selectedPhotoForModal.value) return -1
   const targetId = selectedPhotoForModal.value.id || selectedPhotoForModal.value.fileId
-  return activePhotoCluster.value.findIndex((p) => (p.id || p.fileId) === targetId)
+  const idx = activePhotoCluster.value.findIndex((p) => {
+    if (targetId && (p.id || p.fileId)) {
+      return (p.id || p.fileId) === targetId
+    }
+    return p.url === selectedPhotoForModal.value?.url
+  })
+  return idx >= 0 ? idx : 0
+})
+
+watch(currentPhotoIndex, () => {
+  nextTick(() => {
+    const activeEl = document.querySelector('.lightbox-strip-item.is-active')
+    activeEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  })
 })
 
 const hasPrevPhoto = computed(() => currentPhotoIndex.value > 0)
@@ -1331,15 +1355,17 @@ onUnmounted(() => {
 .lightbox-thumbnails-strip {
   display: flex;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   background: rgba(15, 23, 42, 0.95);
   width: 100%;
-  justify-content: center;
+  justify-content: safe center;
   overflow-x: auto;
   border-top: 1px solid #1e293b;
+  scrollbar-width: thin;
 }
 
 .lightbox-strip-item {
+  flex: 0 0 44px;
   width: 44px;
   height: 44px;
   border-radius: 6px;

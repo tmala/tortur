@@ -101,25 +101,22 @@ const handleForceRefresh = async () => {
       )
     }
 
-    // 2. Be service worker sjekke etter oppdatering og avregistrer for å sikre nyeste versjon
+    // 2. Be service worker sjekke etter oppdatering og aktiver eventuell ventende versjon
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations()
       for (const reg of registrations) {
         if (reg.waiting) {
           reg.waiting.postMessage({ type: 'SKIP_WAITING' })
         }
-        await reg.update()
-        await reg.unregister()
+        await reg.update().catch(() => {})
       }
     }
   } catch (err) {
     console.warn('Kunne ikke oppdatere cache fullstendig:', err)
   } finally {
-    // 3. Tving en full reload fra serveren til appens rot (/tortur/) med cache-busting parameter
+    // 3. Last appen på nytt fra appens rot
     const appBase = import.meta.env.BASE_URL || '/tortur/'
-    const targetUrl = new URL(appBase, window.location.origin)
-    targetUrl.searchParams.set('refresh', String(Date.now()))
-    window.location.replace(targetUrl.href)
+    window.location.href = appBase
   }
 }
 
