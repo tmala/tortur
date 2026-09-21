@@ -170,11 +170,11 @@ export async function uploadCheckinImage(req, res) {
         return res.status(403).json({ success: false, error: 'Ugyldig token – mangler e-post.' })
       }
 
-      // 4b. Sjekk at e-posten er på whitelisten (ALLOWED_EMAILS=a@b.com,c@d.com)
+      // 4b. Sjekk at e-posten er på whitelisten (støtter komma, semikolon eller mellomrom)
       const allowedRaw = process.env.ALLOWED_EMAILS || ''
       if (allowedRaw.trim()) {
         const allowed = allowedRaw
-          .split(',')
+          .split(/[,;\s]+/)
           .map((e) => e.trim().toLowerCase())
           .filter(Boolean)
         if (!allowed.includes(payload.email.toLowerCase())) {
