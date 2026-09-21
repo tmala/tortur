@@ -156,20 +156,21 @@ export async function uploadCheckinImage(req, res) {
       })
     }
 
-    // 4. Valider Google ID-token (hvis sendt med og ikke slått av)
-    if (idToken && process.env.REQUIRE_AUTH !== 'false') {
-      try {
-        const ticket = await authVerifier.verifyIdToken({
-          idToken,
-          audience: process.env.CLIENT_ID
-        })
-        const payload = ticket.getPayload()
-        if (!payload) {
-          console.warn('ID-token kunne ikke verifiseres, men fortsetter.')
-        }
-      } catch (authErr) {
-        console.warn('Advarsel: Feil ved verifisering av idToken:', authErr.message)
+    // 4. Valider Google ID-token – påkrevd
+    if (!idToken) {
+      return res.status(401).json({ success: false, error: 'Mangler idToken – autentisering påkrevd.' })
+    }
+    try {
+      const ticket = await authVerifier.verifyIdToken({
+        idToken,
+        audience: process.env.CLIENT_ID
+      })
+      const payload = ticket.getPayload()
+      if (!payload?.email) {
+        return res.status(403).json({ success: false, error: 'Ugyldig token – mangler e-post.' })
       }
+    } catch (authErr) {
+      return res.status(403).json({ success: false, error: `Ugyldig ID-token: ${authErr.message}` })
     }
 
     // 5. Hent autentisert Drive-klient og last opp bildet
