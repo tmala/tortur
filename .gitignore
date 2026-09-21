@@ -50,3 +50,4 @@ tracks/
 
 # Cloud Function deploy scripts
 scripts/drive-upload-function/deploy.sh
+scripts/drive-upload-function/update_env_vars.deploy.sh
