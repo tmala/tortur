@@ -169,6 +169,19 @@ export async function uploadCheckinImage(req, res) {
       if (!payload?.email) {
         return res.status(403).json({ success: false, error: 'Ugyldig token – mangler e-post.' })
       }
+
+      // 4b. Sjekk at e-posten er på whitelisten (ALLOWED_EMAILS=a@b.com,c@d.com)
+      const allowedRaw = process.env.ALLOWED_EMAILS || ''
+      if (allowedRaw.trim()) {
+        const allowed = allowedRaw
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean)
+        if (!allowed.includes(payload.email.toLowerCase())) {
+          console.warn(`[auth] Avvist e-post: ${payload.email}`)
+          return res.status(403).json({ success: false, error: 'Ikke autorisert.' })
+        }
+      }
     } catch (authErr) {
       return res.status(403).json({ success: false, error: `Ugyldig ID-token: ${authErr.message}` })
     }
