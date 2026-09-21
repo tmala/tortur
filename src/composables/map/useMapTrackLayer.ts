@@ -8,6 +8,7 @@ import {
   interpolatePositionAtElapsedMs
 } from '@/utils/trackPlayback'
 import type { TrackPhoto } from '@/composables/useTrackPhotos'
+import { clusterTrackPhotos, type TrackPhotoCluster } from '@/utils/trackPhotoCluster'
 
 const escapeTrackHtml = (str: string): string => {
   return str.replace(/[&<>"']/g, (m) => {
@@ -22,12 +23,29 @@ const escapeTrackHtml = (str: string): string => {
   })
 }
 
-function createPhotoMarkerIcon(photo: TrackPhoto): L.DivIcon {
+function formatPhotoTime(timestamp?: number): string {
+  if (!timestamp) return ''
+  return new Date(timestamp).toLocaleTimeString('no-NO', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function createPhotoMarkerIcon(photo: TrackPhoto, count: number = 1): L.DivIcon {
   const src = photo.thumbnailUrl || photo.thumbnailDataUrl || photo.url
+  const isCluster = count > 1
+  const badgeHtml = isCluster
+    ? `<span class="track-photo-pin-badge cluster-count">${count}</span>`
+    : `<span class="track-photo-pin-badge">📷</span>`
+  const clusterClass = isCluster ? ' is-cluster' : ''
+  const titleText = isCluster
+    ? `${count} turbilder her (klikk for å velge)`
+    : photo.filename
+
   const html = `
-    <div class="track-photo-map-pin" title="${escapeTrackHtml(photo.filename)}">
+    <div class="track-photo-map-pin${clusterClass}" title="${escapeTrackHtml(titleText)}">
       <img src="${escapeTrackHtml(src)}" alt="${escapeTrackHtml(photo.filename)}" class="track-photo-pin-img" loading="lazy" />
-      <span class="track-photo-pin-badge">📷</span>
+      ${badgeHtml}
     </div>
   `
   return L.divIcon({
@@ -39,10 +57,51 @@ function createPhotoMarkerIcon(photo: TrackPhoto): L.DivIcon {
   })
 }
 
+function createClusterPopupHtml(cluster: TrackPhotoCluster): string {
+  const count = cluster.photos.length
+  const times = cluster.photos
+    .map((p) => p.exifTimestamp || p.uploadedAt)
+    .filter((t): t is number => typeof t === 'number' && t > 0)
+
+  let subtitle = ''
+  if (times.length > 0) {
+    const minTime = formatPhotoTime(Math.min(...times))
+    const maxTime = formatPhotoTime(Math.max(...times))
+    subtitle = minTime === maxTime ? `kl. ${minTime}` : `kl. ${minTime} – ${maxTime}`
+  }
+
+  let itemsHtml = ''
+  for (let i = 0; i < cluster.photos.length; i++) {
+    const p = cluster.photos[i]
+    if (!p) continue
+    const pSrc = p.thumbnailUrl || p.thumbnailDataUrl || p.url
+    const pTime = formatPhotoTime(p.exifTimestamp || p.uploadedAt)
+    const pId = p.id || p.fileId
+    itemsHtml += `
+      <button type="button" class="cluster-thumb-item" data-photo-index="${i}" data-photo-id="${escapeTrackHtml(pId)}" title="${escapeTrackHtml(p.filename)}" aria-label="${escapeTrackHtml(p.filename)}">
+        <img src="${escapeTrackHtml(pSrc)}" alt="${escapeTrackHtml(p.filename)}" class="cluster-thumb-img" loading="lazy" />
+        ${pTime ? `<span class="cluster-thumb-time">${escapeTrackHtml(pTime)}</span>` : ''}
+      </button>
+    `
+  }
+
+  return `
+    <div class="track-photo-cluster-popup">
+      <div class="cluster-popup-header">
+        <strong class="cluster-popup-title">📷 ${count} bilder tatt her</strong>
+        ${subtitle ? `<span class="cluster-popup-subtitle">${escapeTrackHtml(subtitle)}</span>` : ''}
+      </div>
+      <div class="cluster-thumbs-grid">
+        ${itemsHtml}
+      </div>
+    </div>
+  `
+}
+
 export function useMapTrackLayer(
   getMap: () => L.Map | null,
   onClickTrack: () => void,
-  onClickPhoto?: (photo: TrackPhoto) => void
+  onClickPhoto?: (photo: TrackPhoto, clusterPhotos?: TrackPhoto[]) => void
 ) {
   let trackPolyline: L.Polyline | null = null
   let trackBgPolyline: L.Polyline | null = null
@@ -114,6 +173,12 @@ export function useMapTrackLayer(
         kmMarkersLayer.remove()
         kmMarkersLayer = null
       }
+      if (trackPhotosLayer) {
+        trackPhotosLayer.clearLayers()
+        trackPhotosLayer.remove()
+        trackPhotosLayer = null
+      }
+      map.closePopup()
       return
     }
 
@@ -226,28 +291,88 @@ export function useMapTrackLayer(
       }
     }
 
-    for (const photo of trackPhotos) {
-      if (typeof photo.lat !== 'number' || typeof photo.lng !== 'number') continue
+    const clusters = clusterTrackPhotos(trackPhotos)
 
-      const icon = createPhotoMarkerIcon(photo)
-      const marker = L.marker([photo.lat, photo.lng], {
+    for (const cluster of clusters) {
+      const firstPhoto = cluster.photos[0]
+      if (!firstPhoto) continue
+      const count = cluster.photos.length
+      const icon = createPhotoMarkerIcon(firstPhoto, count)
+      const marker = L.marker([cluster.lat, cluster.lng], {
         icon,
         interactive: true,
         zIndexOffset: 650,
       })
 
-      marker.bindTooltip(escapeTrackHtml(photo.filename), {
-        direction: 'top',
-        offset: [0, -18],
-        className: 'track-km-tooltip-wrap',
-      })
+      if (count === 1) {
+        marker.bindTooltip(escapeTrackHtml(firstPhoto.filename), {
+          direction: 'top',
+          offset: [0, -18],
+          className: 'track-km-tooltip-wrap',
+        })
 
-      marker.on('click', (e) => {
-        L.DomEvent.stopPropagation(e)
-        if (onClickPhoto) {
-          onClickPhoto(photo)
-        }
-      })
+        marker.on('click', (e) => {
+          L.DomEvent.stopPropagation(e)
+          if (onClickPhoto) {
+            onClickPhoto(firstPhoto, cluster.photos)
+          }
+        })
+      } else {
+        marker.bindTooltip(`${count} turbilder her (klikk for å velge)`, {
+          direction: 'top',
+          offset: [0, -18],
+          className: 'track-km-tooltip-wrap',
+        })
+
+        const popupHtml = createClusterPopupHtml(cluster)
+        const popup = L.popup({
+          className: 'track-photo-cluster-popup-wrap',
+          maxWidth: 340,
+          minWidth: 220,
+          autoPan: true,
+          autoPanPadding: [20, 20],
+          closeButton: true,
+        }).setContent(popupHtml)
+
+        marker.bindPopup(popup)
+
+        marker.on('popupopen', (e) => {
+          const popupEl = (e as L.PopupEvent).popup.getElement()
+          if (!popupEl) return
+
+          const handleSelect = (btn: HTMLElement) => {
+            const idxStr = btn.getAttribute('data-photo-index')
+            const idx = idxStr !== null ? parseInt(idxStr, 10) : -1
+            const photoId = btn.getAttribute('data-photo-id')
+            const selected =
+              (idx >= 0 ? cluster.photos[idx] : undefined) ||
+              cluster.photos.find((p) => (p.id || p.fileId) === photoId)
+
+            if (selected && onClickPhoto) {
+              marker.closePopup()
+              onClickPhoto(selected, cluster.photos)
+            }
+          }
+
+          // Robust delegert klikk-håndtering på popup-beholderen
+          popupEl.onclick = (ev) => {
+            const target = ev.target as HTMLElement | null
+            const btn = target?.closest<HTMLElement>('.cluster-thumb-item')
+            if (btn) {
+              ev.stopPropagation()
+              handleSelect(btn)
+            }
+          }
+
+          const buttons = popupEl.querySelectorAll<HTMLButtonElement>('.cluster-thumb-item')
+          buttons.forEach((btn) => {
+            btn.onclick = (ev) => {
+              ev.stopPropagation()
+              handleSelect(btn)
+            }
+          })
+        })
+      }
 
       marker.addTo(trackPhotosLayer)
     }

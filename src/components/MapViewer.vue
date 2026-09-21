@@ -59,7 +59,7 @@ const emit = defineEmits<{
   (e: 'add-turpost-map-click', coords: { lat: number; lng: number }): void
   (e: 'delete-private-spot', spotId: string): void
   (e: 'click-track'): void
-  (e: 'click-track-photo', photo: TrackPhoto): void
+  (e: 'click-track-photo', photo: TrackPhoto, clusterPhotos?: TrackPhoto[]): void
   (e: 'disable-municipalities'): void
   (e: 'track-replay-change', isPlaying: boolean): void
 }>()
@@ -79,7 +79,7 @@ const aisLayer = useMapAisLayer(() => map)
 const trackLayer = useMapTrackLayer(
   () => map,
   () => emit('click-track'),
-  (photo: TrackPhoto) => emit('click-track-photo', photo)
+  (photo: TrackPhoto, clusterPhotos?: TrackPhoto[]) => emit('click-track-photo', photo, clusterPhotos)
 )
 const municipalitiesLayer = useMapMunicipalitiesLayer(
   () => map,
@@ -1156,6 +1156,163 @@ onUnmounted(() => {
   font-size: 9px;
   padding: 1px 3px;
   border-top-left-radius: 4px;
+}
+
+/* Klynge-pin (flere bilder på samme sted) */
+:deep(.track-photo-map-pin.is-cluster) {
+  border-color: #f97316;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.6),
+    2px -2px 0 1px #0f172a,
+    3px -3px 0 2px #f97316;
+}
+
+:deep(.track-photo-map-pin.is-cluster:hover) {
+  border-color: #ffffff;
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.75),
+    3px -3px 0 1px #0f172a,
+    4px -4px 0 2px #f97316,
+    0 0 0 2px #ffffff;
+}
+
+:deep(.track-photo-pin-badge.cluster-count) {
+  background: #f97316;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 4px 0 0 0;
+  line-height: 1.1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Klynge-popup (ekspandert bildevelger) */
+:deep(.track-photo-cluster-popup-wrap .leaflet-popup-content-wrapper) {
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7);
+  padding: 0;
+}
+
+:deep(.track-photo-cluster-popup-wrap .leaflet-popup-content) {
+  margin: 10px 12px;
+  line-height: 1.4;
+}
+
+:deep(.track-photo-cluster-popup-wrap .leaflet-popup-tip) {
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+:deep(.track-photo-cluster-popup-wrap .leaflet-popup-close-button) {
+  color: #94a3b8;
+  top: 8px;
+  right: 8px;
+  font-size: 16px;
+  padding: 2px;
+  transition: color 0.15s ease;
+}
+
+:deep(.track-photo-cluster-popup-wrap .leaflet-popup-close-button:hover) {
+  color: #ffffff;
+}
+
+:deep(.track-photo-cluster-popup) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 320px;
+}
+
+:deep(.cluster-popup-header) {
+  display: flex;
+  flex-direction: column;
+  padding-right: 18px;
+}
+
+:deep(.cluster-popup-title) {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+:deep(.cluster-popup-subtitle) {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+:deep(.cluster-thumbs-grid) {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 6px 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+:deep(.cluster-thumbs-grid::-webkit-scrollbar) {
+  height: 4px;
+}
+
+:deep(.cluster-thumbs-grid::-webkit-scrollbar-thumb) {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+:deep(.cluster-thumb-item) {
+  position: relative;
+  flex: 0 0 64px;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  background: #1e293b;
+  overflow: hidden;
+  padding: 0;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+:deep(.cluster-thumb-item:hover),
+:deep(.cluster-thumb-item:focus-visible) {
+  transform: scale(1.06);
+  border-color: #38bdf8;
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.4);
+}
+
+:deep(.cluster-thumb-item:active) {
+  transform: scale(0.96);
+}
+
+:deep(.cluster-thumb-img) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+:deep(.cluster-thumb-time) {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(15, 23, 42, 0.85);
+  font-size: 9px;
+  color: #e2e8f0;
+  text-align: center;
+  padding: 1px 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
 }
 
 :deep(.track-replay-avatar) {

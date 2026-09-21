@@ -14,7 +14,7 @@ import {
   calculateDistanceMeters,
   type GeoLocationState,
 } from '@/composables/useGeolocation'
-import { X as CloseIcon } from 'lucide-vue-next'
+import { X as CloseIcon, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { useTrackPhotos, type TrackPhoto, isPhotoNearTrack } from '@/composables/useTrackPhotos'
 import { formatTrackKey } from '@/composables/useFirebaseTracks'
 import {
@@ -508,8 +508,53 @@ const displayedTrackPhotos = computed(() => {
   return onTrackPhotos.value
 })
 
-const handlePhotoClick = (photo: TrackPhoto) => {
+const activePhotoCluster = ref<TrackPhoto[]>([])
+
+const handlePhotoClick = (photo: TrackPhoto, clusterPhotos?: TrackPhoto[]) => {
   selectedPhotoForModal.value = photo
+  activePhotoCluster.value = clusterPhotos && clusterPhotos.length > 1 ? clusterPhotos : [photo]
+}
+
+const currentPhotoIndex = computed(() => {
+  if (!selectedPhotoForModal.value) return -1
+  const targetId = selectedPhotoForModal.value.id || selectedPhotoForModal.value.fileId
+  return activePhotoCluster.value.findIndex((p) => (p.id || p.fileId) === targetId)
+})
+
+const hasPrevPhoto = computed(() => currentPhotoIndex.value > 0)
+const hasNextPhoto = computed(
+  () =>
+    currentPhotoIndex.value >= 0 &&
+    currentPhotoIndex.value < activePhotoCluster.value.length - 1
+)
+
+const handlePrevPhoto = () => {
+  if (hasPrevPhoto.value) {
+    const prev = activePhotoCluster.value[currentPhotoIndex.value - 1]
+    if (prev) {
+      selectedPhotoForModal.value = prev
+    }
+  }
+}
+
+const handleNextPhoto = () => {
+  if (hasNextPhoto.value) {
+    const next = activePhotoCluster.value[currentPhotoIndex.value + 1]
+    if (next) {
+      selectedPhotoForModal.value = next
+    }
+  }
+}
+
+const handleLightboxKeydown = (e: KeyboardEvent) => {
+  if (!selectedPhotoForModal.value) return
+  if (e.key === 'ArrowLeft') {
+    handlePrevPhoto()
+  } else if (e.key === 'ArrowRight') {
+    handleNextPhoto()
+  } else if (e.key === 'Escape') {
+    selectedPhotoForModal.value = null
+  }
 }
 
 // Håndter åpning og lukking av turpost-panel
@@ -794,6 +839,7 @@ watch(
 
 // Last hierarki og forsøk automatisk å hente brukerens geolokasjon og lokale turposter ved oppstart
 onMounted(async () => {
+  window.addEventListener('keydown', handleLightboxKeydown)
   loadHierarchy()
   try {
     const loc = await getCurrentPosition({ timeout: 5000, enableHighAccuracy: true })
@@ -815,6 +861,7 @@ watch(coords, (newCoords) => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleLightboxKeydown)
   stopAisPoll()
 })
 </script>
@@ -901,6 +948,24 @@ onUnmounted(() => {
           <CloseIcon :size="20" />
         </button>
 
+        <button
+          v-if="hasPrevPhoto"
+          class="btn-lightbox-nav prev"
+          aria-label="Forrige bilde"
+          @click="handlePrevPhoto"
+        >
+          <ChevronLeft :size="24" />
+        </button>
+
+        <button
+          v-if="hasNextPhoto"
+          class="btn-lightbox-nav next"
+          aria-label="Neste bilde"
+          @click="handleNextPhoto"
+        >
+          <ChevronRight :size="24" />
+        </button>
+
         <img
           :src="selectedPhotoForModal.url"
           :alt="selectedPhotoForModal.filename"
@@ -914,8 +979,33 @@ onUnmounted(() => {
           }"
         />
 
+        <!-- Miniatyrbilde-stripe hvis flere bilder i klyngen -->
+        <div v-if="activePhotoCluster.length > 1" class="lightbox-thumbnails-strip">
+          <button
+            v-for="(photo, idx) in activePhotoCluster"
+            :key="photo.id || photo.fileId || idx"
+            type="button"
+            class="lightbox-strip-item"
+            :class="{ 'is-active': idx === currentPhotoIndex }"
+            :aria-label="photo.filename"
+            @click="selectedPhotoForModal = photo"
+          >
+            <img
+              :src="photo.thumbnailUrl || photo.thumbnailDataUrl || photo.url"
+              :alt="photo.filename"
+              class="lightbox-strip-img"
+              loading="lazy"
+            />
+          </button>
+        </div>
+
         <div class="lightbox-footer">
-          <span class="lightbox-filename">{{ selectedPhotoForModal.filename }}</span>
+          <div class="lightbox-title-row">
+            <span class="lightbox-filename">{{ selectedPhotoForModal.filename }}</span>
+            <span v-if="activePhotoCluster.length > 1" class="lightbox-cluster-counter">
+              {{ currentPhotoIndex + 1 }} av {{ activePhotoCluster.length }}
+            </span>
+          </div>
           <div class="lightbox-info">
             <span v-if="selectedPhotoForModal.exifTimestamp">
               Tatt: {{ new Date(selectedPhotoForModal.exifTimestamp).toLocaleString('no-NO') }}
@@ -1206,6 +1296,79 @@ onUnmounted(() => {
   display: block;
 }
 
+.btn-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #f1f5f9;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.15s ease;
+}
+
+.btn-lightbox-nav:hover {
+  background: rgba(56, 189, 248, 0.85);
+  color: #ffffff;
+  border-color: #38bdf8;
+}
+
+.btn-lightbox-nav.prev {
+  left: 10px;
+}
+
+.btn-lightbox-nav.next {
+  right: 10px;
+}
+
+.lightbox-thumbnails-strip {
+  display: flex;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(15, 23, 42, 0.95);
+  width: 100%;
+  justify-content: center;
+  overflow-x: auto;
+  border-top: 1px solid #1e293b;
+}
+
+.lightbox-strip-item {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  overflow: hidden;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 0;
+  background: #1e293b;
+  transition: all 0.15s ease;
+}
+
+.lightbox-strip-item.is-active {
+  border-color: #38bdf8;
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.lightbox-strip-item:hover {
+  opacity: 1;
+}
+
+.lightbox-strip-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .lightbox-footer {
   width: 100%;
   padding: 10px 14px;
@@ -1216,10 +1379,27 @@ onUnmounted(() => {
   gap: 4px;
 }
 
+.lightbox-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .lightbox-filename {
   font-size: 13px;
   font-weight: 600;
   color: #f8fafc;
+}
+
+.lightbox-cluster-counter {
+  font-size: 11px;
+  font-weight: 700;
+  background: #f97316;
+  color: #ffffff;
+  padding: 2px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
 }
 
 .lightbox-info {
