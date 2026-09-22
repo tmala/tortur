@@ -51,3 +51,5 @@ tracks/
 # Cloud Function deploy scripts
 scripts/drive-upload-function/deploy.sh
 scripts/drive-upload-function/update_env_vars.deploy.sh
+old/public/api/config.php
+old/public/api/service-account.json

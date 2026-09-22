@@ -17,6 +17,7 @@ gcloud functions deploy uploadCheckinImage \
   --memory=256MiB \
   --timeout=30s \
   --set-secrets 'REFRESH_TOKEN=tortur-drive-refresh-token:latest,CLIENT_ID=tortur-oauth-client-id:latest,CLIENT_SECRET=tortur-oauth-client-secret:latest' \
-  --update-env-vars INNSJEKK_FOLDER_ID="DIN_INNSJEKK_FOLDER_ID_HER"
+  --update-env-vars INNSJEKK_FOLDER_ID="DIN_INNSJEKK_FOLDER_ID_HER",SPREADSHEET_ID="DIN_SPREADSHEET_ID_HER",SHEET_BRUKERE="Brukere",SHEET_SYSTEM="SystemKonfigurasjon",SHEET_INNSJEKK="TurpostInnsjekk"
 
 echo "✅ Deploy fullført!"
+

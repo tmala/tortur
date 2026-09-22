@@ -17,15 +17,15 @@ graph TB
     end
 
     subgraph Skytjenester ["☁️ Google Cloud & Firebase"]
-        GCF["Google Cloud Function (Node.js 22)<br/><code>europe-west1</code><br/><i>uploadCheckinImage</i>"]
+        GCF["Google Cloud Function (Node.js 22)<br/><code>europe-west1</code><br/><i>uploadCheckinImage (Drive & Sheets API)</i>"]
         SecretMgr["Google Secret Manager<br/><i>OAuth2 Refresh Token & Secrets</i>"]
         GDrive["Google Drive<br/><i>Mappe per turpost, offentlige bilder</i>"]
+        GSheets["Google Regneark (Database)<br/><i>Brukere, Innsjekk, Konfigurasjon</i>"]
         FirebaseRTDB["Firebase Realtime Database<br/><i>Innsjekkinger, venner, reaksjoner & chat</i>"]
     end
 
-    subgraph Backend ["🖥️ Webhotell & Google Regneark"]
-        PHP["PHP Backend (public/api/index.php)<br/><i>Kjører på Apache/Nginx webhotell</i>"]
-        GSheets["Google Regneark (Database)<br/><i>Brukere, Innsjekk, Konfigurasjon</i>"]
+    subgraph Backend ["🖥️ Eksterne ressurser (historisk/valgfritt)"]
+        PHP["PHP Backend (public/api/index.php)<br/><i>Kjører på webhotell (erstattet av Cloud Function)</i>"]
         AppScript["Google Apps Script (Fallback)<br/><i>Historisk / alternativ backend</i>"]
     end
 
@@ -33,21 +33,17 @@ graph TB
     UI --> Store
     Store --> Leaflet
 
-    %% Bildeopplasting
+    %% Bildeopplasting & API
     Store -- "1. Multipart/form-data (rå binærfil)" --> GCF
+    Store -- "2. POST checkin / login (JSON)" --> GCF
     GCF -. "Henter nøkler" .-> SecretMgr
-    GCF -- "2. Skriver bilde & setter deling" --> GDrive
-    GCF -- "3. Returnerer lh3-bilde-URL" --> Store
-
-    %% Innsjekking
-    Store -- "4. POST checkin (kun imageUrl, 0 byte bildeoverhead)" --> PHP
-    PHP -- "5. Skriver rad via Service Account" --> GSheets
+    GCF -- "3. Skriver bilde & setter deling" --> GDrive
+    GCF -- "4. Skriver/leser rader via ADC" --> GSheets
+    GCF -- "5. Returnerer resultat til klient" --> Store
 
     %% Sanntidssynk
     Store -- "6. Sanntids synkronisering" --> FirebaseRTDB
 
-    %% Historisk fallback
-    PHP -. "Fallback for eldre klienter" .-> AppScript
 ```
 
 ---

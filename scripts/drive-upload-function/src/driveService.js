@@ -115,3 +115,40 @@ export async function uploadImageToDrive({
     imageUrl
   }
 }
+
+/**
+ * Sletter et bilde fra Google Drive basert på bilde-URL eller fil-ID
+ * @param {Object} params
+ * @param {InstanceType<typeof google.auth.OAuth2>} params.authClient
+ * @param {string} params.imageUrl
+ * @returns {Promise<boolean>}
+ */
+export async function deleteImageFromDrive({ authClient, imageUrl }) {
+  if (!imageUrl || typeof imageUrl !== 'string') return false
+
+  // Trekk ut fil-ID fra f.eks. https://lh3.googleusercontent.com/d/FILE_ID eller ?id=FILE_ID
+  let fileId = ''
+  const lh3Match = imageUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)
+  if (lh3Match) {
+    fileId = lh3Match[1]
+  } else {
+    const queryMatch = imageUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+    if (queryMatch) {
+      fileId = queryMatch[1]
+    }
+  }
+
+  if (!fileId) {
+    return false
+  }
+
+  try {
+    const drive = google.drive({ version: 'v3', auth: authClient })
+    await drive.files.delete({ fileId })
+    return true
+  } catch (err) {
+    console.warn(`[driveService] Kunne ikke slette bilde (${fileId}) fra Google Drive:`, err.message)
+    return false
+  }
+}
+
