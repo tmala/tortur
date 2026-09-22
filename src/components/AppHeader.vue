@@ -4,12 +4,11 @@ import { ChevronDown } from 'lucide-vue-next'
 import AuthPanel from './AuthPanel.vue'
 import AboutAppModal from './AboutAppModal.vue'
 import HeaderActionsDropdown from './header/HeaderActionsDropdown.vue'
-import MapLayerModal from './header/MapLayerModal.vue'
 import AisInfoModal from './header/AisInfoModal.vue'
 
 withDefaults(
   defineProps<{
-    activeLayer: string
+    activeLayer?: string
     isTurposterOpen: boolean
     activeKommuneName: string | null
     turpostCount: number
@@ -36,6 +35,7 @@ withDefaults(
     isAddSpotModeActive?: boolean
   }>(),
   {
+    activeLayer: 'norgeskart',
     isAdminActive: true,
   }
 )
@@ -47,7 +47,6 @@ const emit = defineEmits<{
   (e: 'open-saved-tracks'): void
   (e: 'open-my-spots'): void
   (e: 'toggle-add-spot-mode'): void
-  (e: 'change-layer', layer: string): void
   (e: 'toggle-turposter'): void
   (e: 'toggle-municipalities'): void
   (e: 'toggle-ais'): void
@@ -61,7 +60,6 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
 }
 
-const showLayerMenu = ref(false)
 const showInfoModal = ref(false)
 const showAisModal = ref(false)
 const installPrompt = ref<BeforeInstallPromptEvent | null>(null)
@@ -76,7 +74,6 @@ const isMenuOpen = ref(false)
 const toggleMenu = () => {
   isMenuOpen.value = !isMenuOpen.value
   if (!isMenuOpen.value) {
-    showLayerMenu.value = false
     showAisModal.value = false
     showInfoModal.value = false
   }
@@ -91,10 +88,6 @@ const handleClickOutside = (e: MouseEvent) => {
 
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Escape') {
-    if (showLayerMenu.value) {
-      showLayerMenu.value = false
-      return
-    }
     if (showAisModal.value) {
       showAisModal.value = false
       return
@@ -184,7 +177,6 @@ const handleInstallClick = async () => {
       :is-zoom-sufficient="isZoomSufficient"
       :ais-vessel-count="aisVesselCount"
       :show-municipalities="showMunicipalities"
-      :show-layer-menu="showLayerMenu"
       :show-ais-modal="showAisModal"
       :show-info-modal="showInfoModal"
       :show-install-prompt="!!installPrompt && !isInstalled"
@@ -197,7 +189,6 @@ const handleInstallClick = async () => {
       @open-track-modal="emit('open-track-modal')"
       @toggle-ais="emit('toggle-ais')"
       @toggle-municipalities="emit('toggle-municipalities')"
-      @toggle-layers="showLayerMenu = !showLayerMenu"
       @toggle-ais-modal="showAisModal = !showAisModal"
       @toggle-info-modal="showInfoModal = !showInfoModal"
       @install="handleInstallClick"
@@ -214,16 +205,6 @@ const handleInstallClick = async () => {
       :is-zoom-sufficient="isZoomSufficient"
       :is-ais-toggled="isAisToggled"
       @close="showAisModal = false"
-    />
-
-    <!-- Kartlag-velgermeny -->
-    <MapLayerModal
-      :is-open="showLayerMenu"
-      :active-layer="activeLayer"
-      :is-logged-in="isLoggedIn"
-      :is-admin="isAdmin"
-      @close="showLayerMenu = false"
-      @change-layer="(layerId: string) => emit('change-layer', layerId)"
     />
 
     <!-- Info-modal («Om appen») -->

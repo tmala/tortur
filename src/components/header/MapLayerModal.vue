@@ -65,10 +65,10 @@ const selectLayer = (layerId: string) => {
 
 .layer-modal {
   position: relative;
-  width: 100%;
-  max-width: 380px;
+  width: 320px;
+  max-width: calc(100vw - 32px);
   max-height: calc(
-    100dvh - 220px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    100dvh - 120px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
   );
   overflow-y: auto;
   padding: 10px 12px;
@@ -166,9 +166,10 @@ const selectLayer = (layerId: string) => {
 
 @media (max-width: 640px) {
   .layer-modal {
-    max-width: calc(100vw - 20px);
+    width: calc(100vw - 32px);
+    max-width: calc(100vw - 32px);
     max-height: calc(
-      100dvh - 240px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+      100dvh - 140px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
     );
     padding: 10px;
   }
@@ -182,6 +183,6 @@ const selectLayer = (layerId: string) => {
 .fade-slide-enter-from,
 .fade-slide-leave-to {
   opacity: 0;
-  transform: translateY(-10px);
+  transform: translateY(10px);
 }
 </style>

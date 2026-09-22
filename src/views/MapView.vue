@@ -10,6 +10,7 @@ import CheckinModal from '@/components/CheckinModal.vue'
 import TurpostCheckinsModal from '@/components/TurpostCheckinsModal.vue'
 import AddTurpostModal from '@/components/AddTurpostModal.vue'
 import MapContextMenu from '@/components/MapContextMenu.vue'
+import MapLayerButton from '@/components/MapLayerButton.vue'
 import {
   useGeolocation,
   calculateDistanceMeters,
@@ -1141,13 +1142,20 @@ onUnmounted(() => {
       @open-saved-tracks="router?.push('/gps-spor')"
       @open-my-spots="router?.push('/mine-turposter')"
       @toggle-add-spot-mode="appState.isAddSpotModeActive = !appState.isAddSpotModeActive"
-      @change-layer="handleChangeLayer"
       @toggle-turposter="handleToggleTurposter"
       @toggle-municipalities="showMunicipalities = !showMunicipalities"
       @toggle-ais="handleToggleAis"
       @show-local-turposter="handleShowLocalTurposter"
       @open-profile="router?.push('/profil')"
       @apply-update="applyUpdate"
+    />
+
+    <!-- Frittstående kartvelger i nedre venstre hjørne -->
+    <MapLayerButton
+      :active-layer="activeLayer"
+      :is-logged-in="isLoggedIn"
+      :is-admin="isAdmin"
+      @change-layer="handleChangeLayer"
     />
 
     <LocationControls

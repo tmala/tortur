@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-  Layers,
   Route,
   FileDown,
   Loader2,
@@ -30,7 +29,6 @@ defineProps<{
   isZoomSufficient?: boolean
   aisVesselCount?: number
   showMunicipalities?: boolean
-  showLayerMenu?: boolean
   showAisModal?: boolean
   showInfoModal?: boolean
   showInstallPrompt?: boolean
@@ -46,7 +44,6 @@ const emit = defineEmits<{
   (e: 'open-track-modal'): void
   (e: 'toggle-ais'): void
   (e: 'toggle-municipalities'): void
-  (e: 'toggle-layers'): void
   (e: 'toggle-ais-modal'): void
   (e: 'toggle-info-modal'): void
   (e: 'install'): void
@@ -58,16 +55,6 @@ const emit = defineEmits<{
   <transition name="fade-slide">
     <div v-if="isOpen" class="brand-menu-dropdown glass-panel" @click.stop>
       <div class="top-actions">
-        <!-- Kartlag-knapp -->
-        <button
-          class="icon-btn"
-          :class="{ active: showLayerMenu }"
-          @click="emit('toggle-layers')"
-          title="Bytt kartlag"
-        >
-          <Layers :size="18" />
-        </button>
-
         <!-- Turposter-knapp -->
         <button
           class="btn-turposter"

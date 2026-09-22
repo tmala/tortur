@@ -9,6 +9,7 @@ import TurposterPanel from '../components/TurposterPanel.vue'
 import CheckinModal from '../components/CheckinModal.vue'
 import TurpostCheckinsModal from '../components/TurpostCheckinsModal.vue'
 import UserProfileModal from '../components/UserProfileModal.vue'
+import MapLayerButton from '../components/MapLayerButton.vue'
 import type { FylkeInfo } from '../composables/useTurposter'
 import type { GoogleUser } from '../composables/useAuth'
 
@@ -81,91 +82,6 @@ describe('AppHeader', () => {
     await wrapper.setProps({ isAdminActive: false })
     expect(wrapper.find('.btn-ais').exists()).toBe(false)
     expect(wrapper.find('button[title="Båttrafikk (AIS) innstillinger"]').exists()).toBe(false)
-  })
-
-  it('does not show Google map layers when user is not logged in', async () => {
-    const wrapper = mount(AppHeader, {
-      props: {
-        isLocating: false,
-        isTracking: false,
-        activeLayer: 'standard',
-        isTurposterOpen: false,
-        activeKommuneName: null,
-        turpostCount: 0,
-        showMunicipalities: true,
-        isLoggedIn: false,
-      },
-    })
-
-    await wrapper.find('.brand-badge-btn').trigger('click')
-    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
-
-    expect(wrapper.text()).not.toContain('Google Veikart')
-    expect(wrapper.text()).not.toContain('Google Satellitt')
-    expect(wrapper.text()).not.toContain('Google Terreng')
-    expect(wrapper.text()).toContain('Standard OpenStreetMap')
-    expect(wrapper.text()).toContain('Kartverket Sjøkart')
-    expect(wrapper.text()).toContain('OpenSeaMap Sjøkart')
-  })
-
-  it('shows Google map layers only when user is admin, and shows sea maps for all users', async () => {
-    const wrapper = mount(AppHeader, {
-      props: {
-        isLocating: false,
-        isTracking: false,
-        activeLayer: 'standard',
-        isTurposterOpen: false,
-        activeKommuneName: null,
-        turpostCount: 0,
-        showMunicipalities: true,
-        isLoggedIn: true,
-        isAdmin: false,
-      },
-    })
-
-    await wrapper.find('.brand-badge-btn').trigger('click')
-    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
-
-    // Google Maps skal ikke være synlig for vanlig innlogget bruker
-    expect(wrapper.text()).not.toContain('Google Veikart')
-    expect(wrapper.text()).not.toContain('Google Satellitt (Hybrid)')
-    expect(wrapper.text()).not.toContain('Google Terreng')
-
-    // Sjøkart skal være tilgjengelig for alle
-    expect(wrapper.text()).toContain('Kartverket Sjøkart')
-    expect(wrapper.text()).toContain('OpenSeaMap Sjøkart')
-
-    // Når brukeren er admin skal Google Maps vises
-    await wrapper.setProps({ isAdmin: true })
-    expect(wrapper.text()).toContain('Google Veikart')
-    expect(wrapper.text()).toContain('Google Satellitt (Hybrid)')
-    expect(wrapper.text()).toContain('Google Terreng')
-  })
-
-  it('renders map layers in ascending order of sortnum', async () => {
-    const wrapper = mount(AppHeader, {
-      props: {
-        isLocating: false,
-        isTracking: false,
-        activeLayer: 'standard',
-        isTurposterOpen: false,
-        activeKommuneName: null,
-        turpostCount: 0,
-        showMunicipalities: true,
-        isLoggedIn: false,
-      },
-    })
-
-    await wrapper.find('.brand-badge-btn').trigger('click')
-    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
-
-    const layerItems = wrapper.findAll('.layer-item .layer-name')
-    const layerNames = layerItems.map((item) => item.text())
-
-    // Sjekk at kartlagene sorteres etter sortnum (Norgeskart 10, Topo 20, Standard OSM 30)
-    expect(layerNames[0]).toBe('Kartverket Norgeskart')
-    expect(layerNames[1]).toBe('Topografisk (OpenTopoMap)')
-    expect(layerNames[2]).toBe('Standard OpenStreetMap')
   })
 
   it('emits locate event when clicking locate button in menu', async () => {
@@ -1261,6 +1177,87 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
     await wrapper.vm.$nextTick()
 
     expect(mapViewer.props('showMunicipalities')).toBe(false)
+  })
+})
+
+describe('MapLayerButton', () => {
+  it('does not show Google map layers when user is not logged in', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: false,
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+
+    expect(wrapper.text()).not.toContain('Google Veikart')
+    expect(wrapper.text()).not.toContain('Google Satellitt')
+    expect(wrapper.text()).not.toContain('Google Terreng')
+    expect(wrapper.text()).toContain('Standard OpenStreetMap')
+    expect(wrapper.text()).toContain('Kartverket Sjøkart')
+    expect(wrapper.text()).toContain('OpenSeaMap Sjøkart')
+  })
+
+  it('shows Google map layers only when user is admin, and shows sea maps for all users', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: true,
+        isAdmin: false,
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+
+    expect(wrapper.text()).not.toContain('Google Veikart')
+    expect(wrapper.text()).not.toContain('Google Satellitt (Hybrid)')
+    expect(wrapper.text()).not.toContain('Google Terreng')
+
+    expect(wrapper.text()).toContain('Kartverket Sjøkart')
+    expect(wrapper.text()).toContain('OpenSeaMap Sjøkart')
+
+    await wrapper.setProps({ isAdmin: true })
+    expect(wrapper.text()).toContain('Google Veikart')
+    expect(wrapper.text()).toContain('Google Satellitt (Hybrid)')
+    expect(wrapper.text()).toContain('Google Terreng')
+  })
+
+  it('renders map layers in ascending order of sortnum', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: false,
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+
+    const layerItems = wrapper.findAll('.layer-item .layer-name')
+    const layerNames = layerItems.map((item) => item.text())
+
+    expect(layerNames[0]).toBe('Kartverket Norgeskart')
+    expect(layerNames[1]).toBe('Topografisk (OpenTopoMap)')
+    expect(layerNames[2]).toBe('Standard OpenStreetMap')
+  })
+
+  it('emits change-layer when selecting a layer', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: false,
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.find('.layer-modal').exists()).toBe(true)
+
+    const layerItems = wrapper.findAll('.layer-item')
+    expect(layerItems[0]).toBeDefined()
+    await layerItems[0]!.trigger('click')
+
+    expect(wrapper.emitted('change-layer')).toBeTruthy()
+    expect(wrapper.emitted('change-layer')?.[0]).toEqual(['norgeskart'])
   })
 })
 
