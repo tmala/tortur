@@ -21,6 +21,7 @@ import {
 import { useMapAisLayer } from '@/composables/map/useMapAisLayer'
 import { useMapTrackLayer } from '@/composables/map/useMapTrackLayer'
 import { useMapMunicipalitiesLayer } from '@/composables/map/useMapMunicipalitiesLayer'
+import { useMapLongpress, LONGPRESS_DURATION_MS } from '@/composables/map/useMapLongpress'
 import type { TrackPhoto } from '@/composables/useTrackPhotos'
 
 const props = defineProps<{
@@ -62,6 +63,7 @@ const emit = defineEmits<{
   (e: 'click-track-photo', photo: TrackPhoto, clusterPhotos?: TrackPhoto[]): void
   (e: 'disable-municipalities'): void
   (e: 'track-replay-change', isPlaying: boolean): void
+  (e: 'map-longpress', coords: { lat: number; lng: number }, point: { x: number; y: number }): void
 }>()
 
 const mapContainer = ref<HTMLElement | null>(null)
@@ -91,6 +93,14 @@ const municipalitiesLayer = useMapMunicipalitiesLayer(
     onDisableMunicipalities: () => emit('disable-municipalities')
   }
 )
+const longpress = useMapLongpress({
+  getMap: () => map,
+  getContainer: () => mapContainer.value,
+  isLoggedIn: () => !!props.isLoggedIn,
+  onLongpressRelease: (coords, point) => {
+    emit('map-longpress', coords, point)
+  }
+})
 
 const switchLayer = (layerKey: string) => {
   if (!map) return
@@ -704,6 +714,8 @@ const showSpotSuggestion = (spot: {
 }
 
 
+const skipNextFitBounds = ref(false)
+
 defineExpose({
   centerOnUser,
   flyToPost,
@@ -714,6 +726,9 @@ defineExpose({
   resetAutoCenter: () => {
     isAutoCenter.value = false
   },
+  suppressNextFitBounds: () => {
+    skipNextFitBounds.value = true
+  },
   getMapInstance: () => map,
   startTrackReplay: trackLayer.startReplay,
   pauseTrackReplay: trackLayer.pauseReplay,
@@ -722,7 +737,13 @@ defineExpose({
   isTrackReplaying: trackLayer.isReplaying,
   trackReplayProgress: trackLayer.replayProgress,
   trackReplaySpeed: trackLayer.replaySpeed,
-  setTrackReplaySpeed: trackLayer.setReplaySpeed
+  setTrackReplaySpeed: trackLayer.setReplaySpeed,
+  cancelLongpress: longpress.cancelPress,
+  latLngToContainerPoint: (lat: number, lng: number) => {
+    if (!map) return null
+    const pt = map.latLngToContainerPoint([lat, lng])
+    return { x: pt.x, y: pt.y }
+  }
 })
 
 watch(
@@ -769,8 +790,9 @@ watch(
     const hasChanged = signature !== lastTurpostSignature
     lastTurpostSignature = signature
 
-    // Tilpass kun kartutsnittet med fitBounds hvis det faktisk kom et nytt utvalg av turposter og vi ikke er i auto-sentrert modus på brukeren
-    const shouldFit = hasChanged && !isAutoCenter.value
+    // Tilpass kun kartutsnittet med fitBounds hvis det faktisk kom et nytt utvalg av turposter, vi ikke er i auto-sentrert modus på brukeren, og fitBounds ikke er eksplisitt undertrykt
+    const shouldFit = hasChanged && !isAutoCenter.value && !skipNextFitBounds.value
+    skipNextFitBounds.value = false
     updateTurpostMarkers(newPosts || [], shouldFit)
     updatePrivateTurpostMarkers(props.privateTurposter || [])
   }
@@ -910,10 +932,13 @@ onMounted(() => {
   setTimeout(handleResize, 200)
   setTimeout(handleResize, 600)
 
+  longpress.attachEvents()
+
   emit('map-ready')
 })
 
 onUnmounted(() => {
+  longpress.cleanup()
   trackLayer.cleanup()
   aisLayer.cleanup()
   municipalitiesLayer.cleanup()
@@ -927,6 +952,28 @@ onUnmounted(() => {
 <template>
   <div class="map-wrapper">
     <div ref="mapContainer" class="map-view"></div>
+
+    <!-- Visuell animert indikator under pågående longpress (fyllende sirkel) -->
+    <div
+      v-if="longpress.isPressing.value && longpress.pressPoint.value"
+      class="longpress-indicator"
+      :class="{ 'is-ready': longpress.isReady.value }"
+      :style="{
+        left: `${longpress.pressPoint.value.x}px`,
+        top: `${longpress.pressPoint.value.y}px`,
+        '--duration': `${LONGPRESS_DURATION_MS}ms`
+      }"
+      aria-hidden="true"
+    >
+      <div class="longpress-ripple"></div>
+      <div class="longpress-svg-wrap">
+        <svg class="progress-svg" viewBox="0 0 52 52">
+          <circle class="progress-bg" cx="26" cy="26" r="22" />
+          <circle class="progress-fill" cx="26" cy="26" r="22" />
+        </svg>
+      </div>
+      <div class="longpress-center"></div>
+    </div>
   </div>
 </template>
 
@@ -948,6 +995,114 @@ onUnmounted(() => {
   bottom: 0;
   width: 100%;
   height: 100%;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Longpress progress-indikator */
+.longpress-indicator {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.longpress-ripple {
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  background: rgba(2, 132, 199, 0.2);
+  animation: indicatorRipple 1.4s ease-out infinite;
+}
+
+.longpress-svg-wrap {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  transform: rotate(-90deg);
+}
+
+.progress-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.progress-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 3.5;
+}
+
+.progress-fill {
+  fill: none;
+  stroke: var(--primary, #0284c7);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-dasharray: 138.23; /* 2 * PI * 22 */
+  stroke-dashoffset: 138.23;
+  animation: fillCircle var(--duration) linear forwards;
+}
+
+.longpress-center {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 8px rgba(2, 132, 199, 0.8);
+  transition: all 0.2s ease;
+}
+
+.longpress-indicator.is-ready .progress-fill {
+  stroke: #10b981;
+}
+
+.longpress-indicator.is-ready .longpress-center {
+  background: #10b981;
+  box-shadow: 0 0 14px #10b981;
+  transform: scale(1.4);
+}
+
+.longpress-indicator.is-ready .longpress-ripple {
+  background: rgba(16, 185, 129, 0.35);
+  animation: readyPulse 0.6s ease-out infinite alternate;
+}
+
+@keyframes fillCircle {
+  from {
+    stroke-dashoffset: 138.23;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes indicatorRipple {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes readyPulse {
+  from {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1.3);
+    opacity: 0.8;
+  }
 }
 
 :deep(.track-interactive-line) {

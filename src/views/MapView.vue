@@ -9,6 +9,7 @@ import TurposterPanel from '@/components/TurposterPanel.vue'
 import CheckinModal from '@/components/CheckinModal.vue'
 import TurpostCheckinsModal from '@/components/TurpostCheckinsModal.vue'
 import AddTurpostModal from '@/components/AddTurpostModal.vue'
+import MapContextMenu from '@/components/MapContextMenu.vue'
 import {
   useGeolocation,
   calculateDistanceMeters,
@@ -98,10 +99,38 @@ const { fetchMySpots, deleteMySpot, fetchMyPrivateCheckins, fetchSpotSuggestions
 
 // Bruker / Admin: ny turpost (kart-klikk)
 const addTurpostClickCoords = ref<{ lat: number; lng: number } | null>(null)
+// Bruker / Admin: ny turpost direkte fra kontekstmeny (longpress)
+const directAddTurpostCoords = ref<{ lat: number; lng: number } | null>(null)
 
 function handleAddTurpostMapClick(coords: { lat: number; lng: number }) {
   if (addTurpostClickCoords.value) return
   addTurpostClickCoords.value = coords
+}
+
+// Kontekstmeny for kart-longpress
+const contextMenuCoords = ref<{ lat: number; lng: number } | null>(null)
+const contextMenuPoint = ref<{ x: number; y: number } | null>(null)
+const isContextMenuOpen = computed(() => !!contextMenuCoords.value)
+
+function handleMapLongpress(coords: { lat: number; lng: number }, point: { x: number; y: number }) {
+  if (!isLoggedIn.value) return
+  contextMenuCoords.value = coords
+  contextMenuPoint.value = point
+}
+
+function handleCloseContextMenu() {
+  contextMenuCoords.value = null
+  contextMenuPoint.value = null
+}
+
+function handleCreateTurpostFromMenu(coords: { lat: number; lng: number }) {
+  handleCloseContextMenu()
+  directAddTurpostCoords.value = coords
+}
+
+async function handleShowTurposterHereFromMenu(coords: { lat: number; lng: number }) {
+  handleCloseContextMenu()
+  await loadTurposterForCoordinates(coords, true, 'none')
 }
 
 const loadMySpots = async () => {
@@ -133,6 +162,14 @@ function handleSpotSaved(spot: TurpostItem) {
   appState.mySpots = [spot, ...appState.mySpots.filter((s) => s.id !== spot.id)]
   appState.isAddSpotModeActive = false
   addTurpostClickCoords.value = null
+  if (isAdmin.value) {
+    loadSpotSuggestions()
+  }
+}
+
+function handleSpotSavedFromMenu(spot: TurpostItem) {
+  appState.mySpots = [spot, ...appState.mySpots.filter((s) => s.id !== spot.id)]
+  directAddTurpostCoords.value = null
   if (isAdmin.value) {
     loadSpotSuggestions()
   }
@@ -724,24 +761,31 @@ const handleLocate = async () => {
   }
 }
 
-// Håndter "Vis turposter i min kommune"
+// Håndter "Vis turposter i min kommune" / "Vis turposter her"
 const isLoadingLocalTurposter = ref(false)
 const hasLoadedDefaultTurposter = ref(false)
 
-const loadLocalTurposterForLocation = async (loc: GeoLocationState, showFeedback = false) => {
+const loadTurposterForCoordinates = async (
+  targetCoords: { lat: number; lng: number },
+  showFeedback = false,
+  centerMode: 'user' | 'pan' | 'none' = 'user'
+) => {
   if (isLoadingLocalTurposter.value) return
   isLoadingLocalTurposter.value = true
   try {
-    // Sentrer kartutsnittet der brukeren befinner seg umiddelbart
-    mapViewerRef.value?.centerOnUser?.(true, 15)
-    await checkAndApplyAbroadLayer(loc.lat, loc.lng)
-    const geoResult = await detectKommune(loc.lat, loc.lng)
+    if (centerMode === 'user') {
+      mapViewerRef.value?.centerOnUser?.(true, 15)
+    } else if (centerMode === 'pan') {
+      mapViewerRef.value?.panToCoordinate(targetCoords.lat, targetCoords.lng, 14)
+    } else if (centerMode === 'none') {
+      mapViewerRef.value?.suppressNextFitBounds?.()
+    }
+    await checkAndApplyAbroadLayer(targetCoords.lat, targetCoords.lng)
+    const geoResult = await detectKommune(targetCoords.lat, targetCoords.lng)
     if (!geoResult || !geoResult.kommune) {
-      // Posisjon er i utlandet – bytt automatisk til OpenStreetMap dersom Norgeskart er aktivt
       if (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart') {
         activeLayer.value = 'standard'
       }
-      // Forsøk å vise turposter for Utlandet
       const utlandResult = await selectKommuneByName('Utlandet')
       if (utlandResult) {
         isTurposterOpen.value = false
@@ -749,7 +793,7 @@ const loadLocalTurposterForLocation = async (loc: GeoLocationState, showFeedback
       }
       if (showFeedback) {
         turError.value =
-          'Posisjonen din ser ut til å være i utlandet (eller usikker via butikk-/hotell-WiFi). Velg kommune manuelt fra menyen.'
+          'Posisjonen ser ut til å være i utlandet (eller usikker via butikk-/hotell-WiFi). Velg kommune manuelt fra menyen.'
       }
       return
     }
@@ -765,6 +809,10 @@ const loadLocalTurposterForLocation = async (loc: GeoLocationState, showFeedback
   } finally {
     isLoadingLocalTurposter.value = false
   }
+}
+
+const loadLocalTurposterForLocation = async (loc: GeoLocationState, showFeedback = false) => {
+  await loadTurposterForCoordinates(loc, showFeedback, 'user')
 }
 
 const handleShowLocalTurposter = async () => {
@@ -795,7 +843,7 @@ const handleToggleTracking = () => {
 }
 
 const handleMapDragged = () => {
-  // Panning i kartet stopper ikke sporloggen
+  handleCloseContextMenu()
 }
 
 // Kartlagbytte
@@ -959,6 +1007,17 @@ onUnmounted(() => {
       @click-track-photo="handlePhotoClick"
       @disable-municipalities="showMunicipalities = false"
       @track-replay-change="handleTrackReplayChange"
+      @map-longpress="handleMapLongpress"
+    />
+
+    <!-- Kontekstmeny etter longpress på kartet (Opprett turpost / Vis turposter her) -->
+    <MapContextMenu
+      :is-open="isContextMenuOpen"
+      :coords="contextMenuCoords"
+      :point="contextMenuPoint"
+      @create-turpost="handleCreateTurpostFromMenu"
+      @show-turposter-here="handleShowTurposterHereFromMenu"
+      @close="handleCloseContextMenu"
     />
 
     <!-- Lightbox Modal for turbilder klikket på kartet -->
@@ -1160,7 +1219,7 @@ onUnmounted(() => {
       @checkin-updated="loadMyCheckins"
     />
 
-    <!-- Bruker / Admin: Legg til ny turpost -->
+    <!-- Bruker / Admin: Legg til ny turpost (fra profilmeny/kartklikk) -->
     <AddTurpostModal
       v-if="appState.isAddSpotModeActive"
       :is-open="!!addTurpostClickCoords"
@@ -1175,6 +1234,20 @@ onUnmounted(() => {
         appState.isAddSpotModeActive = false;
       "
       @spot-saved="handleSpotSaved"
+    />
+
+    <!-- Bruker / Admin: Legg til ny turpost (direkte fra longpress-meny) -->
+    <AddTurpostModal
+      v-if="!!directAddTurpostCoords"
+      :is-open="!!directAddTurpostCoords"
+      :lat="directAddTurpostCoords?.lat ?? 0"
+      :lng="directAddTurpostCoords?.lng ?? 0"
+      :is-admin="isEffectiveAdmin"
+      :user-id="user?.userId"
+      :user-name="user?.userName"
+      :user-email="user?.email"
+      @close="directAddTurpostCoords = null"
+      @spot-saved="handleSpotSavedFromMenu"
     />
 
     <!-- Undersider rendres som overlay her -->

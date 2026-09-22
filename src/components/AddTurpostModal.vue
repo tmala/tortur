@@ -60,10 +60,13 @@
               </div>
             </div>
           </div>
+          <div v-else class="admin-detecting">
+            <span class="spinner">⏳</span> Laster kommune og fylke...
+          </div>
         </div>
 
         <!-- Input-felter -->
-        <div v-if="geoResult" class="admin-section">
+        <div class="admin-section">
           <div class="admin-form">
             <div class="admin-form-row">
               <label for="turpost-name">Navn på turpost *</label>
@@ -118,7 +121,7 @@
         </div>
 
         <!-- Lagre-seksjon for innlogget bruker (både vanlige brukere og admin) -->
-        <div v-if="userId && isFormValid" class="admin-save-section">
+        <div v-if="userId" class="admin-save-section">
           <div v-if="saveSuccessMessage" class="save-feedback success">
             {{ saveSuccessMessage }}
           </div>
@@ -129,7 +132,7 @@
           <div class="save-actions">
             <button
               class="btn-save-spot"
-              :disabled="isSavingSpot"
+              :disabled="!isFormValid || isSavingSpot || isDetecting"
               @click="handleSaveSpot"
             >
               <span v-if="isSavingSpot">⏳ Lagrer...</span>
@@ -217,7 +220,13 @@ const isOutsideNorway = ref(false)
 const customKommune = ref('Utlandet')
 const turpostName = ref('')
 const turpostAlt = ref<number | null>(null)
-const turpostId = ref('')
+function generateId(): string {
+  const bytes = new Uint8Array(12)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+const turpostId = ref(generateId())
 const copied = ref(false)
 const suggestForPublic = ref(false)
 
@@ -225,12 +234,6 @@ const isSavingSpot = ref(false)
 const saveSuccessMessage = ref<string | null>(null)
 const saveErrorMessage = ref<string | null>(null)
 const csvPlacement = ref<CsvPlacementResult | null>(null)
-
-function generateId(): string {
-  const bytes = new Uint8Array(12)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-}
 
 function regenId() {
   turpostId.value = generateId()
@@ -403,7 +406,8 @@ watch(
     } finally {
       isDetecting.value = false
     }
-  }
+  },
+  { immediate: true }
 )
 
 // ---------------------------------------------------------------------------
