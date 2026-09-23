@@ -890,6 +890,13 @@ watch(
 )
 
 watch(
+  () => appState.clearSpotSuggestionTrigger,
+  () => {
+    mapViewerRef.value?.clearSpotSuggestion()
+  },
+)
+
+watch(
   () => appState.viewTrack,
   (track) => {
     if (track) {

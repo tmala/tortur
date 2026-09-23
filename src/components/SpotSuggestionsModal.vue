@@ -89,11 +89,19 @@
                 </button>
 
                 <button
+                  class="btn-deny-suggestion"
+                  @click="handleDeny(spot)"
+                  title="Avvis dette forslaget. Turposten merkes som avvist hos brukeren."
+                >
+                  ❌ Avvis forslag
+                </button>
+
+                <button
                   class="btn-delete-suggestion"
                   @click="handleDelete(spot.id)"
-                  title="Fjern forslag fra listen etter at du har lagt det inn i CSV eller avvist"
+                  title="Fjern forslag fra listen når det er godkjent og lagt inn i data/mountains.csv"
                 >
-                  🗑️ Fjern forslag
+                  ✅ Godkjent (fjern)
                 </button>
               </div>
             </div>
@@ -119,6 +127,7 @@ import {
   type SpotSuggestion,
   type CsvPlacementResult
 } from '@/composables/usePrivateTurposter'
+import { useAppStateStore } from '@/stores/appState'
 
 const props = defineProps<{
   isOpen: boolean
@@ -129,7 +138,8 @@ const emit = defineEmits<{
   (e: 'view-spot', spot: SpotSuggestion): void
 }>()
 
-const { fetchSpotSuggestions, deleteSpotSuggestion, calculateCsvPlacement } = usePrivateTurposter()
+const appState = useAppStateStore()
+const { fetchSpotSuggestions, deleteSpotSuggestion, denySpotSuggestion, calculateCsvPlacement } = usePrivateTurposter()
 
 const suggestions = ref<SpotSuggestion[]>([])
 const isLoading = ref(false)
@@ -269,12 +279,26 @@ async function copyCsv(spot: SpotSuggestion) {
 }
 
 async function handleDelete(spotId: string) {
-  if (!confirm('Vil du fjerne dette forslaget fra listen?')) return
+  if (!confirm('Vil du fjerne dette forslaget fra listen?\n\n(Gjør dette når turposten er lagt inn i mountains.csv)')) return
   try {
     await deleteSpotSuggestion(spotId)
     suggestions.value = suggestions.value.filter((s) => s.id !== spotId)
-  } catch (err) {
-    alert('Kunne ikke slette forslaget.')
+    appState.spotSuggestionsCount = suggestions.value.length
+    appState.requestClearSpotSuggestion()
+  } catch {
+    alert('Kunne ikke fjerne forslaget.')
+  }
+}
+
+async function handleDeny(spot: SpotSuggestion) {
+  if (!confirm(`Vil du avvise forslaget «${spot.name}»?\n\nTurposten vil få status «Avvist» hos brukeren, og kan ikke foreslås som offentlig på nytt.`)) return
+  try {
+    await denySpotSuggestion(spot.id)
+    suggestions.value = suggestions.value.filter((s) => s.id !== spot.id)
+    appState.spotSuggestionsCount = suggestions.value.length
+    appState.requestClearSpotSuggestion()
+  } catch {
+    alert('Kunne ikke avvise forslaget.')
   }
 }
 
@@ -566,18 +590,38 @@ function formatDate(isoStr?: string): string {
   background: rgba(56, 189, 248, 0.25);
 }
 
-.btn-delete-suggestion {
+.btn-deny-suggestion {
   background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
   border-radius: 8px;
   padding: 6px 12px;
   font-size: 0.82rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
+}
+.btn-deny-suggestion:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: #ef4444;
+  color: #ffffff;
+}
+
+.btn-delete-suggestion {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 .btn-delete-suggestion:hover {
-  background: rgba(239, 68, 68, 0.25);
+  background: rgba(16, 185, 129, 0.3);
+  border-color: #10b981;
+  color: #ffffff;
 }
 
 .modal-footer {

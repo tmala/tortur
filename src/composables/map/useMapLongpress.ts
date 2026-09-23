@@ -3,12 +3,15 @@ import L from 'leaflet'
 
 /**
  * Konfigurerbar varighet for kart-longpress i millisekunder.
- * Juster denne verdien etter behov (standard: 3000 ms = 3 sekunder).
+ * Juster denne verdien etter behov (standard: 1500 ms = 1,5 sekunder).
  */
-export const LONGPRESS_DURATION_MS = 3000
+export const LONGPRESS_DURATION_MS = 1500
 
-/** Maksimal bevegelse i piksler før et påbegynt trykk regnes som panorering og avbrytes */
-const MOVE_THRESHOLD_PX = 12
+/**
+ * Maksimal bevegelse i piksler før et påbegynt trykk regnes som en bevisst panorering og avbrytes.
+ * Satt til 25px for å tåle naturlig fingerbevegelse og skjelving på berøringsskjermer uten å avbryte longpress.
+ */
+export const MOVE_THRESHOLD_PX = 25
 
 export interface LongpressCoords {
   lat: number
@@ -27,6 +30,7 @@ export interface UseMapLongpressOptions {
   onLongpressReady?: (coords: LongpressCoords, point: LongpressPoint) => void
   onLongpressRelease: (coords: LongpressCoords, point: LongpressPoint) => void
   durationMs?: number
+  moveThresholdPx?: number
 }
 
 /**
@@ -46,6 +50,7 @@ export function triggerHapticFeedback(pattern: number | number[] = 50): boolean 
 
 export function useMapLongpress(options: UseMapLongpressOptions) {
   const duration = options.durationMs ?? LONGPRESS_DURATION_MS
+  const moveThreshold = options.moveThresholdPx ?? MOVE_THRESHOLD_PX
 
   const isPressing = ref(false)
   const isReady = ref(false)
@@ -108,7 +113,7 @@ export function useMapLongpress(options: UseMapLongpressOptions) {
     const target = e.target as HTMLElement | null
     if (
       target?.closest(
-        '.leaflet-control, .leaflet-popup, .leaflet-marker-icon, .custom-user-pin, .context-menu, button, a, input'
+        '.leaflet-control, .leaflet-popup, .leaflet-marker-icon, .custom-user-pin, .context-menu, button, a, input',
       )
     ) {
       return
@@ -161,7 +166,7 @@ export function useMapLongpress(options: UseMapLongpressOptions) {
     if (!isPressing.value || e.pointerId !== activePointerId || !startScreenPos) return
 
     const distance = Math.hypot(e.clientX - startScreenPos.x, e.clientY - startScreenPos.y)
-    if (distance > MOVE_THRESHOLD_PX) {
+    if (distance > moveThreshold) {
       // Brukeren drar kartet / beveger fingeren for mye – avbryt longpress
       cancelPress()
     }
@@ -222,7 +227,6 @@ export function useMapLongpress(options: UseMapLongpressOptions) {
     if (map && map !== attachedMap) {
       detachMapEvents()
       attachedMap = map
-      map.on('movestart', cancelPress)
       map.on('zoomstart', cancelPress)
     }
   }
@@ -238,7 +242,6 @@ export function useMapLongpress(options: UseMapLongpressOptions) {
 
   const detachMapEvents = () => {
     if (attachedMap) {
-      attachedMap.off('movestart', cancelPress)
       attachedMap.off('zoomstart', cancelPress)
       attachedMap = null
     }
@@ -266,6 +269,6 @@ export function useMapLongpress(options: UseMapLongpressOptions) {
     pressPoint,
     cancelPress,
     attachEvents,
-    cleanup
+    cleanup,
   }
 }

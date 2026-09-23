@@ -11,7 +11,7 @@ describe('Checkin deletion and image updates', () => {
 
   it('deletePublicCheckin calls Apps Script and Firebase DELETE', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL, opts?: RequestInit) => {
-      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/'))) {
+      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/') || url.includes('tortur-api'))) {
         return {
           ok: true,
           text: async () => JSON.stringify({ success: true, checkinId: 'c_101' }),
@@ -69,7 +69,7 @@ describe('Checkin deletion and image updates', () => {
 
   it('updatePublicCheckinImage calls Apps Script and Firebase PATCH', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
-      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/'))) {
+      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/') || url.includes('tortur-api'))) {
         return {
           ok: true,
           text: async () => JSON.stringify({ success: true, checkinId: 'c_102', imageUrl: 'https://lh3.googleusercontent.com/d/file123' }),
@@ -128,7 +128,7 @@ describe('Checkin deletion and image updates', () => {
 
   it('updatePublicCheckin updates description and removes image', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
-      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/'))) {
+      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/') || url.includes('tortur-api'))) {
         return {
           ok: true,
           text: async () => JSON.stringify({ success: true, checkinId: 'c_103' }),
@@ -355,7 +355,7 @@ post_102;Hafskorsundet;61.42;7.25;210;Vestland;Luster`
 
   it('submitCheckin sender bilde som base64 data-URL og oppretter innsjekk', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL, opts?: RequestInit) => {
-      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/'))) {
+      if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/') || url.includes('tortur-api'))) {
         return {
           ok: true,
           text: async () =>
@@ -432,7 +432,7 @@ post_102;Hafskorsundet;61.42;7.25;210;Vestland;Luster`
           })
         } as unknown as Response
       }
-      if (urlStr.includes('script.google.com') || urlStr.includes('/api/')) {
+      if (urlStr.includes('script.google.com') || urlStr.includes('/api/') || urlStr.includes('tortur-api')) {
         return {
           ok: true,
           text: async () =>

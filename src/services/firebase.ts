@@ -99,6 +99,28 @@ export function getFirebaseDatabase(customDbUrl?: string): Database | null {
   return database
 }
 
+/**
+ * Sjekker om et JWT-token (f.eks. Google ID-token eller Firebase ID-token) er utløpt.
+ * Returnerer true dersom tokenet mangler, er ugyldig eller har utløpt (med 30s sikkerhetsmargin).
+ */
+export function isJwtExpired(token?: string | null): boolean {
+  if (!token || typeof token !== 'string') return true
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return true
+    const payloadPart = parts[1]
+    if (!payloadPart) return true
+    const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
+    const jsonStr = atob(padded)
+    const payload = JSON.parse(jsonStr) as { exp?: number }
+    if (typeof payload.exp !== 'number') return false
+    return Date.now() >= payload.exp * 1000 - 30000
+  } catch {
+    return true
+  }
+}
+
 let signInPromise: Promise<UserCredential | null> | null = null
 
 /**
@@ -110,6 +132,10 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<UserCred
     console.warn('[Firebase] Auth er ikke konfigurert. Kan ikke logge inn mot Firebase.')
     return null
   }
+  if (isJwtExpired(idToken)) {
+    console.warn('[Firebase] Google ID-token er utløpt. Avbryter innlogging mot Firebase med utløpt token.')
+    return null
+  }
   const credential = GoogleAuthProvider.credential(idToken)
   signInPromise = signInWithCredential(authInstance, credential)
   try {
@@ -119,6 +145,9 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<UserCred
       sessionStorage.setItem('tortur_firebase_token', fbToken)
     }
     return res
+  } catch (err) {
+    console.warn('[Firebase] Feil ved signInWithCredential:', err)
+    return null
   } finally {
     signInPromise = null
   }

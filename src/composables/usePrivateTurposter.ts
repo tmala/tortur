@@ -16,7 +16,7 @@ export interface SpotSuggestion {
   userId: string
   userEmail?: string
   userName?: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'approved' | 'rejected' | 'denied'
 }
 
 export interface CsvPlacementResult {
@@ -78,6 +78,44 @@ export function usePrivateTurposter() {
         })
       }
 
+      // For turposter som er 'pending' eller foreslått for offentlig:
+      // Sjekk om admin har avvist forslaget (status: 'denied' i spot_suggestions)
+      const pendingSpots = spots.filter((s) => s.status === 'pending' || s.suggestedForPublic)
+      if (pendingSpots.length > 0) {
+        await Promise.all(
+          pendingSpots.map(async (spot) => {
+            try {
+              const suggestionUrl = `${config.dbUrl}/${config.prefix}/spot_suggestions/${encodeURIComponent(String(spot.id))}.json`
+              const resSuggestion = await fetchFirebase(suggestionUrl)
+              if (resSuggestion.ok) {
+                const suggestionData = (await resSuggestion.json()) as SpotSuggestion | null
+                if (suggestionData && suggestionData.status === 'denied') {
+                  // 1. Oppdater brukerens egen private node under my_spots til status: 'denied'
+                  const userSpotUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots/${encodeURIComponent(String(spot.id))}.json`
+                  await fetchFirebase(userSpotUrl, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      status: 'denied',
+                      suggestedForPublic: false
+                    })
+                  })
+
+                  // 2. Slett turposten under spot_suggestions
+                  await fetchFirebase(suggestionUrl, { method: 'DELETE' }).catch(() => {})
+
+                  // 3. Oppdater lokalt spot-objekt
+                  spot.status = 'denied'
+                  spot.suggestedForPublic = false
+                }
+              }
+            } catch (syncErr) {
+              console.warn('[usePrivateTurposter] Kunne ikke synkronisere avvist forslag for spot:', spot.id, syncErr)
+            }
+          })
+        )
+      }
+
       return spots
     } catch (err) {
       console.warn('[usePrivateTurposter] Kunne ikke hente my_spots fra Firebase:', err)
@@ -111,6 +149,8 @@ export function usePrivateTurposter() {
 
     try {
       const nowIso = new Date().toISOString()
+      const canSuggest = suggestForPublic && spot.status !== 'denied'
+      const statusValue = spot.status === 'denied' ? 'denied' : (canSuggest ? 'pending' : 'private')
       const spotData = {
         id: spot.id,
         name: spot.name,
@@ -123,8 +163,8 @@ export function usePrivateTurposter() {
         ownerId: userId,
         ownerName: userMeta?.name || '',
         createdAt: spot.createdAt || nowIso,
-        suggestedForPublic: suggestForPublic,
-        status: suggestForPublic ? 'pending' : 'private',
+        suggestedForPublic: canSuggest,
+        status: statusValue,
         csvLine: spot.csvLine || '',
         csvLineHint: spot.csvLineHint || ''
       }
@@ -142,7 +182,7 @@ export function usePrivateTurposter() {
       }
 
       // 2. Hvis brukeren vil foreslå for admin, legg til i /<prefix>/spot_suggestions/<spotId>.json
-      if (suggestForPublic) {
+      if (canSuggest) {
         const suggestionData: SpotSuggestion = {
           id: String(spot.id),
           name: spot.name,
@@ -184,8 +224,21 @@ export function usePrivateTurposter() {
     userMeta?: { name?: string; email?: string }
   ): Promise<void> {
     if (!userId || userId === 'guest') return
+    if (spot.status === 'denied') {
+      throw new Error('Denne turposten er tidligere avvist av administrator og kan ikke foreslås på nytt.')
+    }
     const config = await getFirebaseConfig()
     if (!config) return
+
+    // Sjekk om forslaget allerede har status denied i spot_suggestions
+    const checkSuggestionUrl = `${config.dbUrl}/${config.prefix}/spot_suggestions/${encodeURIComponent(String(spot.id))}.json`
+    const checkRes = await fetchFirebase(checkSuggestionUrl)
+    if (checkRes.ok) {
+      const existingData = (await checkRes.json()) as SpotSuggestion | null
+      if (existingData && existingData.status === 'denied') {
+        throw new Error('Denne turposten er tidligere avvist av administrator og kan ikke foreslås på nytt.')
+      }
+    }
 
     const nowIso = new Date().toISOString()
     // 1. Oppdater status i brukerens egen turpost
@@ -574,8 +627,11 @@ export function usePrivateTurposter() {
       const suggestions: SpotSuggestion[] = []
       for (const [id, val] of Object.entries(data)) {
         if (!val || typeof val !== 'object') continue
+        const item = val as SpotSuggestion
+        // Admin skal kun se innkommende forslag som venter på vurdering
+        if (item.status && item.status !== 'pending') continue
         suggestions.push({
-          ...(val as SpotSuggestion),
+          ...item,
           id: id
         })
       }
@@ -590,7 +646,7 @@ export function usePrivateTurposter() {
   }
 
   /**
-   * Sletter eller arkiverer et innkommende forslag for admin.
+   * Sletter eller arkiverer et innkommende forslag for admin (f.eks. ved godkjenning).
    */
   async function deleteSpotSuggestion(spotId: string): Promise<void> {
     const config = await getFirebaseConfig()
@@ -601,6 +657,31 @@ export function usePrivateTurposter() {
       await fetchFirebase(url, { method: 'DELETE' })
     } catch (err) {
       console.warn('[usePrivateTurposter] Kunne ikke slette spot_suggestion:', err)
+      throw err
+    }
+  }
+
+  /**
+   * Avviser et innkommende forslag for admin.
+   * Setter status til 'denied' i spot_suggestions slik at brukeren fanger det opp
+   * ved neste lesing og oppdaterer sin egen my_spots-oppføring.
+   */
+  async function denySpotSuggestion(spotId: string): Promise<void> {
+    const config = await getFirebaseConfig()
+    if (!config) return
+
+    try {
+      const url = `${config.dbUrl}/${config.prefix}/spot_suggestions/${encodeURIComponent(spotId)}.json`
+      await fetchFirebase(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'denied',
+          deniedAt: new Date().toISOString()
+        })
+      })
+    } catch (err) {
+      console.warn('[usePrivateTurposter] Kunne ikke avvise spot_suggestion:', err)
       throw err
     }
   }
@@ -694,6 +775,7 @@ export function usePrivateTurposter() {
     submitPrivateCheckin,
     fetchSpotSuggestions,
     deleteSpotSuggestion,
+    denySpotSuggestion,
     calculateCsvPlacement
   }
 }

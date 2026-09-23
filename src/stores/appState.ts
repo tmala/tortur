@@ -17,6 +17,11 @@ export const useAppStateStore = defineStore('appState', () => {
   const spotSuggestionsCount = ref(0)
   const adminModeActive = ref(false)
   const isAddSpotModeActive = ref(false)
+  const clearSpotSuggestionTrigger = ref(0)
+
+  function requestClearSpotSuggestion() {
+    clearSpotSuggestionTrigger.value++
+  }
 
   function requestFlyToCheckin(checkin: FirebaseCheckinItem) {
     flyToCheckin.value = checkin
@@ -67,6 +72,8 @@ export const useAppStateStore = defineStore('appState', () => {
     spotSuggestionsCount,
     adminModeActive,
     isAddSpotModeActive,
+    clearSpotSuggestionTrigger,
+    requestClearSpotSuggestion,
     requestFlyToCheckin,
     clearFlyToCheckin,
     requestFlyToSpot,

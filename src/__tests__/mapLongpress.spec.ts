@@ -5,6 +5,7 @@ import L from 'leaflet'
 import {
   useMapLongpress,
   LONGPRESS_DURATION_MS,
+  MOVE_THRESHOLD_PX,
   triggerHapticFeedback,
   type LongpressCoords,
   type LongpressPoint
@@ -47,8 +48,12 @@ describe('useMapLongpress', () => {
     vi.useRealTimers()
   })
 
-  it('exports LONGPRESS_DURATION_MS as 3000 ms', () => {
-    expect(LONGPRESS_DURATION_MS).toBe(3000)
+  it('exports LONGPRESS_DURATION_MS as 1500 ms', () => {
+    expect(LONGPRESS_DURATION_MS).toBe(1500)
+  })
+
+  it('exports MOVE_THRESHOLD_PX as 25 px', () => {
+    expect(MOVE_THRESHOLD_PX).toBe(25)
   })
 
   it('triggers haptic feedback when navigator.vibrate is supported', () => {
@@ -151,14 +156,14 @@ describe('useMapLongpress', () => {
     vi.unstubAllGlobals()
   })
 
-  it('cancels longpress if movement exceeds threshold before time is up', () => {
+  it('does not cancel longpress if movement is within threshold', () => {
     const onRelease = vi.fn()
     const longpress = useMapLongpress({
       getMap: () => mockMap,
       getContainer: () => mockContainer,
       isLoggedIn: () => true,
       onLongpressRelease: onRelease,
-      durationMs: 3000
+      durationMs: 1500
     })
     longpress.attachEvents()
 
@@ -172,10 +177,51 @@ describe('useMapLongpress', () => {
     )
     expect(longpress.isPressing.value).toBe(true)
 
-    // Move pointer more than threshold (12px)
+    // Move pointer within threshold (15px delta <= 25px)
     window.dispatchEvent(
       new PointerEvent('pointermove', {
-        clientX: 220, // 20px delta
+        clientX: 215, // 15px delta
+        clientY: 150,
+        pointerId: 1,
+        pointerType: 'touch'
+      })
+    )
+
+    // Should still be pressing
+    expect(longpress.isPressing.value).toBe(true)
+
+    // Advance remaining time - should trigger ready
+    vi.advanceTimersByTime(1500)
+    expect(longpress.isReady.value).toBe(true)
+
+    longpress.cleanup()
+  })
+
+  it('cancels longpress if movement exceeds threshold before time is up', () => {
+    const onRelease = vi.fn()
+    const longpress = useMapLongpress({
+      getMap: () => mockMap,
+      getContainer: () => mockContainer,
+      isLoggedIn: () => true,
+      onLongpressRelease: onRelease,
+      durationMs: 1500
+    })
+    longpress.attachEvents()
+
+    mockContainer.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        clientX: 200,
+        clientY: 150,
+        pointerId: 1,
+        pointerType: 'touch'
+      })
+    )
+    expect(longpress.isPressing.value).toBe(true)
+
+    // Move pointer more than threshold (35px delta > 25px)
+    window.dispatchEvent(
+      new PointerEvent('pointermove', {
+        clientX: 235, // 35px delta
         clientY: 150,
         pointerId: 1,
         pointerType: 'touch'
@@ -185,12 +231,12 @@ describe('useMapLongpress', () => {
     expect(longpress.isPressing.value).toBe(false)
 
     // Advance timers - should not trigger
-    vi.advanceTimersByTime(3500)
+    vi.advanceTimersByTime(2000)
     expect(longpress.isReady.value).toBe(false)
 
     window.dispatchEvent(
       new PointerEvent('pointerup', {
-        clientX: 220,
+        clientX: 235,
         clientY: 150,
         pointerId: 1,
         pointerType: 'touch'

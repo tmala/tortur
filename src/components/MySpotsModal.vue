@@ -179,7 +179,7 @@ onUnmounted(() => {
                     <span v-if="spot.alt" class="spot-alt">{{ spot.alt }} moh.</span>
                   </div>
                   <div class="spot-status-badge" :class="spot.status || 'private'">
-                    {{ spot.suggestedForPublic ? '📨 Foreslått for admin' : '🔒 Privat' }}
+                    {{ spot.status === 'denied' ? '🚫 Avvist av admin' : spot.suggestedForPublic ? '📨 Foreslått for admin' : '🔒 Privat' }}
                   </div>
                 </div>
 
@@ -190,7 +190,7 @@ onUnmounted(() => {
 
                 <div class="spot-actions">
                   <button
-                    v-if="!spot.suggestedForPublic"
+                    v-if="!spot.suggestedForPublic && spot.status !== 'denied'"
                     class="btn-suggest-spot"
                     @click="emit('suggest-public', spot)"
                     title="Foreslå denne turposten til administrator slik at den kan legges inn i mountains.csv for alle"
@@ -470,6 +470,12 @@ onUnmounted(() => {
   background: rgba(245, 158, 11, 0.15);
   color: #fde68a;
   border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.spot-status-badge.denied {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
 }
 
 .spot-details {

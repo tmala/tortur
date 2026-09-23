@@ -13,7 +13,7 @@ export interface TurpostItem {
   ownerName?: string
   createdAt?: string
   suggestedForPublic?: boolean
-  status?: 'private' | 'pending' | 'approved'
+  status?: 'private' | 'pending' | 'approved' | 'denied'
   csvLine?: string
   csvLineHint?: string
 }
@@ -172,8 +172,8 @@ export function useTurposter() {
       }
       const data: FylkeInfo[] = await res.json()
       hierarchy.value = data
-    } catch (err: any) {
-      error.value = err.message || 'Feil ved lasting av turpostdata'
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Feil ved lasting av turpostdata'
     } finally {
       isLoadingHierarchy.value = false
     }
@@ -206,8 +206,8 @@ export function useTurposter() {
       }
       const data: TurpostItem[] = await res.json()
       turposter.value = data
-    } catch (err: any) {
-      error.value = err.message || `Kunne ikke hente turposter for ${kommune.name}`
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : `Kunne ikke hente turposter for ${kommune.name}`
     } finally {
       isLoadingPosts.value = false
     }

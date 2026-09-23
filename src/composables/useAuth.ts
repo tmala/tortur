@@ -1,5 +1,12 @@
 import { ref, computed } from 'vue'
-import { signInWithGoogleIdToken, signOutFirebase, fetchFirebase, getFirebaseIdToken } from '@/services/firebase'
+import {
+  signInWithGoogleIdToken,
+  signOutFirebase,
+  fetchFirebase,
+  getFirebaseIdToken,
+  getFirebaseAuth,
+  isJwtExpired,
+} from '@/services/firebase'
 
 export { fetchFirebase, getFirebaseIdToken }
 
@@ -107,12 +114,24 @@ try {
 
   const savedToken = sessionStorage.getItem(STORAGE_KEY_TOKEN)
   if (savedToken) {
-    currentIdToken.value = savedToken
-    signInWithGoogleIdToken(savedToken).then((fbCred) => {
-      if (fbCred?.user?.uid && user.value?.userId) {
-        syncAuthUid(user.value.userId, fbCred.user.uid).catch(() => {})
+    if (isJwtExpired(savedToken)) {
+      sessionStorage.removeItem(STORAGE_KEY_TOKEN)
+      currentIdToken.value = null
+    } else {
+      currentIdToken.value = savedToken
+      const authInstance = getFirebaseAuth()
+      if (authInstance && typeof authInstance.authStateReady === 'function') {
+        authInstance.authStateReady().then(() => {
+          if (!authInstance.currentUser && currentIdToken.value) {
+            signInWithGoogleIdToken(currentIdToken.value).then((fbCred) => {
+              if (fbCred?.user?.uid && user.value?.userId) {
+                syncAuthUid(user.value.userId, fbCred.user.uid).catch(() => {})
+              }
+            }).catch(() => {})
+          }
+        }).catch(() => {})
       }
-    }).catch(() => {})
+    }
   }
 } catch {
   // Ugyldig data – ignorer
@@ -251,14 +270,9 @@ async function login(): Promise<void> {
       cancel_on_tap_outside: true
     })
 
-    gisId.prompt((notification: { isNotDisplayed: () => boolean; isSkippedMoment: () => boolean }) => {
-      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        gisId.renderButton(
-          document.getElementById('g_id_signin_hidden') || document.body,
-          { theme: 'outline', size: 'large' }
-        )
-      }
-    })
+    // Forsøk å vise One Tap-prompt. Hvis det ikke er mulig (f.eks. Safari ITP / FedCM),
+    // ignoreres det stille – brukeren kan uansett bruke «Fortsett med Google»-knappen i modalen.
+    gisId.prompt()
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Innlogging feilet'
   }
@@ -878,7 +892,13 @@ export async function migrateUserCheckinsIfNeeded(userId: string, dbUrl: string,
   try {
     const userRootUrl = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(userId)}.json`
     const res = await fetchFirebase(userRootUrl)
-    if (!res.ok) return
+    if (!res.ok) {
+      // 401/403: Firebase-reglene tillater ikke lesing av hele brukernoden (kun barna).
+      // Dette betyr at auth_uid-mappingen eksisterer og brukeren allerede er migrert.
+      localStorage.setItem(storageKey, 'true')
+      migratedUsersCache.add(userId)
+      return
+    }
     const data = await res.json()
     if (!data || typeof data !== 'object') {
       localStorage.setItem(storageKey, 'true')

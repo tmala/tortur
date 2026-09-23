@@ -95,13 +95,11 @@ describe('usePrivateTurposter', () => {
     })
 
     // Should have called PATCH on user spot and PUT on spot_suggestions
-    const patchCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('my_spots/spot_123.json'))
+    const patchCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('my_spots/spot_123.json') && c[1]?.method === 'PATCH')
     expect(patchCall).toBeDefined()
-    expect(patchCall![1]?.method).toBe('PATCH')
 
-    const putCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('spot_suggestions/spot_123.json'))
+    const putCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('spot_suggestions/spot_123.json') && c[1]?.method === 'PUT')
     expect(putCall).toBeDefined()
-    expect(putCall![1]?.method).toBe('PUT')
     const body = JSON.parse(putCall![1]?.body as string)
     expect(body.name).toBe('Utsiktsposten')
     expect(body.userName).toBe('Test Bruker')
@@ -129,6 +127,126 @@ describe('usePrivateTurposter', () => {
 
     const deleteCheckinsCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('my_spots_checkins/spot_123.json'))
     expect(deleteCheckinsCall![1]?.method).toBe('DELETE')
+  })
+
+  it('denySpotSuggestion updates spot_suggestions with status denied', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      return {
+        ok: true,
+        json: async () => ({})
+      } as unknown as Response
+    })
+
+    const { denySpotSuggestion } = usePrivateTurposter()
+    await denySpotSuggestion('spot_123')
+
+    const patchCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('spot_suggestions/spot_123.json') && c[1]?.method === 'PATCH')
+    expect(patchCall).toBeDefined()
+    const body = JSON.parse(patchCall![1]?.body as string)
+    expect(body.status).toBe('denied')
+    expect(body.deniedAt).toBeDefined()
+  })
+
+  it('fetchMySpots synchronizes denied status from spot_suggestions and deletes the suggestion', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url)
+      if (urlStr.includes('my_spots.json')) {
+        return {
+          ok: true,
+          json: async () => ({
+            spot_1: {
+              id: 'spot_1',
+              name: 'Varden',
+              lat: 60.1,
+              lng: 5.2,
+              status: 'pending',
+              suggestedForPublic: true
+            }
+          })
+        } as unknown as Response
+      }
+      if (urlStr.includes('spot_suggestions/spot_1.json')) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'spot_1',
+            status: 'denied'
+          })
+        } as unknown as Response
+      }
+      return {
+        ok: true,
+        json: async () => ({})
+      } as unknown as Response
+    })
+
+    const { fetchMySpots } = usePrivateTurposter()
+    const spots = await fetchMySpots('user_abc')
+
+    expect(spots).toHaveLength(1)
+    expect(spots[0]?.status).toBe('denied')
+    expect(spots[0]?.suggestedForPublic).toBe(false)
+
+    // Verify user node was patched with denied
+    const userPatchCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('my_spots/spot_1.json') && c[1]?.method === 'PATCH')
+    expect(userPatchCall).toBeDefined()
+    const userBody = JSON.parse(userPatchCall![1]?.body as string)
+    expect(userBody.status).toBe('denied')
+    expect(userBody.suggestedForPublic).toBe(false)
+
+    // Verify spot_suggestion was deleted
+    const deleteSuggestionCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('spot_suggestions/spot_1.json') && c[1]?.method === 'DELETE')
+    expect(deleteSuggestionCall).toBeDefined()
+  })
+
+  it('suggestExistingSpotForPublic rejects if spot already has status denied', async () => {
+    const { suggestExistingSpotForPublic } = usePrivateTurposter()
+    const deniedSpot: TurpostItem = {
+      id: 'spot_denied',
+      name: 'Avvist turpost',
+      lat: 60.1,
+      lng: 5.2,
+      alt: 100,
+      status: 'denied',
+      isPrivate: true
+    }
+
+    await expect(
+      suggestExistingSpotForPublic('user_abc', deniedSpot)
+    ).rejects.toThrow('tidligere avvist')
+  })
+
+  it('saveMySpot prevents suggestedForPublic if spot has status denied', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      return {
+        ok: true,
+        json: async () => ({})
+      } as unknown as Response
+    })
+
+    const { saveMySpot } = usePrivateTurposter()
+    const deniedSpot: TurpostItem = {
+      id: 'spot_denied',
+      name: 'Avvist turpost',
+      lat: 60.1,
+      lng: 5.2,
+      alt: 100,
+      status: 'denied',
+      isPrivate: true
+    }
+
+    await saveMySpot('user_abc', deniedSpot, true)
+
+    // Verify user spot PUT has status: 'denied' and suggestedForPublic: false
+    const putCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('my_spots/spot_denied.json') && c[1]?.method === 'PUT')
+    expect(putCall).toBeDefined()
+    const body = JSON.parse(putCall![1]?.body as string)
+    expect(body.status).toBe('denied')
+    expect(body.suggestedForPublic).toBe(false)
+
+    // Verify NO entry was sent to spot_suggestions
+    const suggestionCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('spot_suggestions/spot_denied.json'))
+    expect(suggestionCall).toBeUndefined()
   })
 
   it('submitPrivateCheckin uploads image via Apps Script and saves Google Drive URL to Firebase', async () => {
