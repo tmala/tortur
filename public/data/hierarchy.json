@@ -1884,12 +1884,12 @@
   {
     "name": "Utlandet",
     "slug": "utlandet",
-    "count": 12,
+    "count": 24,
     "kommuner": [
       {
         "name": "Mallorca",
         "slug": "mallorca",
-        "count": 4
+        "count": 16
       },
       {
         "name": "Spania",
