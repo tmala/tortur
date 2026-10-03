@@ -12,7 +12,8 @@ import {
   Minus,
   Plus,
   Clock,
-  ChevronDown
+  ChevronDown,
+  Film
 } from 'lucide-vue-next'
 import type { SavedTrack } from '@/stores/gpsTrack'
 import { formatDistance } from '@/composables/useGeolocation'
@@ -56,6 +57,7 @@ const emit = defineEmits<{
   (e: 'decrease-speed'): void
   (e: 'cycle-speed'): void
   (e: 'stop-replay'): void
+  (e: 'play-3d'): void
 }>()
 
 const SPEED_OPTIONS = [10, 20, 40, 80, 120, 160]
@@ -846,6 +848,18 @@ defineExpose({
           <Square :size="10" fill="currentColor" />
         </button>
 
+        <!-- 3D filmavspilling -->
+        <button
+          type="button"
+          class="btn-playback-control btn-playback-3d"
+          @click="emit('play-3d')"
+          title="Opplev sporet i 3D-terreng med flyover-kamera"
+          aria-label="3D-film flyover"
+        >
+          <Film :size="12" />
+          <span>3D-film</span>
+        </button>
+
         <!-- Hastighetsindikator med minus foran og pluss bak -->
         <div class="speed-stepper-control" role="group" aria-label="Juster avspillingsfart">
           <button
@@ -1507,6 +1521,23 @@ input:checked + .slider:before {
   background: rgba(239, 68, 68, 0.35);
   border-color: rgba(248, 113, 113, 0.65);
   color: #ffffff;
+}
+
+/* 3D-film knapp */
+.btn-playback-3d {
+  background: rgba(249, 115, 22, 0.2);
+  border: 1px solid rgba(249, 115, 22, 0.55);
+  color: #fb923c;
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.15);
+}
+
+.btn-playback-3d:hover {
+  background: rgba(249, 115, 22, 0.38);
+  color: #ffffff;
+  border-color: rgba(249, 115, 22, 0.85);
+  box-shadow: 0 0 14px rgba(249, 115, 22, 0.35);
+  transform: scale(1.02);
 }
 
 /* Hastighetsvelger med minus, verdi og pluss */

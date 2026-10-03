@@ -42,6 +42,11 @@ const router = createRouter({
           path: 'forslag',
           name: 'spot-suggestions',
           component: () => import('../views/SpotSuggestionsView.vue')
+        },
+        {
+          path: 'spor-3d',
+          name: 'track-flyover',
+          component: () => import('../views/TrackFlyoverView.vue')
         }
       ]
     },

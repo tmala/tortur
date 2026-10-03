@@ -108,10 +108,13 @@ const handleDownloadGpx = () => {
   gpx += `    <trkseg>\n`
 
   for (const pt of props.trackPoints) {
+    const eleXml = pt.ele !== undefined
+      ? `\n        <ele>${pt.ele.toFixed(1)}</ele>`
+      : ''
     const timeXml = pt.timestamp
       ? `\n        <time>${new Date(pt.timestamp).toISOString()}</time>`
       : ''
-    gpx += `      <trkpt lat="${pt.lat.toFixed(6)}" lon="${pt.lng.toFixed(6)}">${timeXml}\n      </trkpt>\n`
+    gpx += `      <trkpt lat="${pt.lat.toFixed(6)}" lon="${pt.lng.toFixed(6)}">${eleXml}${timeXml}\n      </trkpt>\n`
   }
 
   gpx += `    </trkseg>\n`

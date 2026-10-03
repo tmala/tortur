@@ -14,6 +14,7 @@ export interface TrackPoint {
   lat: number
   lng: number
   timestamp?: number
+  ele?: number
 }
 
 const STORAGE_KEY_TRACK = 'tortur_track_points'
@@ -91,22 +92,26 @@ export function useGeolocation() {
 
     const last = trackPoints.value[trackPoints.value.length - 1]
     let added = false
-    if (!last) {
-      trackPoints.value.push({
+    const createPoint = (): TrackPoint => {
+      const pt: TrackPoint = {
         lat: point.lat,
         lng: point.lng,
         timestamp: point.timestamp || Date.now()
-      })
+      }
+      if (point.altitude !== null && point.altitude !== undefined && !isNaN(point.altitude)) {
+        pt.ele = Math.round(point.altitude * 10) / 10
+      }
+      return pt
+    }
+
+    if (!last) {
+      trackPoints.value.push(createPoint())
       added = true
     } else {
       const dist = calculateDistanceMeters(last.lat, last.lng, point.lat, point.lng)
       // Kun legg til nytt punkt dersom man har beveget seg minst 4 meter (fjerner GPS-jitter)
       if (dist >= 4) {
-        trackPoints.value.push({
-          lat: point.lat,
-          lng: point.lng,
-          timestamp: point.timestamp || Date.now()
-        })
+        trackPoints.value.push(createPoint())
         added = true
       }
     }

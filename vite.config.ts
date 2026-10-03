@@ -169,7 +169,7 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern:
-              /https:\/\/(?:[abc]\.tile\.openstreetmap\.org|cache\.kartverket\.no|[abc]\.tile-cyclosm\.openstreetmap\.fr|[abc]\.tile\.opentopomap\.org|server\.arcgisonline\.com|mt[0-3]\.google\.com)\/.*/i,
+              /https:\/\/(?:[abc]\.tile\.openstreetmap\.org|cache\.kartverket\.no|[abc]\.tile-cyclosm\.openstreetmap\.fr|[abc]\.tile\.opentopomap\.org|server\.arcgisonline\.com|mt[0-3]\.google\.com|s3\.amazonaws\.com)\/.*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'map-tiles-cache',
@@ -217,6 +217,9 @@ export default defineConfig({
   ],
   build: {
     chunkSizeWarningLimit: 600,
+  },
+  optimizeDeps: {
+    exclude: ['maplibre-gl'],
   },
   resolve: {
     alias: {

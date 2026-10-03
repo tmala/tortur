@@ -519,6 +519,20 @@ const handleTrackReplayChange = (isPlaying: boolean) => {
   isReplayingTrack.value = isPlaying
 }
 
+const handlePlayTrack3D = () => {
+  if (trackStore.activeTrack) {
+    try {
+      sessionStorage.setItem('tortur_active_flyover_track', JSON.stringify(trackStore.activeTrack))
+    } catch {
+      // Ignorer
+    }
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+    const trackIdQuery = trackStore.activeTrack.id ? `trackId=${trackStore.activeTrack.id}&` : ''
+    const popoutUrl = `${window.location.origin}${base}/spor-3d?${trackIdQuery}popout=true`
+    window.open(popoutUrl, '_blank', 'width=1280,height=800,menubar=no,toolbar=no,location=no,status=no')
+  }
+}
+
 // Visningstilstander for sporet på kartet
 const showKmMarkers = ref(true)
 const showPhotosOnMap = ref(true)
@@ -998,6 +1012,7 @@ onUnmounted(() => {
           @decrease-speed="handleDecreaseSpeed"
           @cycle-speed="handleCycleReplaySpeed"
           @stop-replay="handleStopTrackReplay"
+          @play-3d="handlePlayTrack3D"
         />
       </div>
     </transition>

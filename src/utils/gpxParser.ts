@@ -63,6 +63,14 @@ export function parseGpx(xmlString: string): ParsedGpxResult {
 
     const point: TrackPoint = { lat, lng }
 
+    const eleEl = el.querySelector('ele')
+    if (eleEl && eleEl.textContent) {
+      const eleVal = parseFloat(eleEl.textContent.trim())
+      if (!isNaN(eleVal)) {
+        point.ele = Math.round(eleVal * 10) / 10
+      }
+    }
+
     const timeEl = el.querySelector('time')
     if (timeEl && timeEl.textContent) {
       const parsedTime = Date.parse(timeEl.textContent.trim())
