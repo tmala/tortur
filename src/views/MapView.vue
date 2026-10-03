@@ -461,6 +461,9 @@ const handleViewSavedTrack = (track: SavedTrack | null) => {
 const isReplayingTrack = ref(false)
 const replaySpeedOptions = [10, 20, 40, 80, 120, 160]
 const currentReplaySpeed = ref(40)
+const replayProgress = ref(0)
+const replayElapsedMs = ref(0)
+const replayDurationMs = ref(0)
 
 const handleCycleReplaySpeed = () => {
   const currentIndex = replaySpeedOptions.indexOf(currentReplaySpeed.value)
@@ -498,6 +501,18 @@ const handlePauseTrackReplay = () => {
 const handleStopTrackReplay = () => {
   mapViewerRef.value?.stopTrackReplay()
   isReplayingTrack.value = false
+  replayProgress.value = 0
+  replayElapsedMs.value = 0
+}
+
+const handleSeekTrackReplay = (progress: number) => {
+  mapViewerRef.value?.seekTrackReplay(progress)
+}
+
+const handleTrackReplayProgress = (data: { progress: number; elapsedMs: number; durationMs: number }) => {
+  replayProgress.value = data.progress
+  replayElapsedMs.value = data.elapsedMs
+  replayDurationMs.value = data.durationMs
 }
 
 const handleTrackReplayChange = (isPlaying: boolean) => {
@@ -517,6 +532,9 @@ watch(
   async (track) => {
     mapViewerRef.value?.stopTrackReplay()
     isReplayingTrack.value = false
+    replayProgress.value = 0
+    replayElapsedMs.value = 0
+    replayDurationMs.value = 0
     if (track) {
       handleViewSavedTrack(track)
       if (track.userId && track.userId !== 'guest') {
@@ -963,6 +981,9 @@ onUnmounted(() => {
           :track="trackStore.activeTrack"
           :is-replaying="isReplayingTrack"
           :replay-speed="currentReplaySpeed"
+          :replay-progress="replayProgress"
+          :replay-elapsed-ms="replayElapsedMs"
+          :replay-duration-ms="replayDurationMs"
           :show-km-markers="showKmMarkers"
           :show-photos-on-map="showPhotosOnMap"
           :on-track-photos-count="onTrackPhotos.length"
@@ -972,6 +993,7 @@ onUnmounted(() => {
           @update:show-photos-on-map="showPhotosOnMap = $event"
           @play="handlePlayTrackReplay"
           @pause="handlePauseTrackReplay"
+          @seek="handleSeekTrackReplay"
           @increase-speed="handleIncreaseSpeed"
           @decrease-speed="handleDecreaseSpeed"
           @cycle-speed="handleCycleReplaySpeed"
@@ -1015,6 +1037,7 @@ onUnmounted(() => {
       @click-track-photo="handlePhotoClick"
       @disable-municipalities="showMunicipalities = false"
       @track-replay-change="handleTrackReplayChange"
+      @track-replay-progress="handleTrackReplayProgress"
       @map-longpress="handleMapLongpress"
     />
 
@@ -1324,7 +1347,7 @@ onUnmounted(() => {
   top: calc(14px + env(safe-area-inset-top, 0px));
   right: calc(14px + env(safe-area-inset-right, 0px));
   z-index: 1060;
-  max-width: 380px;
+  max-width: calc(100vw - 28px);
   pointer-events: none;
 }
 

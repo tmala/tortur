@@ -63,6 +63,7 @@ const emit = defineEmits<{
   (e: 'click-track-photo', photo: TrackPhoto, clusterPhotos?: TrackPhoto[]): void
   (e: 'disable-municipalities'): void
   (e: 'track-replay-change', isPlaying: boolean): void
+  (e: 'track-replay-progress', data: { progress: number; elapsedMs: number; durationMs: number }): void
   (e: 'map-longpress', coords: { lat: number; lng: number }, point: { x: number; y: number }): void
 }>()
 
@@ -617,6 +618,13 @@ watch(trackLayer.isReplaying, (playing) => {
   emit('track-replay-change', playing)
 })
 
+watch(
+  [trackLayer.replayProgress, trackLayer.replayElapsed, trackLayer.replayDuration],
+  ([progress, elapsedMs, durationMs]) => {
+    emit('track-replay-progress', { progress, elapsedMs, durationMs })
+  }
+)
+
 const clearSpotSuggestion = () => {
   if (suggestionMarker && map) {
     map.removeLayer(suggestionMarker)
@@ -734,8 +742,11 @@ defineExpose({
   pauseTrackReplay: trackLayer.pauseReplay,
   stopTrackReplay: trackLayer.stopReplay,
   toggleTrackReplay: trackLayer.toggleReplay,
+  seekTrackReplay: trackLayer.seekReplay,
   isTrackReplaying: trackLayer.isReplaying,
   trackReplayProgress: trackLayer.replayProgress,
+  trackReplayElapsed: trackLayer.replayElapsed,
+  trackReplayDuration: trackLayer.replayDuration,
   trackReplaySpeed: trackLayer.replaySpeed,
   setTrackReplaySpeed: trackLayer.setReplaySpeed,
   cancelLongpress: longpress.cancelPress,

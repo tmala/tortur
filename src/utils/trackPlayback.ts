@@ -6,6 +6,7 @@ export interface InterpolatedTrackPosition {
   lng: number
   bearing: number
   progress: number // 0.0 til 1.0
+  timestamp?: number
 }
 
 /**
@@ -101,7 +102,7 @@ export function interpolatePositionAtElapsedMs(
         const lng = pPrev.lng + fraction * (pCurr.lng - pPrev.lng)
         const bearing = calculateBearingDegrees(pPrev.lat, pPrev.lng, pCurr.lat, pCurr.lng)
 
-        return { lat, lng, bearing, progress }
+        return { lat, lng, bearing, progress, timestamp: Math.round(targetTime) }
       }
     }
   }
@@ -176,3 +177,36 @@ export function interpolatePositionAtProgress(
     progress: 1
   }
 }
+
+/**
+ * Formaterer millisekunder til spilletid-streng i formatet m:ss eller h:mm:ss.
+ */
+export function formatPlaybackTime(ms: number): string {
+  if (!ms || ms <= 0 || !Number.isFinite(ms)) return '0:00'
+  const totalSeconds = Math.floor(ms / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  const paddedSeconds = seconds.toString().padStart(2, '0')
+  if (hours > 0) {
+    const paddedMinutes = minutes.toString().padStart(2, '0')
+    return `${hours}:${paddedMinutes}:${paddedSeconds}`
+  }
+  return `${minutes}:${paddedSeconds}`
+}
+
+/**
+ * Formaterer et tidsstempel (ms) til klokkeslett (f.eks. 14:05 eller 14:05:12).
+ */
+export function formatClockTime(timestampMs: number, includeSeconds: boolean = true): string {
+  if (!timestampMs || !Number.isFinite(timestampMs)) return ''
+  const d = new Date(timestampMs)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleTimeString('no-NO', {
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(includeSeconds ? { second: '2-digit' } : {})
+  })
+}
+

@@ -5,7 +5,8 @@ import { calculateKmMarkers } from '@/utils/trackKmMarkers'
 import { createKmMarkerIcon, createTrackReplayIcon } from '@/utils/mapIcons'
 import {
   getTrackDurationMs,
-  interpolatePositionAtElapsedMs
+  interpolatePositionAtElapsedMs,
+  type InterpolatedTrackPosition
 } from '@/utils/trackPlayback'
 import type { TrackPhoto } from '@/composables/useTrackPhotos'
 import { clusterTrackPhotos, type TrackPhotoCluster } from '@/utils/trackPhotoCluster'
@@ -112,6 +113,8 @@ export function useMapTrackLayer(
   // Tilstand for animert avspilling av sporet
   const isReplaying = ref(false)
   const replayProgress = ref(0)
+  const replayElapsed = ref(0)
+  const replayDuration = ref(0)
   const replaySpeed = ref(40)
 
   const setReplaySpeed = (speed: number) => {
@@ -154,6 +157,9 @@ export function useMapTrackLayer(
     if (pointsChanged) {
       stopReplay()
     }
+
+    const totalDuration = pts.length >= 2 ? getTrackDurationMs(pts) : 0
+    replayDuration.value = totalDuration
 
     if (pts.length < 2) {
       if (trackPolyline) {
@@ -384,15 +390,33 @@ export function useMapTrackLayer(
     }
   }
 
+  const ensureReplayMarker = (pos: InterpolatedTrackPosition): L.Marker | null => {
+    const map = getMap()
+    if (!map) return null
+    if (!replayMarker) {
+      replayMarker = L.marker([pos.lat, pos.lng], {
+        icon: createTrackReplayIcon(pos.bearing),
+        interactive: false,
+        zIndexOffset: 2000
+      }).addTo(map)
+    }
+    return replayMarker
+  }
+
   const updateReplayMarkerPosition = (elapsedMs: number) => {
-    if (!replayMarker || currentPoints.length < 2) return
-    const pos = interpolatePositionAtElapsedMs(currentPoints, elapsedMs)
+    if (currentPoints.length < 2) return
+    const totalDuration = replayDuration.value || getTrackDurationMs(currentPoints)
+    const pos = interpolatePositionAtElapsedMs(currentPoints, elapsedMs, totalDuration)
     if (!pos) return
 
-    replayMarker.setLatLng([pos.lat, pos.lng])
-    replayProgress.value = pos.progress
+    const marker = replayMarker || ensureReplayMarker(pos)
+    if (!marker) return
 
-    const iconEl = replayMarker.getElement()
+    marker.setLatLng([pos.lat, pos.lng])
+    replayProgress.value = pos.progress
+    replayElapsed.value = elapsedMs
+
+    const iconEl = marker.getElement()
     const avatarEl = iconEl?.querySelector<HTMLElement>('.track-replay-avatar')
     if (avatarEl) {
       avatarEl.style.transform = `rotate(${Math.round(pos.bearing)}deg)`
@@ -411,7 +435,7 @@ export function useMapTrackLayer(
 
     // Begrens dt til maks 100ms for å unngå hopp dersom fanen har vært i bakgrunnen
     const clampedDt = Math.min(100, dtWall)
-    const totalDuration = getTrackDurationMs(currentPoints)
+    const totalDuration = replayDuration.value || getTrackDurationMs(currentPoints)
 
     replayElapsedMs += clampedDt * replaySpeed.value
 
@@ -436,21 +460,19 @@ export function useMapTrackLayer(
       replaySpeed.value = speedMultiplier
     }
 
-    const totalDuration = getTrackDurationMs(currentPoints)
+    const totalDuration = replayDuration.value || getTrackDurationMs(currentPoints)
     // Hvis vi er ved slutten, start forfra
     if (replayElapsedMs >= totalDuration) {
       replayElapsedMs = 0
       replayProgress.value = 0
+      replayElapsed.value = 0
     }
 
     if (!replayMarker) {
-      const initialPos = interpolatePositionAtElapsedMs(currentPoints, replayElapsedMs)
-      if (!initialPos) return
-      replayMarker = L.marker([initialPos.lat, initialPos.lng], {
-        icon: createTrackReplayIcon(initialPos.bearing),
-        interactive: false,
-        zIndexOffset: 2000
-      }).addTo(map)
+      const initialPos = interpolatePositionAtElapsedMs(currentPoints, replayElapsedMs, totalDuration)
+      if (initialPos) {
+        ensureReplayMarker(initialPos)
+      }
     }
 
     isReplaying.value = true
@@ -474,6 +496,7 @@ export function useMapTrackLayer(
     pauseReplay()
     replayElapsedMs = 0
     replayProgress.value = 0
+    replayElapsed.value = 0
     if (replayMarker) {
       replayMarker.remove()
       replayMarker = null
@@ -488,6 +511,15 @@ export function useMapTrackLayer(
     }
   }
 
+  const seekReplay = (progress: number) => {
+    if (currentPoints.length < 2) return
+    const clampedProgress = Math.max(0, Math.min(1, progress))
+    const totalDuration = replayDuration.value || getTrackDurationMs(currentPoints)
+    replayElapsedMs = clampedProgress * totalDuration
+    lastAnimWallTime = null
+    updateReplayMarkerPosition(replayElapsedMs)
+  }
+
   const zoomToTrack = (points?: TrackPoint[]) => {
     const map = getMap()
     if (!points || points.length < 2 || !map) return
@@ -500,6 +532,7 @@ export function useMapTrackLayer(
 
   const cleanup = () => {
     stopReplay()
+    replayDuration.value = 0
     if (trackPolyline) {
       trackPolyline.remove()
       trackPolyline = null
@@ -531,11 +564,14 @@ export function useMapTrackLayer(
     cleanup,
     isReplaying,
     replayProgress,
+    replayElapsed,
+    replayDuration,
     replaySpeed,
     setReplaySpeed,
     startReplay,
     pauseReplay,
     stopReplay,
-    toggleReplay
+    toggleReplay,
+    seekReplay
   }
 }

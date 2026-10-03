@@ -6,7 +6,9 @@ import {
   hasTrackTimestamps,
   getTrackDurationMs,
   interpolatePositionAtProgress,
-  interpolatePositionAtElapsedMs
+  interpolatePositionAtElapsedMs,
+  formatPlaybackTime,
+  formatClockTime
 } from '../utils/trackPlayback'
 import { parseGpx } from '../utils/gpxParser'
 import type { TrackPoint } from '../composables/useGeolocation'
@@ -86,6 +88,7 @@ describe('trackPlayback', () => {
       expect(pos!.lat).toBeCloseTo(60.0050, 4)
       expect(pos!.lng).toBeCloseTo(5.0000, 4)
       expect(pos!.bearing).toBeCloseTo(0, 0) // beveget seg nordover
+      expect(pos!.timestamp).toBe(15000)
     })
 
     it('spiller av ekte Rollandsoksen GPX (3.8 km)', () => {
@@ -100,6 +103,7 @@ describe('trackPlayback', () => {
       const posStart = interpolatePositionAtElapsedMs(parsed.points, 0, duration)
       expect(posStart).not.toBeNull()
       expect(posStart!.lat).toBeCloseTo(parsed.points[0]!.lat, 4)
+      expect(posStart!.timestamp).toBe(parsed.points[0]!.timestamp)
 
       // Midtveis
       const posMid = interpolatePositionAtElapsedMs(parsed.points, duration / 2, duration)
@@ -112,6 +116,47 @@ describe('trackPlayback', () => {
       expect(posEnd).not.toBeNull()
       const lastPoint = parsed.points[parsed.points.length - 1]!
       expect(posEnd!.lat).toBeCloseTo(lastPoint.lat, 4)
+    })
+  })
+
+  describe('formatPlaybackTime', () => {
+    it('formaterer 0 ms eller ugyldige verdier som 0:00', () => {
+      expect(formatPlaybackTime(0)).toBe('0:00')
+      expect(formatPlaybackTime(-100)).toBe('0:00')
+      expect(formatPlaybackTime(NaN)).toBe('0:00')
+    })
+
+    it('formaterer sekunder og minutter korrekt (m:ss)', () => {
+      expect(formatPlaybackTime(5000)).toBe('0:05')
+      expect(formatPlaybackTime(59000)).toBe('0:59')
+      expect(formatPlaybackTime(60000)).toBe('1:00')
+      expect(formatPlaybackTime(75000)).toBe('1:15')
+      expect(formatPlaybackTime(599000)).toBe('9:59')
+      expect(formatPlaybackTime(600000)).toBe('10:00')
+      expect(formatPlaybackTime(3599000)).toBe('59:59')
+    })
+
+    it('formaterer timer korrekt (h:mm:ss)', () => {
+      expect(formatPlaybackTime(3600000)).toBe('1:00:00')
+      expect(formatPlaybackTime(3665000)).toBe('1:01:05')
+      expect(formatPlaybackTime(16382000)).toBe('4:33:02')
+    })
+  })
+
+  describe('formatClockTime', () => {
+    it('formaterer timestamp til klokkeslett-streng', () => {
+      // 2026-10-01T10:23:45Z
+      const date = new Date('2026-10-01T12:00:00.000Z')
+      const res = formatClockTime(date.getTime(), true)
+      expect(res).toMatch(/^\d{2}:\d{2}:\d{2}$/)
+
+      const resNoSec = formatClockTime(date.getTime(), false)
+      expect(resNoSec).toMatch(/^\d{2}:\d{2}$/)
+    })
+
+    it('returnerer tom streng for 0 eller ugyldig timestamp', () => {
+      expect(formatClockTime(0)).toBe('')
+      expect(formatClockTime(NaN)).toBe('')
     })
   })
 })

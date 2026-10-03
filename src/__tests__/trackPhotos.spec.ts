@@ -11,7 +11,7 @@ import {
 } from '../composables/useTrackPhotos'
 import type { SavedTrack } from '../stores/gpsTrack'
 import { useAuth } from '../composables/useAuth'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import TrackPlaybackPanel from '../components/TrackPlaybackPanel.vue'
 
 // Mock exifr
@@ -775,6 +775,401 @@ describe('useTrackPhotos', () => {
       )
 
       expect(vm.isDragging).toBe(false)
+    })
+
+    it('viser tidslinje med klokkeslett, medgått tid og total varighet', () => {
+      const wrapper = mount(TrackPlaybackPanel, {
+        props: {
+          track: mockTrack,
+          isReplaying: false,
+          replaySpeed: 40,
+          replayProgress: 0.5,
+          replayElapsedMs: 4500000,
+          replayDurationMs: 9000000,
+          showKmMarkers: true,
+          showPhotosOnMap: true,
+          onTrackPhotosCount: 3
+        }
+      })
+
+      // mockTrack.startTime er 10:00:00Z, så etter 4500000ms (1t 15m) skal klokken vises
+      const clockBadge = wrapper.find('.timeline-clock-badge')
+      expect(clockBadge.exists()).toBe(true)
+
+      const elapsed = wrapper.find('.timeline-elapsed')
+      expect(elapsed.text()).toBe('1:15:00')
+
+      const duration = wrapper.find('.timeline-duration')
+      expect(duration.text()).toBe('2:30:00')
+
+      const slider = wrapper.find<HTMLInputElement>('.timeline-slider')
+      expect(slider.exists()).toBe(true)
+      expect(slider.element.value).toBe('500')
+    })
+
+    it('emitter seek-event når brukeren beveger slideren', async () => {
+      const wrapper = mount(TrackPlaybackPanel, {
+        props: {
+          track: mockTrack,
+          isReplaying: false,
+          replaySpeed: 40,
+          replayProgress: 0,
+          replayElapsedMs: 0,
+          replayDurationMs: 9000000,
+          showKmMarkers: true,
+          showPhotosOnMap: true,
+          onTrackPhotosCount: 3
+        }
+      })
+
+      const slider = wrapper.find<HTMLInputElement>('.timeline-slider')
+      slider.element.value = '750'
+      await slider.trigger('input')
+
+      expect(wrapper.emitted('seek')).toBeTruthy()
+      expect(wrapper.emitted('seek')![0]).toEqual([0.75])
+    })
+
+    it('pauser under scrub hvis avspilling pågikk, og gjenopptar på change', async () => {
+      const wrapper = mount(TrackPlaybackPanel, {
+        props: {
+          track: mockTrack,
+          isReplaying: true,
+          replaySpeed: 40,
+          replayProgress: 0.2,
+          replayElapsedMs: 1800000,
+          replayDurationMs: 9000000,
+          showKmMarkers: true,
+          showPhotosOnMap: true,
+          onTrackPhotosCount: 3
+        }
+      })
+
+      const slider = wrapper.find<HTMLInputElement>('.timeline-slider')
+      await slider.trigger('pointerdown')
+      expect(wrapper.emitted('pause')).toHaveLength(1)
+
+      slider.element.value = '600'
+      await slider.trigger('input')
+      expect(wrapper.emitted('seek')).toBeTruthy()
+
+      await slider.trigger('change')
+      expect(wrapper.emitted('play')).toHaveLength(1)
+    })
+
+    it('viser chevron og toggler innstillinger (kilometermarkører og turbilder) ved klikk på spornavnet', async () => {
+      localStorage.removeItem('tortur.trackPanel.settingsCollapsed')
+
+      const wrapper = mount(TrackPlaybackPanel, {
+        attachTo: document.body,
+        props: {
+          track: mockTrack,
+          isReplaying: false,
+          replaySpeed: 40,
+          showKmMarkers: true,
+          showPhotosOnMap: true,
+          onTrackPhotosCount: 3
+        }
+      })
+
+      const titleBtn = wrapper.find('.track-title-btn')
+      expect(titleBtn.exists()).toBe(true)
+      expect(titleBtn.attributes('aria-expanded')).toBe('true')
+
+      const chevron = wrapper.find('.collapse-chevron')
+      expect(chevron.exists()).toBe(true)
+      expect(chevron.classes()).not.toContain('is-collapsed')
+
+      const settingsDiv = wrapper.find('#track-panel-settings')
+      expect(settingsDiv.isVisible()).toBe(true)
+
+      // Klikk på spornavnet for å skjule
+      await titleBtn.trigger('click')
+      await flushPromises()
+
+      expect(titleBtn.attributes('aria-expanded')).toBe('false')
+      expect(wrapper.find('.collapse-chevron').classes()).toContain('is-collapsed')
+      expect(wrapper.find('#track-panel-settings').isVisible()).toBe(false)
+      expect(localStorage.getItem('tortur.trackPanel.settingsCollapsed')).toBe('true')
+
+      // Klikk på spornavnet på nytt for å vise igjen
+      await titleBtn.trigger('click')
+      await flushPromises()
+
+      expect(titleBtn.attributes('aria-expanded')).toBe('true')
+      expect(wrapper.find('.collapse-chevron').classes()).not.toContain('is-collapsed')
+      expect(wrapper.find('#track-panel-settings').isVisible()).toBe(true)
+      expect(localStorage.getItem('tortur.trackPanel.settingsCollapsed')).toBe('false')
+
+      wrapper.unmount()
+    })
+
+    it('respekterer lagret innstilling fra localStorage ved lasting', () => {
+      localStorage.setItem('tortur.trackPanel.settingsCollapsed', 'true')
+
+      const wrapper = mount(TrackPlaybackPanel, {
+        props: {
+          track: mockTrack,
+          isReplaying: false,
+          replaySpeed: 40,
+          showKmMarkers: true,
+          showPhotosOnMap: true,
+          onTrackPhotosCount: 3
+        }
+      })
+
+      const titleBtn = wrapper.find('.track-title-btn')
+      expect(titleBtn.attributes('aria-expanded')).toBe('false')
+      expect(wrapper.find('#track-panel-settings').isVisible()).toBe(false)
+      expect(wrapper.find('.collapse-chevron').classes()).toContain('is-collapsed')
+
+      localStorage.removeItem('tortur.trackPanel.settingsCollapsed')
+    })
+
+    it('ignorerer klikk på tittel hvis det inngikk i en dra-bevegelse', async () => {
+      localStorage.removeItem('tortur.trackPanel.settingsCollapsed')
+
+      const wrapper = mount(TrackPlaybackPanel, {
+        props: {
+          track: mockTrack,
+          isReplaying: false,
+          replaySpeed: 40,
+          showKmMarkers: true,
+          showPhotosOnMap: true,
+          onTrackPhotosCount: 3
+        }
+      })
+
+      const titleBtn = wrapper.find('.track-title-btn')
+      expect(titleBtn.attributes('aria-expanded')).toBe('true')
+
+      // Start drag på tittel
+      titleBtn.element.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 100,
+          clientY: 100,
+          button: 0,
+          pointerType: 'mouse'
+        })
+      )
+
+      // Beveg musen over 5px terskel
+      window.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 150,
+          clientY: 150,
+          button: 0,
+          pointerType: 'mouse'
+        })
+      )
+
+      // Avslutt drag
+      window.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerType: 'mouse'
+        })
+      )
+
+      // Klikk-event fyres etter drag
+      await titleBtn.trigger('click')
+
+      // Skal fortsatt være ekspandert (ikke togglet pga drag)
+      expect(titleBtn.attributes('aria-expanded')).toBe('true')
+      expect(wrapper.find('#track-panel-settings').isVisible()).toBe(true)
+    })
+
+    it('rendrer resize-håndtak på venstre og høyre kant på desktop (> 640px)', () => {
+      const wrapper = mount(TrackPlaybackPanel, {
+        attachTo: document.body,
+        props: {
+          track: mockTrack,
+          isReplaying: false,
+          replaySpeed: 40,
+          showKmMarkers: true,
+          showPhotosOnMap: true,
+          onTrackPhotosCount: 3
+        }
+      })
+
+      const handles = wrapper.findAll('.resize-handle')
+      expect(handles.length).toBe(2)
+
+      const leftHandle = wrapper.find('.resize-handle--left')
+      const rightHandle = wrapper.find('.resize-handle--right')
+      expect(leftHandle.exists()).toBe(true)
+      expect(rightHandle.exists()).toBe(true)
+
+      expect(leftHandle.attributes('role')).toBe('separator')
+      expect(leftHandle.attributes('aria-orientation')).toBe('vertical')
+      expect(leftHandle.attributes('aria-valuenow')).toBe('380')
+      expect(leftHandle.attributes('aria-valuemin')).toBe('300')
+
+      wrapper.unmount()
+    })
+
+    it('skjuler resize-håndtak på smale mobilskjermer (<= 640px)', () => {
+      const originalInnerWidth = window.innerWidth
+      Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 400 })
+
+      const wrapper = mount(TrackPlaybackPanel, {
+        props: {
+          track: mockTrack,
+          isReplaying: false,
+          replaySpeed: 40,
+          showKmMarkers: true,
+          showPhotosOnMap: true,
+          onTrackPhotosCount: 3
+        }
+      })
+
+      const handles = wrapper.findAll('.resize-handle')
+      expect(handles.length).toBe(0)
+
+      wrapper.unmount()
+      Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: originalInnerWidth })
+    })
+
+    it('justerer bredde med tastatur på resize-håndtakene og lagrer i localStorage', async () => {
+      localStorage.removeItem('tortur.trackPanel.width')
+
+      const wrapper = mount(TrackPlaybackPanel, {
+        attachTo: document.body,
+        props: {
+          track: mockTrack,
+          isReplaying: false,
+          replaySpeed: 40,
+          showKmMarkers: true,
+          showPhotosOnMap: true,
+          onTrackPhotosCount: 3
+        }
+      })
+
+      const leftHandle = wrapper.find('.resize-handle--left')
+      const rightHandle = wrapper.find('.resize-handle--right')
+
+      // Venstre håndtak: ArrowLeft øker bredden med 16 (380 -> 396)
+      await leftHandle.trigger('keydown', { key: 'ArrowLeft' })
+      await flushPromises()
+      expect(wrapper.attributes('style')).toContain('width: 396px')
+      expect(leftHandle.attributes('aria-valuenow')).toBe('396')
+      expect(localStorage.getItem('tortur.trackPanel.width')).toBe('396')
+
+      // Venstre håndtak: ArrowRight reduserer bredden med 16 (396 -> 380)
+      await leftHandle.trigger('keydown', { key: 'ArrowRight' })
+      await flushPromises()
+      expect(wrapper.attributes('style')).toContain('width: 380px')
+
+      // Høyre håndtak: ArrowRight øker bredden med 16 (380 -> 396)
+      await rightHandle.trigger('keydown', { key: 'ArrowRight' })
+      await flushPromises()
+      expect(wrapper.attributes('style')).toContain('width: 396px')
+
+      // Home: hopper til MIN_WIDTH (300)
+      await rightHandle.trigger('keydown', { key: 'Home' })
+      await flushPromises()
+      expect(wrapper.attributes('style')).toContain('width: 300px')
+      expect(localStorage.getItem('tortur.trackPanel.width')).toBe('300')
+
+      wrapper.unmount()
+      localStorage.removeItem('tortur.trackPanel.width')
+    })
+
+    it('dobbeltklikk på et resize-håndtak nullstiller bredden', async () => {
+      localStorage.setItem('tortur.trackPanel.width', '520')
+
+      const wrapper = mount(TrackPlaybackPanel, {
+        attachTo: document.body,
+        props: {
+          track: mockTrack,
+          isReplaying: false,
+          replaySpeed: 40,
+          showKmMarkers: true,
+          showPhotosOnMap: true,
+          onTrackPhotosCount: 3
+        }
+      })
+
+      expect(wrapper.attributes('style')).toContain('width: 520px')
+
+      const leftHandle = wrapper.find('.resize-handle--left')
+      await leftHandle.trigger('dblclick')
+      await flushPromises()
+
+      expect(localStorage.getItem('tortur.trackPanel.width')).toBeNull()
+      expect(wrapper.attributes('style') || '').not.toContain('width: 520px')
+
+      wrapper.unmount()
+    })
+
+    it('resize-pointerdown starter ikke panel-drag', async () => {
+      const wrapper = mount(TrackPlaybackPanel, {
+        attachTo: document.body,
+        props: {
+          track: mockTrack,
+          isReplaying: false,
+          replaySpeed: 40,
+          showKmMarkers: true,
+          showPhotosOnMap: true,
+          onTrackPhotosCount: 3
+        }
+      })
+
+      const leftHandle = wrapper.find('.resize-handle--left')
+
+      // Start resize på venstre håndtak
+      leftHandle.element.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 600,
+          clientY: 100,
+          button: 0,
+          pointerType: 'mouse'
+        })
+      )
+      await flushPromises()
+
+      expect(wrapper.classes()).toContain('is-resizing')
+      expect(wrapper.classes()).not.toContain('is-dragging')
+
+      // Flytt pekeren mot venstre for å utvide med 50px
+      window.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 550,
+          clientY: 100,
+          button: 0,
+          pointerType: 'mouse'
+        })
+      )
+      await flushPromises()
+
+      expect(wrapper.attributes('style')).toContain('width: 430px')
+
+      // Avslutt resize
+      window.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerType: 'mouse'
+        })
+      )
+      await flushPromises()
+
+      expect(wrapper.classes()).not.toContain('is-resizing')
+      expect(localStorage.getItem('tortur.trackPanel.width')).toBe('430')
+
+      wrapper.unmount()
+      localStorage.removeItem('tortur.trackPanel.width')
     })
   })
 })
