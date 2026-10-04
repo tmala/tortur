@@ -1,5 +1,6 @@
+import type { ServerResponse } from 'node:http'
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin, type ViteDevServer, type Connect } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import vueDevTools from 'vite-plugin-vue-devtools'
@@ -9,7 +10,7 @@ import { readFileSync, existsSync, unlinkSync } from 'node:fs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
 
-function excludeApiSecretsPlugin() {
+function excludeApiSecretsPlugin(): Plugin {
   return {
     name: 'exclude-api-secrets',
     closeBundle() {
@@ -33,33 +34,44 @@ function excludeApiSecretsPlugin() {
   }
 }
 
-function barentsWatchAisDevPlugin() {
-  let cachedAisData: any[] | null = null
+interface RawAisShip {
+  latitude?: number
+  longitude?: number
+  [key: string]: unknown
+}
+
+interface AisProxyRequestBody {
+  bounds?: { minLat: number; maxLat: number; minLng: number; maxLng: number }
+  coordinates?: [number, number][][]
+}
+
+function barentsWatchAisDevPlugin(): Plugin {
+  let cachedAisData: RawAisShip[] | null = null
   let cachedAisTime = 0
 
   return {
     name: 'bw-ais-dev-filter',
-    configureServer(server: any) {
-      server.middlewares.use(async (req: any, res: any, next: any) => {
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use(async (req: Connect.IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
         if (req.url && req.url.startsWith('/tortur/api/bw-ais/v1/latest/combined') && req.method === 'POST') {
           let bodyStr = ''
-          req.on('data', (chunk: any) => {
-            bodyStr += chunk
+          req.on('data', (chunk: unknown) => {
+            bodyStr += String(chunk)
           })
           req.on('end', async () => {
             try {
               let bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null = null
               try {
-                const parsed = JSON.parse(bodyStr)
+                const parsed = JSON.parse(bodyStr) as AisProxyRequestBody
                 if (parsed.bounds) {
                   bounds = parsed.bounds
                 } else if (parsed.coordinates && Array.isArray(parsed.coordinates[0])) {
                   const pts = parsed.coordinates[0]
                   bounds = {
-                    minLng: Math.min(...pts.map((p: any) => p[0])),
-                    maxLng: Math.max(...pts.map((p: any) => p[0])),
-                    minLat: Math.min(...pts.map((p: any) => p[1])),
-                    maxLat: Math.max(...pts.map((p: any) => p[1])),
+                    minLng: Math.min(...pts.map((p) => p[0])),
+                    maxLng: Math.max(...pts.map((p) => p[0])),
+                    minLat: Math.min(...pts.map((p) => p[1])),
+                    maxLat: Math.max(...pts.map((p) => p[1])),
                   }
                 }
               } catch {
@@ -90,14 +102,14 @@ function barentsWatchAisDevPlugin() {
                   res.end(errText)
                   return
                 }
-                cachedAisData = await bwRes.json()
+                cachedAisData = ((await bwRes.json()) as unknown) as RawAisShip[]
                 cachedAisTime = now
               }
 
               let filtered = cachedAisData || []
               if (bounds) {
                 const b = bounds
-                filtered = filtered.filter((ship: any) => {
+                filtered = filtered.filter((ship) => {
                   return (
                     typeof ship.latitude === 'number' &&
                     typeof ship.longitude === 'number' &&
@@ -114,10 +126,11 @@ function barentsWatchAisDevPlugin() {
               res.setHeader('X-AIS-Cache', wasCached ? 'HIT' : 'MISS')
               res.setHeader('X-AIS-Count', String(filtered.length))
               res.end(JSON.stringify(filtered))
-            } catch (err: any) {
+            } catch (err: unknown) {
               res.statusCode = 502
               res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ error: err.message || 'Feil under proxying til BarentsWatch' }))
+              const errorMessage = err instanceof Error ? err.message : 'Feil under proxying til BarentsWatch'
+              res.end(JSON.stringify({ error: errorMessage }))
             }
           })
           return
@@ -216,7 +229,7 @@ export default defineConfig({
     excludeApiSecretsPlugin(),
   ],
   build: {
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 1200,
   },
   optimizeDeps: {
     exclude: ['maplibre-gl'],
