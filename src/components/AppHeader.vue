@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import AuthPanel from './AuthPanel.vue'
 import AboutAppModal from './AboutAppModal.vue'
 import HeaderActionsDropdown from './header/HeaderActionsDropdown.vue'
 import AisInfoModal from './header/AisInfoModal.vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     activeLayer?: string
     isTurposterOpen: boolean
@@ -70,6 +70,30 @@ const appVersion = __APP_VERSION__
 const appTitle = 'TorTur'
 
 const isMenuOpen = ref(false)
+
+const handleToggleTurposter = () => {
+  isMenuOpen.value = false
+  emit('toggle-turposter')
+}
+
+const handleOpenTrackModal = () => {
+  isMenuOpen.value = false
+  emit('open-track-modal')
+}
+
+const handleOpenProfile = () => {
+  isMenuOpen.value = false
+  emit('open-profile')
+}
+
+watch(
+  () => props.isTurposterOpen,
+  (isOpen) => {
+    if (isOpen) {
+      isMenuOpen.value = false
+    }
+  }
+)
 
 const toggleMenu = () => {
   isMenuOpen.value = !isMenuOpen.value
@@ -159,7 +183,7 @@ const handleInstallClick = async () => {
 
       <div class="brand-divider" />
 
-      <AuthPanel @open-profile="emit('open-profile')" />
+      <AuthPanel @open-profile="handleOpenProfile" />
     </header>
 
     <!-- Verktøymeny med Turposter, GPS, lag etc. -->
@@ -182,11 +206,11 @@ const handleInstallClick = async () => {
       :show-install-prompt="!!installPrompt && !isInstalled"
       :needs-update="needsUpdate"
       @close="isMenuOpen = false"
-      @toggle-turposter="emit('toggle-turposter')"
+      @toggle-turposter="handleToggleTurposter"
       @show-local-turposter="emit('show-local-turposter')"
       @locate="emit('locate')"
       @toggle-tracking="emit('toggle-tracking')"
-      @open-track-modal="emit('open-track-modal')"
+      @open-track-modal="handleOpenTrackModal"
       @toggle-ais="emit('toggle-ais')"
       @toggle-municipalities="emit('toggle-municipalities')"
       @toggle-ais-modal="showAisModal = !showAisModal"

@@ -119,11 +119,35 @@ describe('AppHeader', () => {
 
     await wrapper.find('.brand-badge-btn').trigger('click')
     const turBtn = wrapper.find('.btn-turposter')
+    expect(wrapper.text()).toContain('Luster')
+    expect(wrapper.text()).toContain('412')
     await turBtn.trigger('click')
 
     expect(wrapper.emitted('toggle-turposter')).toBeTruthy()
-    expect(wrapper.text()).toContain('Luster')
-    expect(wrapper.text()).toContain('412')
+    // Menyen skal lukkes automatisk når turposter-knappen klikkes
+    expect(wrapper.find('.brand-menu-dropdown').exists()).toBe(false)
+  })
+
+  it('closes menu automatically when isTurposterOpen becomes true', async () => {
+    const wrapper = mount(AppHeader, {
+      props: {
+        isLocating: false,
+        isTracking: false,
+        activeLayer: 'standard',
+        isTurposterOpen: false,
+        activeKommuneName: 'Bergen',
+        turpostCount: 240,
+        showMunicipalities: true,
+      },
+    })
+
+    // Åpne menyen
+    await wrapper.find('.brand-badge-btn').trigger('click')
+    expect(wrapper.find('.brand-menu-dropdown').exists()).toBe(true)
+
+    // Simuler at turposter-panelet åpnes
+    await wrapper.setProps({ isTurposterOpen: true })
+    expect(wrapper.find('.brand-menu-dropdown').exists()).toBe(false)
   })
 
   it('emits toggle-municipalities when clicking boundary button in menu', async () => {
