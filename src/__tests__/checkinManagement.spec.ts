@@ -502,6 +502,86 @@ post_102;Hafskorsundet;61.42;7.25;210;Vestland;Luster`
 
     vi.unstubAllEnvs()
   })
+
+  it('fetchTurpostCheckins ignorerer korrupte spøkelses-innsjekkinger og tildeler id fra nøkkel', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = typeof url === 'string' ? url : url.toString()
+      if (urlStr.includes('/turposter/tp_ghost.json')) {
+        return {
+          ok: true,
+          json: async () => ({
+            valid_1: {
+              id: 'valid_1',
+              turpostId: 'tp_ghost',
+              userId: 'user_1',
+              userName: 'Kari Nordmann',
+              timestamp: '2026-09-21T10:00:00Z',
+              description: 'Flott tur!'
+            },
+            key_without_id: {
+              turpostId: 'tp_ghost',
+              userId: 'user_2',
+              userName: 'Ola Nordmann',
+              timestamp: '2026-09-21T11:00:00Z',
+              description: 'Uten id felt i noden'
+            },
+            corrupt_ghost: {
+              description: 'Oppholdsbyge',
+              imageUrl: 'https://example.com/img.jpg',
+              trackId: 'track_123'
+              // Mangler både timestamp og userId!
+            }
+          })
+        } as unknown as Response
+      }
+      return { ok: true, json: async () => ({}) } as unknown as Response
+    })
+
+    const { systemConfig, fetchTurpostCheckins } = useAuth()
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const checkins = await fetchTurpostCheckins('tp_ghost')
+
+    // Skal ignorere corrupt_ghost, så bare 2 gyldige elementer returneres
+    expect(checkins.length).toBe(2)
+    expect(checkins.find(c => c.description === 'Oppholdsbyge')).toBeUndefined()
+
+    // Skal ha satt id = key for noden som manglet id
+    const itemWithoutId = checkins.find(c => c.userName === 'Ola Nordmann')
+    expect(itemWithoutId?.id).toBe('key_without_id')
+
+    fetchSpy.mockRestore()
+  })
+
+  it('updatePublicCheckin feiler ved ugyldig eller manglende checkinId', async () => {
+    const { user, updatePublicCheckin } = useAuth()
+    user.value = {
+      userId: 'test_user_sub',
+      userName: 'Test User',
+      email: 'test@example.com',
+      avatarUrl: '',
+      lastLogin: new Date().toISOString()
+    }
+
+    await expect(
+      updatePublicCheckin({
+        turpostId: '123',
+        checkinId: '',
+        description: 'Test'
+      })
+    ).rejects.toThrow('Ugyldig eller manglende checkinId')
+
+    await expect(
+      updatePublicCheckin({
+        turpostId: '123',
+        checkinId: 'undefined',
+        description: 'Test'
+      })
+    ).rejects.toThrow('Ugyldig eller manglende checkinId')
+  })
 })
 
 

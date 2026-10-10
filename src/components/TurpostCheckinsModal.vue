@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed, type Ref } from 'vue'
 import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Trash2, Globe, Users, Lock, ChevronDown, Route } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
@@ -143,6 +143,46 @@ const isWithinRange = computed(() => {
   return distance.value !== null && distance.value <= MAX_CHECKIN_DISTANCE_METERS
 })
 
+function addCheckinToList(targetList: Ref<FirebaseCheckinItem[]>, item: FirebaseCheckinItem): void {
+  // Ignorer korrupte/spøkelsesoppføringer som mangler både timestamp og userId
+  if (!item.timestamp && !item.userId) return
+
+  const existingIdx = targetList.value.findIndex((c) => {
+    if (c.id && item.id && c.id === item.id) return true
+    if (c.imageUrl && item.imageUrl && c.imageUrl === item.imageUrl) return true
+    if (
+      c.timestamp &&
+      item.timestamp &&
+      c.timestamp === item.timestamp &&
+      c.userId &&
+      item.userId &&
+      c.userId === item.userId
+    ) {
+      return true
+    }
+    return false
+  })
+
+  if (existingIdx === -1) {
+    targetList.value.push(item)
+  } else {
+    // Flett sammen data dersom den ene har rikere metadata (f.eks. brukernavn, avatar, id)
+    const existing = targetList.value[existingIdx]!
+    targetList.value[existingIdx] = {
+      ...existing,
+      ...item,
+      id: existing.id || item.id,
+      userName: existing.userName || item.userName,
+      userAvatar: existing.userAvatar || item.userAvatar,
+      userId: existing.userId || item.userId,
+      timestamp: existing.timestamp || item.timestamp,
+      description: existing.description || item.description,
+      imageUrl: existing.imageUrl || item.imageUrl,
+      trackId: existing.trackId || item.trackId,
+    }
+  }
+}
+
 const loadCheckins = async () => {
   if (!props.turpost) return
   isLoading.value = true
@@ -169,13 +209,9 @@ const loadCheckins = async () => {
     })
 
     myMatching.forEach((item) => {
-      if (!checkins.value.some((c) => c.id === item.id)) {
-        checkins.value.push(item)
-      }
+      addCheckinToList(checkins, item)
       if (item.isPrivate || (matchingPrivateSpotId && String(item.turpostId) === String(matchingPrivateSpotId))) {
-        if (!privateCheckins.value.some((c) => c.id === item.id)) {
-          privateCheckins.value.push(item)
-        }
+        addCheckinToList(privateCheckins, item)
       }
     })
   }
@@ -188,9 +224,7 @@ const loadCheckins = async () => {
       promises.push(
         fetchTurpostCheckins(currentPostId).then((data) => {
           data.forEach((item) => {
-            if (!checkins.value.some((c) => c.id === item.id)) {
-              checkins.value.push(item)
-            }
+            addCheckinToList(checkins, item)
           })
         })
       )
@@ -204,9 +238,7 @@ const loadCheckins = async () => {
             }
             const friendItems = await fetchFriendsCheckinsForTurpost(currentPostId)
             friendItems.forEach((item) => {
-              if (!checkins.value.some((c) => c.id === item.id)) {
-                checkins.value.push(item)
-              }
+              addCheckinToList(checkins, item)
             })
           })()
         )
@@ -229,12 +261,10 @@ const loadCheckins = async () => {
         promises.push(
           fetchPrivateCheckinsForSpot(props.currentUserId, sId).then((data) => {
             data.forEach((item) => {
-              if (!privateCheckins.value.some((c) => c.id === item.id)) {
-                privateCheckins.value.push(item)
-              }
+              addCheckinToList(privateCheckins, item)
               // Egne private innsjekkinger på dette punktet skal også vises i feeden for turposten for forfatteren selv
-              if (!checkins.value.some((c) => c.id === item.id)) {
-                checkins.value.push(item)
+              if (item.userId === currentUid) {
+                addCheckinToList(checkins, item)
               }
             })
           })
@@ -251,9 +281,7 @@ const loadCheckins = async () => {
               }
               const pId = String(item.turpostId)
               if (pId === String(currentPostId) || (matchingPrivateSpotId && pId === String(matchingPrivateSpotId))) {
-                if (!checkins.value.some((c) => c.id === item.id)) {
-                  checkins.value.push(item)
-                }
+                addCheckinToList(checkins, item)
               }
             })
           })
@@ -443,9 +471,7 @@ watch(
         return pId === currentPostId || (matchingId && pId === matchingId)
       })
       myMatching.forEach((item) => {
-        if (!checkins.value.some((c) => c.id === item.id)) {
-          checkins.value.push(item)
-        }
+        addCheckinToList(checkins, item)
       })
     }
   }

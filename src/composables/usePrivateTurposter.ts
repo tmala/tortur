@@ -321,13 +321,17 @@ export function usePrivateTurposter() {
       if (res.ok) {
         const data = await res.json()
         if (data && typeof data === 'object') {
-          const spotItems = Object.values(data)
-            .filter((item): item is FirebaseCheckinItem => Boolean(item && typeof item === 'object' && (item as Record<string, unknown>).turpostId != null))
-            .map(item => ({
-              ...item,
-              isPrivate: true,
-              spotId: spotId
-            }))
+          const spotItems = Object.entries(data)
+            .filter(([, item]) => Boolean(item && typeof item === 'object' && (item as Record<string, unknown>).turpostId != null))
+            .map(([key, item]) => {
+              const rec = item as Record<string, unknown>
+              if (!rec.id) rec.id = key
+              return {
+                ...(rec as unknown as FirebaseCheckinItem),
+                isPrivate: true,
+                spotId: spotId
+              }
+            })
           items.push(...spotItems)
         }
       }
@@ -338,9 +342,11 @@ export function usePrivateTurposter() {
       if (privRes.ok) {
         const privData = await privRes.json()
         if (privData && typeof privData === 'object') {
-          for (const item of Object.values(privData)) {
+          for (const [key, item] of Object.entries(privData)) {
             if (item && typeof item === 'object') {
-              const chk = item as unknown as FirebaseCheckinItem
+              const rec = item as Record<string, unknown>
+              if (!rec.id) rec.id = key
+              const chk = rec as unknown as FirebaseCheckinItem
               if (String(chk.turpostId) === String(spotId) && !items.some(c => c.id === chk.id)) {
                 items.push({
                   ...chk,
