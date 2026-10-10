@@ -95,7 +95,8 @@ onUnmounted(() => {
 
 .map-layer-wrapper {
   position: absolute;
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  /* Litt lavere enn før, men over den avrundede skjermkanten (safe-area-inset-bottom) */
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   left: calc(16px + env(safe-area-inset-left, 0px));
   z-index: 1050;
   display: flex;
