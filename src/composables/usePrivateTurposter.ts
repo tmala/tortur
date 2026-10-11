@@ -1,5 +1,13 @@
 import { ref } from 'vue'
-import { useAuth, getFirebaseConfig, fetchFirebase, type FirebaseCheckinItem, type CheckinResult } from './useAuth'
+import {
+  useAuth,
+  getFirebaseConfig,
+  fetchFirebase,
+  syncAdminStatus,
+  type FirebaseCheckinItem,
+  type CheckinResult
+} from './useAuth'
+import { getCurrentFirebaseUser } from '@/services/firebase'
 import type { TurpostItem } from './useTurposter'
 
 export interface SpotSuggestion {
@@ -831,6 +839,12 @@ export function usePrivateTurposter() {
       approvedBy: approvedBy || 'Admin',
       status: 'approved',
       exportedToCsv: false
+    }
+
+    // 0. Sørg for at innlogget admin er registrert i admins-noden i Firebase RTDB
+    const currentFbUser = getCurrentFirebaseUser()
+    if (currentFbUser?.uid) {
+      await syncAdminStatus(currentFbUser.uid, true).catch(() => {})
     }
 
     // 1. Lagre i approved_spots
