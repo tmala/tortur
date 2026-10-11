@@ -287,9 +287,13 @@ describe('usePrivateTurposter', () => {
     expect(savedPayload.imageUrl).toBe('https://lh3.googleusercontent.com/d/mock_img')
     expect(savedPayload.turpostId).toBe('spot_123')
 
-    // Verifiser at Apps Script sine automatiske offentlige noder ryddes opp
+    // Verifiser at Apps Script sine automatiske offentlige noder ryddes opp (inkludert friends_checkins)
     const deleteTurpostCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('turposter/spot_123/mock_checkin_id.json'))
     expect(deleteTurpostCall).toBeDefined()
     expect(deleteTurpostCall![1]?.method).toBe('DELETE')
+
+    const deleteFriendsCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('friends_checkins/mock_checkin_id.json'))
+    expect(deleteFriendsCall).toBeDefined()
+    expect(deleteFriendsCall![1]?.method).toBe('DELETE')
   })
 })

@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { getFirebaseConfig, fetchFirebase, type GoogleUser, type FirebaseCheckinItem } from './useAuth'
+import { getPublicTurpostIds } from './useTurposter'
 
 export type CheckinVisibility = 'all' | 'friends' | 'private'
 
@@ -505,11 +506,22 @@ export async function setCheckinVisibility(
 
     if (opts?.isPrivate && opts?.userId && opts?.spotId) {
       const privateSpotUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(opts.userId)}/my_spots_checkins/${encodeURIComponent(String(opts.spotId))}/${encodeURIComponent(checkinId)}.json`
-      await fetchFirebase(privateSpotUrl, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: jsonPatch
-      })
+      const cleanupFriendsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(opts.userId)}/friends_checkins/${encodeURIComponent(checkinId)}.json`
+      const cleanupPrivateUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(opts.userId)}/private_checkins/${encodeURIComponent(checkinId)}.json`
+      const cleanupLegacyUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(opts.userId)}/checkins/${encodeURIComponent(checkinId)}.json`
+      const cleanupTurpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(opts.spotId))}/${encodeURIComponent(checkinId)}.json`
+
+      await Promise.all([
+        fetchFirebase(privateSpotUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: jsonPatch
+        }),
+        fetchFirebase(cleanupFriendsUrl, { method: 'DELETE' }).catch(() => {}),
+        fetchFirebase(cleanupPrivateUrl, { method: 'DELETE' }).catch(() => {}),
+        fetchFirebase(cleanupLegacyUrl, { method: 'DELETE' }).catch(() => {}),
+        fetchFirebase(cleanupTurpostUrl, { method: 'DELETE' }).catch(() => {})
+      ])
     } else if (opts?.userId) {
       const uId = opts.userId
       const turpostUrl = opts.turpostId ? `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(opts.turpostId))}/${encodeURIComponent(checkinId)}.json` : null
@@ -663,18 +675,23 @@ export async function fetchFriendCheckins(
     }
 
     // 4. Filtrer basert på synlighet og type:
-    // - Utelat private innsjekkinger (visibility: 'private')
-    // - Utelat private spots (turpostId starter med 'spot_' eller isPrivate: true)
+    // - Utelat private innsjekkinger (visibility: 'private' eller isPrivate: true)
+    // - Utelat private spots (turpostId starter med 'spot_' eller ikke finnes blant offentlige turposter)
     // - Ta med 'friends', 'all', eller uspesifisert synlighet (standard offentlig)
+    const publicIds = await getPublicTurpostIds()
     const filtered = items.filter(c => {
       if (c.isPrivate || (c.turpostId && String(c.turpostId).startsWith('spot_'))) return false
       const vis = c.visibility || 'all'
-      return vis !== 'private'
+      if (vis === 'private') return false
+      if (publicIds.size > 0 && c.turpostId && !publicIds.has(String(c.turpostId))) {
+        return false
+      }
+      return true
     })
 
-    // 5. Hent ferske reaksjoner og kommentarer direkte fra turpost-noden i Firebase
-    // Slik at likes/kommentarer lagt inn på turposten alltid vises i venneprofilen
-    // For optimal ytelse berikes kun relevante turposter hvis targetTurpostId er angitt.
+    // 5. Hent ferske reaksjoner, kommentarer og verifiser reell synlighet direkte fra Firebase
+    // Slik at likes/kommentarer lagt inn på turposten alltid vises i venneprofilen,
+    // og eventuell overstyring i checkins_visibility/<id>.json respekteres.
     const shouldEnrich = options?.enrichTurposts !== false
     const targetTurpostIdStr = options?.targetTurpostId != null ? String(options.targetTurpostId) : null
 
@@ -687,9 +704,22 @@ export async function fetchFriendCheckins(
         itemsToEnrich.map(async (item) => {
           if (!item.turpostId || item.isPrivate) return
           try {
+            const visUrl = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(item.id)}.json`
             const turpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`
-            const tpRes = await fetchFirebase(turpostUrl)
-            if (tpRes.ok) {
+
+            const [visRes, tpRes] = await Promise.all([
+              fetchFirebase(visUrl).catch(() => null),
+              fetchFirebase(turpostUrl).catch(() => null)
+            ])
+
+            if (visRes && visRes.ok) {
+              const visVal = await visRes.json()
+              if (visVal && ['all', 'friends', 'private'].includes(visVal)) {
+                item.visibility = visVal as CheckinVisibility
+              }
+            }
+
+            if (tpRes && tpRes.ok) {
               const tpData = await tpRes.json()
               if (tpData && typeof tpData === 'object') {
                 if (tpData.likes) {
@@ -710,8 +740,11 @@ export async function fetchFriendCheckins(
       )
     }
 
+    // Sikre at innsjekkinger med synlighet satt til 'private' aldri returneres til venner
+    const finalFiltered = filtered.filter(c => c.visibility !== 'private')
+
     // Sorter nyeste først
-    return filtered.sort((a, b) => {
+    return finalFiltered.sort((a, b) => {
       const timeA = new Date(a.timestamp || 0).getTime()
       const timeB = new Date(b.timestamp || 0).getTime()
       return timeB - timeA

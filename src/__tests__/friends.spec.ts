@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 import { useFriends, registerPublicUser, searchPublicUsers, fetchFriendCheckins, fetchFriendsCheckinsForTurpost, clearFriendsCheckinsCache, type CheckinVisibility, type FriendUser, type FriendRequest } from '../composables/useFriends'
 import * as friendsModule from '../composables/useFriends'
+import { setCachedMountainsListForTest } from '../composables/useTurposter'
 import { useAuth } from '../composables/useAuth'
 import FriendProfileModal from '../components/FriendProfileModal.vue'
 
@@ -11,6 +12,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
     vi.clearAllMocks()
     localStorage.clear()
     sessionStorage.clear()
+    setCachedMountainsListForTest(null)
   })
 
   it('registerPublicUser updates users_public node in Firebase', async () => {
@@ -272,6 +274,38 @@ describe('useFriends - Friends system and check-in visibility', () => {
     expect(tpCall).toBeDefined()
   })
 
+  it('setCheckinVisibility for private spots oppdaterer my_spots_checkins og sletter eventuelle kopier i friends_checkins', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      return { ok: true, json: async () => ({}) } as unknown as Response
+    })
+
+    const { systemConfig } = useAuth()
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const { setCheckinVisibility } = useFriends()
+
+    await setCheckinVisibility('c_tom_1', 'friends', {
+      spotId: '72f2bfcde003ba545b3b6748',
+      userId: 'user_tom',
+      isPrivate: true
+    })
+
+    // my_spots_checkins PATCH
+    const patchCall = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/brukere/user_tom/my_spots_checkins/72f2bfcde003ba545b3b6748/c_tom_1.json') && c[1]?.method === 'PATCH'
+    )
+    expect(patchCall).toBeDefined()
+
+    // friends_checkins DELETE (skal slettes for å unngå lekkasje)
+    const deleteFriendsCall = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/brukere/user_tom/friends_checkins/c_tom_1.json') && c[1]?.method === 'DELETE'
+    )
+    expect(deleteFriendsCall).toBeDefined()
+  })
+
   it('fetchFriendCheckins henter vennens innsjekkinger og ekskluderer private', async () => {
     const friendCheckinsData: Record<string, unknown> = {
       chk_pub: {
@@ -336,6 +370,117 @@ describe('useFriends - Friends system and check-in visibility', () => {
     // Ingen private
     expect(result.some(c => c.id === 'chk_secret')).toBe(false)
     expect(result.some(c => c.id === 'chk_spot')).toBe(false)
+  })
+
+  it('fetchFriendCheckins ekskluderer uoffisielle private turposter selv om visibility er satt til all og isPrivate mangler', async () => {
+    // Sett opp mock for offentlige turposter: kun tp_official_1 er offentlig kjent
+    setCachedMountainsListForTest([
+      {
+        id: 'tp_official_1',
+        name: 'Preben KAFFE OG VINBAR',
+        lat: 60.39,
+        lng: 5.32,
+        alt: 10
+      }
+    ])
+
+    const friendCheckinsData: Record<string, unknown> = {
+      chk_official: {
+        id: 'chk_official',
+        userId: 'friend_tom',
+        turpostId: 'tp_official_1',
+        turpostName: 'Preben KAFFE OG VINBAR',
+        timestamp: '2026-10-11T15:35:00Z',
+        visibility: 'all'
+      },
+      chk_hh14_leak: {
+        id: 'c_1790098943477',
+        userId: 'friend_tom',
+        turpostId: '72f2bfcde003ba545b3b6748', // privat spot ID
+        turpostName: 'HH14',
+        timestamp: '2026-09-22T17:42:23Z',
+        description: 'Beina på bordet!',
+        visibility: 'all' // lekt kopi fra Apps Script med default "all"
+        // merk: isPrivate mangler i den lekkede noden!
+      }
+    }
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url)
+      if (urlStr.includes('/brukere/friend_tom/friends_checkins.json')) {
+        return {
+          ok: true,
+          json: async () => friendCheckinsData
+        } as unknown as Response
+      }
+      return { ok: false, json: async () => ({}) } as unknown as Response
+    })
+
+    const { systemConfig } = useAuth()
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const { fetchFriendCheckins } = useFriends()
+    const result = await fetchFriendCheckins('friend_tom')
+
+    // Den private turposten HH14 skal være filtrert bort!
+    expect(result.length).toBe(1)
+    expect(result[0]?.id).toBe('chk_official')
+    expect(result.some(c => c.id === 'c_1790098943477')).toBe(false)
+  })
+
+  it('fetchFriendCheckins beriker visibility fra checkins_visibility hvis overstyring finnes', async () => {
+    setCachedMountainsListForTest([
+      {
+        id: 'tp_sudoku',
+        name: 'SudokuKaféen',
+        lat: 60.39,
+        lng: 5.32,
+        alt: 10
+      }
+    ])
+
+    const friendCheckinsData: Record<string, unknown> = {
+      chk_sudoku: {
+        id: 'chk_sudoku_1',
+        userId: 'friend_tom',
+        turpostId: 'tp_sudoku',
+        turpostName: 'SudokuKaféen',
+        timestamp: '2026-09-11T16:11:00Z',
+        visibility: 'all' // opprinnelig lagret som all i noden
+      }
+    }
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url)
+      if (urlStr.includes('/brukere/friend_tom/friends_checkins.json')) {
+        return {
+          ok: true,
+          json: async () => friendCheckinsData
+        } as unknown as Response
+      }
+      if (urlStr.includes('/checkins_visibility/chk_sudoku_1.json')) {
+        return {
+          ok: true,
+          json: async () => 'friends' // Bruker har endret synlighet til friends
+        } as unknown as Response
+      }
+      return { ok: false, json: async () => ({}) } as unknown as Response
+    })
+
+    const { systemConfig } = useAuth()
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const { fetchFriendCheckins } = useFriends()
+    const result = await fetchFriendCheckins('friend_tom')
+
+    expect(result.length).toBe(1)
+    expect(result[0]?.visibility).toBe('friends')
   })
 
   it('fetchFriendCheckins henter fra friends_checkins.json og kaller aldri rotnoden til brukeren', async () => {

@@ -426,7 +426,17 @@ export function usePrivateTurposter() {
 
     try {
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}/${encodeURIComponent(checkinId)}.json`
-      await fetchFirebase(url, { method: 'DELETE' })
+      const cleanupFriendsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/friends_checkins/${encodeURIComponent(checkinId)}.json`
+      const cleanupPrivateUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/private_checkins/${encodeURIComponent(checkinId)}.json`
+      const cleanupLegacyUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/checkins/${encodeURIComponent(checkinId)}.json`
+      const cleanupVisUrl = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(checkinId)}.json`
+      await Promise.all([
+        fetchFirebase(url, { method: 'DELETE' }),
+        fetchFirebase(cleanupFriendsUrl, { method: 'DELETE' }).catch(() => {}),
+        fetchFirebase(cleanupPrivateUrl, { method: 'DELETE' }).catch(() => {}),
+        fetchFirebase(cleanupLegacyUrl, { method: 'DELETE' }).catch(() => {}),
+        fetchFirebase(cleanupVisUrl, { method: 'DELETE' }).catch(() => {})
+      ])
     } catch (err) {
       console.warn('[usePrivateTurposter] Kunne ikke slette privat innsjekking:', err)
       throw err
@@ -585,13 +595,15 @@ export function usePrivateTurposter() {
       throw new Error('Firebase-konfigurasjon er ikke tilgjengelig.')
     }
 
-    // Opprett innsjekk og lagre bildet i Google Drive via Apps Script
+    // Opprett innsjekk og lagre bildet i Google Drive via Apps Script.
+    // Vi setter visibility: 'private' til submitCheckin så Apps Script/useAuth ikke oppretter offentlig turpost-/vennekopi.
     const appScriptResult = await submitCheckin({
       turpostId: String(params.post.id),
       turpostName: params.post.name,
       description: params.description || '',
       imageFile: params.imageFile || undefined,
-      trackId: params.trackId || undefined
+      trackId: params.trackId || undefined,
+      visibility: 'private'
     })
 
     const checkinId = appScriptResult.id || `checkin_${Date.now()}`
@@ -610,6 +622,7 @@ export function usePrivateTurposter() {
       description: params.description || appScriptResult.description || '',
       imageUrl: photoUrl,
       visibility,
+      isPrivate: true,
       trackId: params.trackId || appScriptResult.trackId || undefined
     }
 
@@ -633,14 +646,18 @@ export function usePrivateTurposter() {
     }
 
     // Apps Script synkroniserer automatisk alle innsjekkinger til offentlig turpost- og bruker-indeks.
-    // For private turposter skal innsjekkingen kun ligge under my_spots_checkins; rydd derfor opp de to nodene:
+    // For private turposter skal innsjekkingen kun ligge under my_spots_checkins; rydd derfor opp eventuelle andre noder:
     try {
       const cleanupTurpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(params.post.id))}/${checkinId}.json`
       const cleanupUserUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/checkins/${checkinId}.json`
       const cleanupLegacyUserUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/${checkinId}.json`
+      const cleanupFriendsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/friends_checkins/${checkinId}.json`
+      const cleanupPrivateUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(params.userId)}/private_checkins/${checkinId}.json`
       await Promise.all([
         fetchFirebase(cleanupTurpostUrl, { method: 'DELETE' }),
         fetchFirebase(cleanupUserUrl, { method: 'DELETE' }),
+        fetchFirebase(cleanupFriendsUrl, { method: 'DELETE' }).catch(() => {}),
+        fetchFirebase(cleanupPrivateUrl, { method: 'DELETE' }).catch(() => {}),
         fetchFirebase(cleanupLegacyUserUrl, { method: 'DELETE' }).catch(() => {})
       ])
     } catch {

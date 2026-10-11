@@ -148,6 +148,61 @@ export async function lookupTurpost(
   return null
 }
 
+/**
+ * Henter alle offentlig kjente turpost-IDer (fra mountains.csv og eventuelt tilleggs-spots).
+ */
+export async function getPublicTurpostIds(additionalSpots?: TurpostItem[]): Promise<Set<string>> {
+  if (!cachedMountainsList) {
+    // Sørg for at mountains.csv er lastet inn
+    await lookupTurpost('__ensure_cache__')
+  }
+
+  const ids = new Set<string>()
+  if (cachedMountainsList) {
+    for (const p of cachedMountainsList) {
+      if (p.id) ids.add(String(p.id))
+    }
+  }
+
+  if (additionalSpots && additionalSpots.length > 0) {
+    for (const s of additionalSpots) {
+      if (s.id && !s.isPrivate) {
+        ids.add(String(s.id))
+      }
+    }
+  }
+
+  return ids
+}
+
+/**
+ * Sjekker om en gitt turpost-ID tilhører en offentlig kjent turpost.
+ * Returnerer false dersom ID-en tilhører en privat turpost eller mangler.
+ */
+export async function isPublicTurpost(
+  turpostId?: string | number,
+  additionalSpots?: TurpostItem[]
+): Promise<boolean> {
+  if (!turpostId) return false
+  const idStr = String(turpostId).trim()
+  if (!idStr || idStr.startsWith('spot_')) return false
+
+  const publicIds = await getPublicTurpostIds(additionalSpots)
+  if (publicIds.size > 0) {
+    return publicIds.has(idStr)
+  }
+
+  // Fallback kun dersom turpostlisten ikke kunne lastes (f.eks. offline eller enhetstester uten mock)
+  return true
+}
+
+/**
+ * Kun for enhetstesting: overstyrer eller nullstiller hurtigbuffer for mountains.csv.
+ */
+export function setCachedMountainsListForTest(list: TurpostItem[] | null): void {
+  cachedMountainsList = list
+}
+
 export function useTurposter() {
   const hierarchy = ref<FylkeInfo[]>([])
   const selectedFylke = ref<FylkeInfo | null>(null)
