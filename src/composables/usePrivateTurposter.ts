@@ -8,7 +8,7 @@ import {
   type CheckinResult
 } from './useAuth'
 import { getCurrentFirebaseUser } from '@/services/firebase'
-import type { TurpostItem } from './useTurposter'
+import { getPublicTurpostIds, type TurpostItem } from './useTurposter'
 
 export interface SpotSuggestion {
   id: string
@@ -152,12 +152,25 @@ export function usePrivateTurposter() {
                   // 3. Oppdater lokalt spot-objekt
                   spot.status = 'approved'
                   spot.suggestedForPublic = true
+
+                  // 4. Flytt eventuelle innsjekkinger fra my_spots_checkins og slett dem derfra
+                  await syncAndCleanApprovedSpotCheckins(userId, String(spot.id), config)
                 }
               }
             } catch (syncErr) {
               console.warn('[usePrivateTurposter] Kunne ikke synkronisere avvist forslag for spot:', spot.id, syncErr)
             }
           })
+        )
+      }
+
+      // For alle godkjente turposter: sjekk og slett eventuelle gjenværende duplikater i my_spots_checkins
+      const approvedSpots = spots.filter((s) => s.status === 'approved')
+      if (approvedSpots.length > 0) {
+        await Promise.all(
+          approvedSpots.map((s) =>
+            syncAndCleanApprovedSpotCheckins(userId, String(s.id), config)
+          )
         )
       }
 
@@ -538,6 +551,75 @@ export function usePrivateTurposter() {
   }
 
   /**
+   * Flytter innsjekkinger på en godkjent turpost fra my_spots_checkins til
+   * friends_checkins/turposter/private_checkins, og sletter kopien i my_spots_checkins
+   * for å unngå unødvendig dobbeltlagring i RTDB.
+   */
+  async function syncAndCleanApprovedSpotCheckins(
+    userId: string,
+    spotId: string,
+    config: { dbUrl: string; prefix: string }
+  ): Promise<void> {
+    try {
+      const checkinsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}.json`
+      const chkRes = await fetchFirebase(checkinsUrl)
+      if (!chkRes.ok) return
+
+      const chkData = await chkRes.json()
+      if (!chkData || typeof chkData !== 'object') return
+
+      for (const [chkId, chkVal] of Object.entries(chkData)) {
+        if (!chkVal || typeof chkVal !== 'object') continue
+        const chkItem = { ...(chkVal as Record<string, unknown>), id: chkId, isPrivate: false } as unknown as FirebaseCheckinItem
+        const vis = chkItem.visibility || 'all'
+
+        // 1. Synkroniser overstyrt synlighet
+        const visUrl = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(chkId)}.json`
+        await fetchFirebase(visUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(vis)
+        }).catch(() => {})
+
+        // 2. Flytt/speil til riktig destinasjon
+        if (vis === 'private') {
+          const privUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/private_checkins/${encodeURIComponent(chkId)}.json`
+          await fetchFirebase(privUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(chkItem)
+          }).catch(() => {})
+        } else {
+          const friendsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/friends_checkins/${encodeURIComponent(chkId)}.json`
+          await fetchFirebase(friendsUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(chkItem)
+          }).catch(() => {})
+
+          if (vis === 'all') {
+            const tpUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(spotId)}/${encodeURIComponent(chkId)}.json`
+            await fetchFirebase(tpUrl, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(chkItem)
+            }).catch(() => {})
+          }
+        }
+
+        // 3. Slett innsjekkingen fra my_spots_checkins for å hindre duplikater
+        const singleChkUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots_checkins/${encodeURIComponent(spotId)}/${encodeURIComponent(chkId)}.json`
+        await fetchFirebase(singleChkUrl, { method: 'DELETE' }).catch(() => {})
+      }
+
+      // 4. Slett selve spot-katalogen under my_spots_checkins
+      await fetchFirebase(checkinsUrl, { method: 'DELETE' }).catch(() => {})
+    } catch (err) {
+      console.warn('[usePrivateTurposter] Feil under flytting og sletting av my_spots_checkins:', spotId, err)
+    }
+  }
+
+  /**
    * Henter alle innsjekkinger på innlogget brukers private turposter.
    * Sti: /<prefix>/brukere/<userId>/my_spots_checkins.json
    */
@@ -554,10 +636,22 @@ export function usePrivateTurposter() {
       const data = await res.json()
       if (!data || typeof data !== 'object') return []
 
+      const publicIds = await getPublicTurpostIds()
+
       const checkins: FirebaseCheckinItem[] = []
       // Data kan være strukturert som { [spotId]: { [checkinId]: item } }
       for (const [spotId, spotVal] of Object.entries(data)) {
         if (!spotVal || typeof spotVal !== 'object') continue
+
+        // Hvis turposten nå er godkjent som en offentlig turpost,
+        // skal den ikke telles som privat innsjekking, og vi rydder opp duplikatet:
+        if (publicIds.has(String(spotId))) {
+          syncAndCleanApprovedSpotCheckins(userId, String(spotId), config).catch((err) => {
+            console.warn('[usePrivateTurposter] Opprydding av my_spots_checkins feilet:', spotId, err)
+          })
+          continue
+        }
+
         for (const item of Object.values(spotVal as Record<string, unknown>)) {
           if (item && typeof item === 'object' && (item as Record<string, unknown>).turpostId != null) {
             checkins.push({
@@ -955,7 +1049,8 @@ export function usePrivateTurposter() {
     denySpotSuggestion,
     approveSpotSuggestion,
     fetchApprovedSpots,
-    calculateCsvPlacement
+    calculateCsvPlacement,
+    syncAndCleanApprovedSpotCheckins
   }
 }
 

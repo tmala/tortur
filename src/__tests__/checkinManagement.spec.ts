@@ -353,6 +353,34 @@ post_102;Hafskorsundet;61.42;7.25;210;Vestland;Luster`
     expect(nonExistent).toBeNull()
   })
 
+  it('lookupTurpost og getPublicTurpostIds finner også godkjente turposter fra approved_spots', async () => {
+    const { lookupTurpost, getPublicTurpostIds, isPublicTurpost, setCachedMountainsListForTest, setCachedApprovedSpotsForTest } = await import('../composables/useTurposter')
+
+    setCachedMountainsListForTest([
+      { id: 'csv_1', name: 'Fløyen', lat: 60.4, lng: 5.3, alt: 320 }
+    ])
+    setCachedApprovedSpotsForTest([
+      { id: 'spot_preben', name: 'Preben KAFFE OG VINBAR', lat: 60.39, lng: 5.32, alt: 10, fylke: 'Vestland', kommune: 'Bergen', status: 'approved' }
+    ])
+
+    const foundById = await lookupTurpost('spot_preben')
+    expect(foundById).toBeDefined()
+    expect(foundById?.name).toBe('Preben KAFFE OG VINBAR')
+    expect(foundById?.kommune).toBe('Bergen')
+
+    const foundByName = await lookupTurpost(undefined, 'preben kaffe og vinbar')
+    expect(foundByName).toBeDefined()
+    expect(foundByName?.id).toBe('spot_preben')
+
+    const publicIds = await getPublicTurpostIds()
+    expect(publicIds.has('csv_1')).toBe(true)
+    expect(publicIds.has('spot_preben')).toBe(true)
+    expect(publicIds.has('spot_unapproved')).toBe(false)
+
+    expect(await isPublicTurpost('spot_preben')).toBe(true)
+    expect(await isPublicTurpost('spot_unapproved')).toBe(false)
+  })
+
   it('submitCheckin sender bilde som base64 data-URL og oppretter innsjekk', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL, opts?: RequestInit) => {
       if (typeof url === 'string' && (url.includes('script.google.com') || url.includes('/api/') || url.includes('tortur-api') || url.includes('cloudfunctions.net'))) {

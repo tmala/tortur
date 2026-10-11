@@ -296,4 +296,52 @@ describe('usePrivateTurposter', () => {
     expect(deleteFriendsCall).toBeDefined()
     expect(deleteFriendsCall![1]?.method).toBe('DELETE')
   })
+
+  it('syncAndCleanApprovedSpotCheckins flytter innsjekking til friends_checkins og sletter fra my_spots_checkins', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url)
+      if (urlStr.includes('my_spots_checkins/spot_approved_1.json')) {
+        return {
+          ok: true,
+          json: async () => ({
+            c_1: {
+              id: 'c_1',
+              turpostId: 'spot_approved_1',
+              turpostName: 'Preben KAFFE OG VINBAR',
+              description: 'God kaffe',
+              visibility: 'all',
+              isPrivate: true
+            }
+          })
+        } as unknown as Response
+      }
+      return {
+        ok: true,
+        json: async () => ({})
+      } as unknown as Response
+    })
+
+    const { syncAndCleanApprovedSpotCheckins } = usePrivateTurposter()
+    await syncAndCleanApprovedSpotCheckins('user_tom', 'spot_approved_1', {
+      dbUrl: 'https://test-db.firebaseio.com',
+      prefix: 'test_prefix'
+    })
+
+    // 1. Skal ha skrevet til friends_checkins med isPrivate: false
+    const friendsPutCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('friends_checkins/c_1.json') && c[1]?.method === 'PUT')
+    expect(friendsPutCall).toBeDefined()
+    const friendsPayload = JSON.parse(friendsPutCall![1]?.body as string)
+    expect(friendsPayload.isPrivate).toBe(false)
+
+    // 2. Skal ha skrevet til turposter siden visibility er all
+    const tpPutCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('turposter/spot_approved_1/c_1.json') && c[1]?.method === 'PUT')
+    expect(tpPutCall).toBeDefined()
+
+    // 3. Skal ha SLETTET fra my_spots_checkins for å hindre dobbeltlagring!
+    const deleteChkCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('my_spots_checkins/spot_approved_1/c_1.json') && c[1]?.method === 'DELETE')
+    expect(deleteChkCall).toBeDefined()
+
+    const deleteDirCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('my_spots_checkins/spot_approved_1.json') && c[1]?.method === 'DELETE')
+    expect(deleteDirCall).toBeDefined()
+  })
 })

@@ -675,15 +675,21 @@ export async function fetchFriendCheckins(
     }
 
     // 4. Filtrer basert på synlighet og type:
-    // - Utelat private innsjekkinger (visibility: 'private' eller isPrivate: true)
-    // - Utelat private spots (turpostId starter med 'spot_' eller ikke finnes blant offentlige turposter)
+    // - Utelat private innsjekkinger (visibility: 'private')
+    // - Offentlige turposter inkluderer både mountains.csv og approved_spots
     // - Ta med 'friends', 'all', eller uspesifisert synlighet (standard offentlig)
     const publicIds = await getPublicTurpostIds()
     const filtered = items.filter(c => {
-      if (c.isPrivate || (c.turpostId && String(c.turpostId).startsWith('spot_'))) return false
       const vis = c.visibility || 'all'
       if (vis === 'private') return false
-      if (publicIds.size > 0 && c.turpostId && !publicIds.has(String(c.turpostId))) {
+
+      if (publicIds.size > 0) {
+        if (!c.turpostId || !publicIds.has(String(c.turpostId))) {
+          return false
+        }
+        // Turposten er godkjent som offentlig turpost (i mountains.csv eller approved_spots)
+        c.isPrivate = false
+      } else if (c.isPrivate || (c.turpostId && String(c.turpostId).startsWith('spot_'))) {
         return false
       }
       return true

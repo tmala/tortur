@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { getFirebaseConfig, fetchFirebase } from './useAuth'
 
 export interface TurpostItem {
   id: string
@@ -76,9 +77,72 @@ export function findKommuneInHierarchy(
 }
 
 let cachedMountainsList: TurpostItem[] | null = null
+let cachedApprovedSpots: TurpostItem[] | null = null
+let approvedSpotsFetchedAt = 0
 
 /**
- * Slår opp en turpost i mountains.csv basert på ID eller navn.
+ * Henter alle godkjente turposter fra Firebase Realtime Database:
+ * /<prefix>/approved_spots.json
+ * Resultatet caches med en TTL på 60 sekunder.
+ */
+export async function fetchApprovedSpotsFromFirebase(force = false): Promise<TurpostItem[]> {
+  const now = Date.now()
+  if (!force && cachedApprovedSpots && now - approvedSpotsFetchedAt < 60000) {
+    return cachedApprovedSpots
+  }
+
+  const config = await getFirebaseConfig()
+  if (!config) return cachedApprovedSpots || []
+
+  try {
+    const url = `${config.dbUrl}/${config.prefix}/approved_spots.json`
+    const res = await fetchFirebase(url)
+    if (!res.ok) return cachedApprovedSpots || []
+
+    const data = await res.json()
+    if (!data || typeof data !== 'object') {
+      cachedApprovedSpots = []
+      approvedSpotsFetchedAt = now
+      return []
+    }
+
+    const list: TurpostItem[] = []
+    for (const [id, val] of Object.entries(data)) {
+      if (!val || typeof val !== 'object') continue
+      const item = val as Record<string, unknown>
+      list.push({
+        id: String(item.id || id),
+        name: typeof item.name === 'string' ? item.name : 'Uten navn',
+        lat: Number(item.lat),
+        lng: Number(item.lng),
+        alt: item.alt !== undefined && item.alt !== null ? Number(item.alt) : null,
+        fylke: typeof item.fylke === 'string' ? item.fylke : '',
+        kommune: typeof item.kommune === 'string' ? item.kommune : '',
+        isPrivate: false,
+        status: 'approved',
+        csvLine: typeof item.csvLine === 'string' ? item.csvLine : '',
+        csvLineHint: typeof item.csvLineHint === 'string' ? item.csvLineHint : ''
+      })
+    }
+    cachedApprovedSpots = list
+    approvedSpotsFetchedAt = now
+    return list
+  } catch (err) {
+    console.warn('[useTurposter] Kunne ikke laste approved_spots fra Firebase:', err)
+    return cachedApprovedSpots || []
+  }
+}
+
+/**
+ * Kun for enhetstesting: overstyrer eller nullstiller hurtigbuffer for approved_spots.
+ */
+export function setCachedApprovedSpotsForTest(list: TurpostItem[] | null): void {
+  cachedApprovedSpots = list
+  approvedSpotsFetchedAt = list ? Date.now() : 0
+}
+
+/**
+ * Slår opp en turpost i mountains.csv eller approved_spots basert på ID eller navn.
  * Returnerer et TurpostItem med koordinater, fylke og kommune.
  */
 export async function lookupTurpost(
@@ -88,6 +152,7 @@ export async function lookupTurpost(
 ): Promise<TurpostItem | null> {
   if (!turpostId && !turpostName) return null
 
+  // 1. Sjekk eventuelle eksplisitte tilleggs-spots (f.eks. fra komponent eller modal)
   if (additionalSpots && additionalSpots.length > 0) {
     if (turpostId) {
       const match = additionalSpots.find(p => String(p.id) === String(turpostId))
@@ -100,6 +165,7 @@ export async function lookupTurpost(
     }
   }
 
+  // 2. Sjekk felles turpostdatabase fra mountains.csv
   if (!cachedMountainsList) {
     try {
       const csvUrl = `${import.meta.env.BASE_URL}data/mountains.csv?v=${__APP_VERSION__}`
@@ -132,24 +198,39 @@ export async function lookupTurpost(
     }
   }
 
-  if (!cachedMountainsList || cachedMountainsList.length === 0) return null
+  if (cachedMountainsList && cachedMountainsList.length > 0) {
+    if (turpostId) {
+      const match = cachedMountainsList.find(p => p.id === turpostId)
+      if (match) return match
+    }
 
-  if (turpostId) {
-    const match = cachedMountainsList.find(p => p.id === turpostId)
-    if (match) return match
+    if (turpostName) {
+      const clean = turpostName.trim().toLowerCase()
+      const match = cachedMountainsList.find(p => p.name.toLowerCase() === clean)
+      if (match) return match
+    }
   }
 
-  if (turpostName) {
-    const clean = turpostName.trim().toLowerCase()
-    const match = cachedMountainsList.find(p => p.name.toLowerCase() === clean)
-    if (match) return match
+  // 3. Sjekk godkjente turposter (approved_spots i Firebase RTDB)
+  const approvedList = await fetchApprovedSpotsFromFirebase()
+  if (approvedList && approvedList.length > 0) {
+    if (turpostId) {
+      const match = approvedList.find(p => String(p.id) === String(turpostId))
+      if (match) return match
+    }
+
+    if (turpostName) {
+      const clean = turpostName.trim().toLowerCase()
+      const match = approvedList.find(p => p.name.toLowerCase() === clean)
+      if (match) return match
+    }
   }
 
   return null
 }
 
 /**
- * Henter alle offentlig kjente turpost-IDer (fra mountains.csv og eventuelt tilleggs-spots).
+ * Henter alle offentlig kjente turpost-IDer (fra mountains.csv, approved_spots og eventuelt tilleggs-spots).
  */
 export async function getPublicTurpostIds(additionalSpots?: TurpostItem[]): Promise<Set<string>> {
   if (!cachedMountainsList) {
@@ -160,6 +241,14 @@ export async function getPublicTurpostIds(additionalSpots?: TurpostItem[]): Prom
   const ids = new Set<string>()
   if (cachedMountainsList) {
     for (const p of cachedMountainsList) {
+      if (p.id) ids.add(String(p.id))
+    }
+  }
+
+  // Inkluder også godkjente turposter fra Firebase RTDB (approved_spots)
+  const approvedList = await fetchApprovedSpotsFromFirebase()
+  if (approvedList && approvedList.length > 0) {
+    for (const p of approvedList) {
       if (p.id) ids.add(String(p.id))
     }
   }
@@ -185,7 +274,7 @@ export async function isPublicTurpost(
 ): Promise<boolean> {
   if (!turpostId) return false
   const idStr = String(turpostId).trim()
-  if (!idStr || idStr.startsWith('spot_')) return false
+  if (!idStr) return false
 
   const publicIds = await getPublicTurpostIds(additionalSpots)
   if (publicIds.size > 0) {
@@ -193,7 +282,7 @@ export async function isPublicTurpost(
   }
 
   // Fallback kun dersom turpostlisten ikke kunne lastes (f.eks. offline eller enhetstester uten mock)
-  return true
+  return !idStr.startsWith('spot_')
 }
 
 /**
@@ -321,6 +410,9 @@ export function useTurposter() {
     findKommuneByName,
     selectKommuneByName,
     lookupTurpost,
+    fetchApprovedSpotsFromFirebase,
+    getPublicTurpostIds,
+    isPublicTurpost,
     clearSelection
   }
 }

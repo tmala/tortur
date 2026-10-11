@@ -3,7 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 import { useFriends, registerPublicUser, searchPublicUsers, fetchFriendCheckins, fetchFriendsCheckinsForTurpost, clearFriendsCheckinsCache, type CheckinVisibility, type FriendUser, type FriendRequest } from '../composables/useFriends'
 import * as friendsModule from '../composables/useFriends'
-import { setCachedMountainsListForTest } from '../composables/useTurposter'
+import { setCachedMountainsListForTest, setCachedApprovedSpotsForTest } from '../composables/useTurposter'
 import { useAuth } from '../composables/useAuth'
 import FriendProfileModal from '../components/FriendProfileModal.vue'
 
@@ -13,6 +13,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
     localStorage.clear()
     sessionStorage.clear()
     setCachedMountainsListForTest(null)
+    setCachedApprovedSpotsForTest(null)
   })
 
   it('registerPublicUser updates users_public node in Firebase', async () => {
@@ -429,6 +430,71 @@ describe('useFriends - Friends system and check-in visibility', () => {
     expect(result.length).toBe(1)
     expect(result[0]?.id).toBe('chk_official')
     expect(result.some(c => c.id === 'c_1790098943477')).toBe(false)
+  })
+
+  it('fetchFriendCheckins inkluderer innsjekkinger på turposter i approved_spots', async () => {
+    // Ingen turposter i mountains.csv
+    setCachedMountainsListForTest([])
+    // Turposten finnes derimot i approved_spots
+    setCachedApprovedSpotsForTest([
+      {
+        id: 'spot_preben_kaffe',
+        name: 'Preben KAFFE OG VINBAR',
+        lat: 60.39,
+        lng: 5.32,
+        alt: 12,
+        status: 'approved'
+      }
+    ])
+
+    const friendCheckinsData: Record<string, unknown> = {
+      chk_approved: {
+        id: 'chk_preben_1',
+        userId: 'friend_tom',
+        turpostId: 'spot_preben_kaffe',
+        turpostName: 'Preben KAFFE OG VINBAR',
+        timestamp: '2026-10-11T16:00:00Z',
+        visibility: 'friends',
+        isPrivate: true // opprinnelig merket da spotten var privat før godkjenning
+      },
+      chk_hh14_unapproved: {
+        id: 'c_hh14',
+        userId: 'friend_tom',
+        turpostId: 'spot_hh14_private',
+        turpostName: 'HH14',
+        timestamp: '2026-09-22T17:42:23Z',
+        visibility: 'friends',
+        isPrivate: true
+      }
+    }
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url)
+      if (urlStr.includes('/brukere/friend_tom/friends_checkins.json')) {
+        return {
+          ok: true,
+          json: async () => friendCheckinsData
+        } as unknown as Response
+      }
+      return { ok: false, json: async () => ({}) } as unknown as Response
+    })
+
+    const { systemConfig } = useAuth()
+    systemConfig.value = {
+      FIREBASE_DB_URL: 'https://test-db.firebaseio.com',
+      FIREBASE_SECRET_PREFIX: 'test_prefix'
+    }
+
+    const { fetchFriendCheckins } = useFriends()
+    const result = await fetchFriendCheckins('friend_tom')
+
+    // Kun den godkjente turposten Preben KAFFE OG VINBAR skal tas med
+    expect(result.length).toBe(1)
+    expect(result[0]?.id).toBe('chk_preben_1')
+    expect(result[0]?.turpostId).toBe('spot_preben_kaffe')
+    expect(result[0]?.isPrivate).toBe(false) // skal være behandlet som offentlig turpost
+    // HH14 skal være filtrert bort
+    expect(result.some(c => c.id === 'c_hh14')).toBe(false)
   })
 
   it('fetchFriendCheckins beriker visibility fra checkins_visibility hvis overstyring finnes', async () => {

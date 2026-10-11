@@ -116,7 +116,10 @@ export function useCheckinSocial() {
       )
     }
 
-    // Speil alltid til forfatterens bruker-checkin (både /checkins/ og rot for bakoverkompatibilitet)
+    // Speil alltid til forfatterens bruker-checkin (både friends_checkins, /checkins/ og rot for bakoverkompatibilitet)
+    urls.push(
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/friends_checkins/${chkIdEncoded}/likes/${uidEncoded}.json`
+    )
     urls.push(
       `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/checkins/${chkIdEncoded}/likes/${uidEncoded}.json`
     )
@@ -193,7 +196,10 @@ export function useCheckinSocial() {
       )
     }
 
-    // Speil til forfatterens bruker-checkin (både /checkins/ og rot for bakoverkompatibilitet)
+    // Speil til forfatterens bruker-checkin (både friends_checkins, /checkins/ og rot for bakoverkompatibilitet)
+    urls.push(
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/friends_checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
+    )
     urls.push(
       `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
     )
@@ -251,6 +257,9 @@ export function useCheckinSocial() {
       )
     }
 
+    urls.push(
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/friends_checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
+    )
     urls.push(
       `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
     )

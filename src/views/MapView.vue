@@ -790,10 +790,12 @@ const handleViewCheckinOnMap = async (checkin: FirebaseCheckinItem) => {
   }
 
   // 1. Sjekk om det er en privat turpost / spot
+  const isApproved = appState.approvedSpots.some((s) => String(s.id) === String(checkin.turpostId))
   const isPrivate =
-    checkin.isPrivate ||
-    !!checkin.spotId ||
-    (checkin.turpostId && checkin.turpostId.startsWith('spot_'))
+    !isApproved &&
+    (checkin.isPrivate ||
+      !!checkin.spotId ||
+      (checkin.turpostId && checkin.turpostId.startsWith('spot_')))
   if (isPrivate) {
     const spot = appState.mySpots.find(
       (s) =>
