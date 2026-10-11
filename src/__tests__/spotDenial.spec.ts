@@ -131,9 +131,9 @@ describe('Spot Denial Flow and UI', () => {
       expect(denyButton.exists()).toBe(true)
       expect(denyButton.text()).toContain('Avvis forslag')
 
-      const approveButton = wrapper.find('.btn-delete-suggestion')
+      const approveButton = wrapper.find('.btn-approve-suggestion')
       expect(approveButton.exists()).toBe(true)
-      expect(approveButton.text()).toContain('Godkjent')
+      expect(approveButton.text()).toContain('Godkjenn')
 
       // Click deny
       await denyButton.trigger('click')

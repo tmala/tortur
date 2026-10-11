@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { FirebaseCheckinItem } from '@/composables/useAuth'
 import type { TurpostItem } from '@/composables/useTurposter'
-import type { SpotSuggestion } from '@/composables/usePrivateTurposter'
+import type { ApprovedSpot, SpotSuggestion } from '@/composables/usePrivateTurposter'
 import type { SavedTrack } from '@/stores/gpsTrack'
 
 export const useAppStateStore = defineStore('appState', () => {
@@ -14,6 +14,8 @@ export const useAppStateStore = defineStore('appState', () => {
   const myCheckins = ref<FirebaseCheckinItem[]>([])
   const mySpots = ref<TurpostItem[]>([])
   const isMySpotsLoading = ref(false)
+  const approvedSpots = ref<ApprovedSpot[]>([])
+  const isApprovedSpotsLoading = ref(false)
   const spotSuggestionsCount = ref(0)
   const adminModeActive = ref(false)
   const isAddSpotModeActive = ref(false)
@@ -69,6 +71,8 @@ export const useAppStateStore = defineStore('appState', () => {
     myCheckins,
     mySpots,
     isMySpotsLoading,
+    approvedSpots,
+    isApprovedSpotsLoading,
     spotSuggestionsCount,
     adminModeActive,
     isAddSpotModeActive,

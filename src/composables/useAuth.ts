@@ -126,6 +126,9 @@ try {
             signInWithGoogleIdToken(currentIdToken.value).then((fbCred) => {
               if (fbCred?.user?.uid && user.value?.userId) {
                 syncAuthUid(user.value.userId, fbCred.user.uid).catch(() => {})
+                if (user.value.isAdmin) {
+                  syncAdminStatus(fbCred.user.uid, true).catch(() => {})
+                }
               }
             }).catch(() => {})
           }
@@ -150,6 +153,22 @@ export async function syncAuthUid(userId: string, authUid: string): Promise<void
     ])
   } catch (err) {
     console.warn('[useAuth] Feil ved synkronisering av auth_uid:', err)
+  }
+}
+
+export async function syncAdminStatus(authUid: string, isAdmin: boolean): Promise<void> {
+  if (!authUid || !isAdmin) return
+  const fbConfig = await getFirebaseConfig()
+  if (!fbConfig) return
+  try {
+    const adminUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/admins/${encodeURIComponent(authUid)}.json`
+    await fetchFirebase(adminUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(true)
+    })
+  } catch (err) {
+    console.warn('[useAuth] Feil ved synkronisering av admin-status:', err)
   }
 }
 
@@ -227,6 +246,9 @@ async function loginWithToken(idToken: string): Promise<void> {
       const fbCred = await signInWithGoogleIdToken(idToken)
       if (fbCred?.user?.uid && user.value) {
         syncAuthUid(user.value.userId, fbCred.user.uid).catch(() => {})
+        if (user.value.isAdmin) {
+          syncAdminStatus(fbCred.user.uid, true).catch(() => {})
+        }
       }
     } catch (fbAuthErr) {
       console.warn('[useAuth] Firebase Auth innlogging feilet (fortsetter med Apps Script sesjon):', fbAuthErr)

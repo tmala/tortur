@@ -13,7 +13,7 @@ export interface TurpostItem {
   ownerName?: string
   createdAt?: string
   suggestedForPublic?: boolean
-  status?: 'private' | 'pending' | 'approved' | 'denied'
+  status?: 'private' | 'pending' | 'approved' | 'denied' | 'exported'
   csvLine?: string
   csvLineHint?: string
 }
@@ -83,9 +83,22 @@ let cachedMountainsList: TurpostItem[] | null = null
  */
 export async function lookupTurpost(
   turpostId?: string,
-  turpostName?: string
+  turpostName?: string,
+  additionalSpots?: TurpostItem[]
 ): Promise<TurpostItem | null> {
   if (!turpostId && !turpostName) return null
+
+  if (additionalSpots && additionalSpots.length > 0) {
+    if (turpostId) {
+      const match = additionalSpots.find(p => String(p.id) === String(turpostId))
+      if (match) return match
+    }
+    if (turpostName) {
+      const clean = turpostName.trim().toLowerCase()
+      const match = additionalSpots.find(p => p.name.toLowerCase() === clean)
+      if (match) return match
+    }
+  }
 
   if (!cachedMountainsList) {
     try {

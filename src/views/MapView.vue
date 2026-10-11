@@ -94,9 +94,14 @@ watch(
   { immediate: true },
 )
 
-// Private turposter (my_spots) og innkommende forslag
-const { fetchMySpots, deleteMySpot, fetchMyPrivateCheckins, fetchSpotSuggestions } =
-  usePrivateTurposter()
+// Private turposter (my_spots), godkjente poster og innkommende forslag
+const {
+  fetchMySpots,
+  deleteMySpot,
+  fetchMyPrivateCheckins,
+  fetchSpotSuggestions,
+  fetchApprovedSpots
+} = usePrivateTurposter()
 
 // Bruker / Admin: ny turpost (kart-klikk)
 const addTurpostClickCoords = ref<{ lat: number; lng: number } | null>(null)
@@ -146,6 +151,21 @@ const loadMySpots = async () => {
     console.warn('[MapView] Kunne ikke laste brukerens private turposter:', err)
   } finally {
     appState.isMySpotsLoading = false
+  }
+}
+
+const loadApprovedSpots = async () => {
+  if (!isLoggedIn.value) {
+    appState.approvedSpots = []
+    return
+  }
+  try {
+    appState.isApprovedSpotsLoading = true
+    appState.approvedSpots = await fetchApprovedSpots()
+  } catch (err) {
+    console.warn('[MapView] Kunne ikke laste godkjente turposter:', err)
+  } finally {
+    appState.isApprovedSpotsLoading = false
   }
 }
 
@@ -229,6 +249,7 @@ watch(
     if (loggedIn) {
       loadMyCheckins()
       loadMySpots()
+      loadApprovedSpots()
       if (user.value) {
         registerPublicUser(user.value)
         loadFriends(user.value.userId)
@@ -241,6 +262,7 @@ watch(
     } else {
       appState.myCheckins = []
       appState.mySpots = []
+      appState.approvedSpots = []
       appState.spotSuggestionsCount = 0
     }
   },
@@ -382,7 +404,6 @@ const {
   selectedFylke,
   selectedKommune,
   turposter,
-  filteredTurposter,
   isLoadingHierarchy,
   isLoadingPosts,
   error: turError,
@@ -394,6 +415,49 @@ const {
   lookupTurpost,
   clearSelection,
 } = useTurposter()
+
+// Kombiner faste turposter fra kommune med godkjente forslag fra Firebase Realtime Database
+const displayTurposter = computed(() => {
+  const base = turposter.value || []
+  if (!isLoggedIn.value || appState.approvedSpots.length === 0) {
+    return base
+  }
+  const selectedKommuneName = selectedKommune.value?.name?.toLowerCase().trim()
+  const approvedMatching = appState.approvedSpots.filter((appSpot) => {
+    if (selectedKommuneName) {
+      return appSpot.kommune?.toLowerCase().trim() === selectedKommuneName
+    }
+    return true
+  })
+
+  const baseIds = new Set(base.map((p) => String(p.id)))
+  const extra: TurpostItem[] = []
+  for (const appSpot of approvedMatching) {
+    if (!baseIds.has(String(appSpot.id))) {
+      extra.push({
+        id: String(appSpot.id),
+        name: appSpot.name,
+        lat: appSpot.lat,
+        lng: appSpot.lng,
+        alt: appSpot.alt,
+        fylke: appSpot.fylke,
+        kommune: appSpot.kommune,
+        isPrivate: false,
+        status: appSpot.status || 'approved',
+        csvLine: appSpot.csvLine
+      })
+    }
+  }
+  return [...base, ...extra]
+})
+
+const displayFilteredTurposter = computed(() => {
+  if (!searchQuery.value.trim()) return displayTurposter.value
+  const q = searchQuery.value.toLowerCase().trim()
+  return displayTurposter.value.filter(
+    (p) => p.name.toLowerCase().includes(q) || (p.alt && p.alt.toString().includes(q))
+  )
+})
 
 const mapViewerRef = ref<InstanceType<typeof MapViewer> | null>(null)
 const centerCoords = ref<{ lat: number; lng: number; zoom: number } | null>(null)
@@ -756,8 +820,12 @@ const handleViewCheckinOnMap = async (checkin: FirebaseCheckinItem) => {
     return
   }
 
-  // 3. Slå opp i felles turpostdatabase (mountains.csv)
-  const found = await lookupTurpost(checkin.turpostId, checkin.turpostName)
+  // 3. Slå opp i felles turpostdatabase (mountains.csv) samt godkjente turposter
+  const found = await lookupTurpost(
+    checkin.turpostId,
+    checkin.turpostName,
+    appState.approvedSpots as unknown as TurpostItem[]
+  )
   if (found) {
     await checkAndApplyAbroadLayer(found.lat, found.lng)
     if (found.kommune) {
@@ -1027,7 +1095,7 @@ onUnmounted(() => {
       :track-distance-meters="displayedTrackDistance"
       :show-km-markers="showKmMarkers"
       :track-photos="displayedTrackPhotos"
-      :turposter="turposter"
+      :turposter="displayTurposter"
       :private-turposter="appState.mySpots"
       :is-add-spot-active="appState.isAddSpotModeActive"
       :show-municipalities="showMunicipalities"
@@ -1160,7 +1228,7 @@ onUnmounted(() => {
       :active-layer="activeLayer"
       :is-turposter-open="isTurposterOpen"
       :active-kommune-name="selectedKommune ? selectedKommune.name : null"
-      :turpost-count="turposter.length"
+      :turpost-count="displayTurposter.length"
       :show-municipalities="showMunicipalities"
       :is-ais-toggled="isAisToggled"
       :is-zoom-sufficient="isZoomSufficient"
@@ -1217,8 +1285,8 @@ onUnmounted(() => {
       :hierarchy="hierarchy"
       :selected-fylke="selectedFylke"
       :selected-kommune="selectedKommune"
-      :turposter="turposter"
-      :filtered-turposter="filteredTurposter"
+      :turposter="displayTurposter"
+      :filtered-turposter="displayFilteredTurposter"
       :is-loading-hierarchy="isLoadingHierarchy"
       :is-loading-posts="isLoadingPosts"
       :search-query="searchQuery"

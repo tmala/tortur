@@ -198,7 +198,12 @@ For å utvide kartet utover de 15 200 faste turpostene fra postkassetrimmen, til
    - Brukere kan foreslå nye poster til felleskartet.
    - **Automatisk plassering i CSV**: Systemet analyserer eksisterende `mountains.csv` og beregner nøyaktig linjenummer der posten hører hjemme alfabetisk under riktig kommune (`CsvPlacementResult`).
    - Forslag lagres i `/<prefix>/spot_suggestions/{id}.json` med status `pending`.
-   - Administratorer kan godkjenne eller avvise forslag direkte i appen.
+   - Administratorer kan godkjenne eller avvise forslag direkte i appen:
+     - **Godkjenning**: Posten lagres i `/<prefix>/approved_spots/{id}.json` og vises umiddelbart for alle innloggede brukere på kartet som offentlig turpost. Innsenderens egen oppføring oppdateres automatisk til status `approved` med «Godkjent av admin»-badge.
+     - **Avvisning**: Forslaget merkes som `denied` og oppdaterer brukerens oppføring til «Avvist».
+   - **Eksport til `mountains.csv`**:
+     - Kjøres med `npm run sync:spots`. Skriptet henter ueksporterte godkjente turposter fra `approved_spots`, fletter dem alfabetisk inn i `data/mountains.csv`, og markerer dem som `status: 'exported'` (`exportedToCsv: true`).
+     - Deretter kjøres `npm run build` (som regenererer JSON-filer og hierarki) før manuell publisering.
 
 ---
 
@@ -210,7 +215,7 @@ For å utvide kartet utover de 15 200 faste turpostene fra postkassetrimmen, til
 | **Google Drive** | **Strukturert tilgangsstyring** | Bildene lagres i undermapper per turpost under en fast hovedmappe (`INNSJEKK_FOLDER_ID`). Cloud Function setter leserettighet for alle med lenken (`anyone with link`), slik at bildene kan vises i PWA-en uten å eksponere skrive- eller slettetilgang. |
 | **Google Sheets** | **Skjermet databaselag** | Ingen direkte tilgang fra nettleseren. All lesing og skriving skjer via Cloud Function. |
 | **Webklient (PWA)** | **Google Identity Services (GIS)** | Bruker logger inn med offisiell Google OAuth2. `id_token` lagres i `sessionStorage` og benyttes som bærer-token mot både Cloud Function og Firebase Authentication. |
-| **Firebase Realtime Database** | **Finkornet regelsett** | Regelsett i [database.rules.json](file:///Users/mala/work/github/tortur/database.rules.json) sikrer: <br/>• Autentiserte brukere kan lese felles turposter og skrive likes/kommentarer.<br/>• Brukerspesifikke data (`checkins`, `my_spots`, `tracks`, `track_photos`) er låst til brukerens egen `auth.uid`.<br/>• Innsjekkinger og spor deles selektivt med godkjente venner basert på vennelister.<br/>• Forslag til turposter (`spot_suggestions`) er skjermet. |
+| **Firebase Realtime Database** | **Finkornet regelsett** | Regelsett i [database.rules.json](file:///Users/mala/work/github/tortur/database.rules.json) sikrer: <br/>• Autentiserte brukere kan lese felles turposter, godkjente turposter (`approved_spots`) og skrive likes/kommentarer.<br/>• Brukerspesifikke data (`checkins`, `my_spots`, `tracks`, `track_photos`) er låst til brukerens egen `auth.uid`.<br/>• Innsjekkinger og spor deles selektivt med godkjente venner basert på vennelister.<br/>• Forslag til turposter (`spot_suggestions`) er skjermet, og kun administratorer har skrivetilgang til `approved_spots` via `admins`-noden. |
 | **BarentsWatch Proxier** | **Server-side Proxy & Caching** | Produksjon: [bw-token.php](file:///Users/mala/work/github/tortur/public/api/bw-token.php) og [bw-ais.php](file:///Users/mala/work/github/tortur/public/api/bw-ais.php) på webhotell hindrer CORS-problemer og beskytter API-et via 25s diskcache og bounding box-filter.<br/>Utvikling: `barentsWatchAisDevPlugin` i [vite.config.ts](file:///Users/mala/work/github/tortur/vite.config.ts) gir samme opplevelse lokalt. |
 
 ---

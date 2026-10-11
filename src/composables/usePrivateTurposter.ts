@@ -19,6 +19,25 @@ export interface SpotSuggestion {
   status: 'pending' | 'approved' | 'rejected' | 'denied'
 }
 
+export interface ApprovedSpot {
+  id: string
+  name: string
+  lat: number
+  lng: number
+  alt: number | null
+  fylke: string
+  kommune: string
+  csvLine: string
+  csvLineHint?: string
+  ownerId?: string
+  ownerName?: string
+  approvedAt: string
+  approvedBy?: string
+  status?: 'approved' | 'exported'
+  exportedToCsv?: boolean
+  exportedAt?: string
+}
+
 export interface CsvPlacementResult {
   lineNumber: number
   prevName?: string
@@ -107,6 +126,24 @@ export function usePrivateTurposter() {
                   // 3. Oppdater lokalt spot-objekt
                   spot.status = 'denied'
                   spot.suggestedForPublic = false
+                } else if (suggestionData && suggestionData.status === 'approved') {
+                  // 1. Oppdater brukerens egen private node under my_spots til status: 'approved'
+                  const userSpotUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/my_spots/${encodeURIComponent(String(spot.id))}.json`
+                  await fetchFirebase(userSpotUrl, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      status: 'approved',
+                      suggestedForPublic: true
+                    })
+                  })
+
+                  // 2. Slett turposten under spot_suggestions (den er nå i approved_spots)
+                  await fetchFirebase(suggestionUrl, { method: 'DELETE' }).catch(() => {})
+
+                  // 3. Oppdater lokalt spot-objekt
+                  spot.status = 'approved'
+                  spot.suggestedForPublic = true
                 }
               }
             } catch (syncErr) {
@@ -765,6 +802,109 @@ export function usePrivateTurposter() {
     }
   }
 
+  /**
+   * Godkjenner et innkommende forslag for admin:
+   * 1. Lagrer turposten under /<prefix>/approved_spots/<spotId>.json
+   * 2. Merker forslaget som 'approved' i /<prefix>/spot_suggestions/<spotId>.json
+   */
+  async function approveSpotSuggestion(
+    suggestion: SpotSuggestion,
+    approvedBy?: string
+  ): Promise<void> {
+    const config = await getFirebaseConfig()
+    if (!config) throw new Error('Firebase-konfigurasjon er ikke tilgjengelig.')
+
+    const nowIso = new Date().toISOString()
+    const approvedItem: ApprovedSpot = {
+      id: String(suggestion.id),
+      name: suggestion.name,
+      lat: suggestion.lat,
+      lng: suggestion.lng,
+      alt: suggestion.alt ?? null,
+      fylke: suggestion.fylke || '',
+      kommune: suggestion.kommune || '',
+      csvLine: suggestion.csvLine || '',
+      csvLineHint: suggestion.csvLineHint || '',
+      ownerId: suggestion.userId || '',
+      ownerName: suggestion.userName || suggestion.userEmail || '',
+      approvedAt: nowIso,
+      approvedBy: approvedBy || 'Admin',
+      status: 'approved',
+      exportedToCsv: false
+    }
+
+    // 1. Lagre i approved_spots
+    const approvedUrl = `${config.dbUrl}/${config.prefix}/approved_spots/${encodeURIComponent(String(suggestion.id))}.json`
+    const resApproved = await fetchFirebase(approvedUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(approvedItem)
+    })
+
+    if (!resApproved.ok) {
+      throw new Error(`Kunne ikke lagre godkjent turpost i Firebase (status ${resApproved.status})`)
+    }
+
+    // 2. Oppdater status i spot_suggestions til 'approved'
+    const suggestionUrl = `${config.dbUrl}/${config.prefix}/spot_suggestions/${encodeURIComponent(String(suggestion.id))}.json`
+    await fetchFirebase(suggestionUrl, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: 'approved',
+        approvedAt: nowIso,
+        approvedBy: approvedBy || 'Admin'
+      })
+    }).catch(() => {})
+  }
+
+  /**
+   * Henter alle godkjente turposter:
+   * /<prefix>/approved_spots.json
+   */
+  async function fetchApprovedSpots(): Promise<ApprovedSpot[]> {
+    const config = await getFirebaseConfig()
+    if (!config) return []
+
+    try {
+      const url = `${config.dbUrl}/${config.prefix}/approved_spots.json`
+      const res = await fetchFirebase(url)
+      if (!res.ok) return []
+
+      const data = await res.json()
+      if (!data || typeof data !== 'object') return []
+
+      const list: ApprovedSpot[] = []
+      for (const [id, val] of Object.entries(data)) {
+        if (!val || typeof val !== 'object') continue
+        const item = val as Record<string, unknown>
+        list.push({
+          id: String(item.id || id),
+          name: typeof item.name === 'string' ? item.name : 'Uten navn',
+          lat: Number(item.lat),
+          lng: Number(item.lng),
+          alt: item.alt !== undefined && item.alt !== null ? Number(item.alt) : null,
+          fylke: typeof item.fylke === 'string' ? item.fylke : '',
+          kommune: typeof item.kommune === 'string' ? item.kommune : '',
+          csvLine: typeof item.csvLine === 'string' ? item.csvLine : '',
+          csvLineHint: typeof item.csvLineHint === 'string' ? item.csvLineHint : '',
+          ownerId: typeof item.ownerId === 'string' ? item.ownerId : '',
+          ownerName: typeof item.ownerName === 'string' ? item.ownerName : '',
+          approvedAt: typeof item.approvedAt === 'string' ? item.approvedAt : '',
+          approvedBy: typeof item.approvedBy === 'string' ? item.approvedBy : '',
+          status: (item.status as ApprovedSpot['status']) || 'approved',
+          exportedToCsv: Boolean(item.exportedToCsv),
+          exportedAt: typeof item.exportedAt === 'string' ? item.exportedAt : undefined
+        })
+      }
+
+      return list
+    } catch (err) {
+      console.warn('[usePrivateTurposter] Kunne ikke hente approved_spots:', err)
+      return []
+    }
+  }
+
   return {
     isSaving,
     isLoading,
@@ -782,6 +922,8 @@ export function usePrivateTurposter() {
     fetchSpotSuggestions,
     deleteSpotSuggestion,
     denySpotSuggestion,
+    approveSpotSuggestion,
+    fetchApprovedSpots,
     calculateCsvPlacement
   }
 }

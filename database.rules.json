@@ -88,6 +88,16 @@
       "spot_suggestions": {
         ".read": "auth != null",
         ".write": "auth != null"
+      },
+      "admins": {
+        ".read": "auth != null",
+        "$authUid": {
+          ".write": "auth != null && (root.child($prefix).child('admins').child(auth.uid).val() == true || !root.child($prefix).child('admins').exists())"
+        }
+      },
+      "approved_spots": {
+        ".read": "auth != null",
+        ".write": "auth != null && root.child($prefix).child('admins').child(auth.uid).val() == true"
       }
     }
   }

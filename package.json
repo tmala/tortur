@@ -1,11 +1,12 @@
 {
   "name": "tortur",
-  "version": "0.3.21",
+  "version": "0.3.22",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build:data": "node scripts/build-data.js",
+    "sync:spots": "node scripts/sync-approved-spots.js",
     "build:icons": "node scripts/generate-favicons.js",
     "build": "npm run build:data && run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",

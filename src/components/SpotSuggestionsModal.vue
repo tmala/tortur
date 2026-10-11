@@ -97,11 +97,11 @@
                 </button>
 
                 <button
-                  class="btn-delete-suggestion"
-                  @click="handleDelete(spot.id)"
-                  title="Fjern forslag fra listen når det er godkjent og lagt inn i data/mountains.csv"
+                  class="btn-approve-suggestion"
+                  @click="handleApprove(spot)"
+                  title="Godkjenn dette forslaget og publiser det til Firebase Realtime Database for alle innloggede brukere"
                 >
-                  ✅ Godkjent (fjern)
+                  ✅ Godkjenn og publiser
                 </button>
               </div>
             </div>
@@ -111,7 +111,7 @@
         <!-- Footer -->
         <div class="modal-footer">
           <div class="footer-note">
-            💡 Når du har lagt inn linjen i <code>data/mountains.csv</code>, kjør <code>npm run build && npm run deploy</code>.
+            💡 Godkjente turposter lagres i Firebase Realtime Database. Kjør <code>npm run sync:spots</code> for å oppdatere <code>data/mountains.csv</code> før neste bygg og distribusjon.
           </div>
           <button class="btn-primary" @click="emit('close')">Lukk</button>
         </div>
@@ -122,6 +122,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useAuth } from '@/composables/useAuth'
 import {
   usePrivateTurposter,
   type SpotSuggestion,
@@ -138,8 +139,14 @@ const emit = defineEmits<{
   (e: 'view-spot', spot: SpotSuggestion): void
 }>()
 
+const { user } = useAuth()
 const appState = useAppStateStore()
-const { fetchSpotSuggestions, deleteSpotSuggestion, denySpotSuggestion, calculateCsvPlacement } = usePrivateTurposter()
+const {
+  fetchSpotSuggestions,
+  denySpotSuggestion,
+  approveSpotSuggestion,
+  calculateCsvPlacement
+} = usePrivateTurposter()
 
 const suggestions = ref<SpotSuggestion[]>([])
 const isLoading = ref(false)
@@ -278,15 +285,25 @@ async function copyCsv(spot: SpotSuggestion) {
   }
 }
 
-async function handleDelete(spotId: string) {
-  if (!confirm('Vil du fjerne dette forslaget fra listen?\n\n(Gjør dette når turposten er lagt inn i mountains.csv)')) return
+async function handleApprove(spot: SpotSuggestion) {
+  if (
+    !confirm(
+      `Vil du godkjenne og publisere forslaget «${spot.name}»?\n\nTurposten blir umiddelbart lagret i Firebase Realtime Database (approved_spots) og offentlig tilgjengelig for alle innloggede brukere!`
+    )
+  )
+    return
   try {
-    await deleteSpotSuggestion(spotId)
-    suggestions.value = suggestions.value.filter((s) => s.id !== spotId)
+    await approveSpotSuggestion(
+      spot,
+      user.value?.userName || user.value?.email || 'Admin'
+    )
+    suggestions.value = suggestions.value.filter((s) => s.id !== spot.id)
     appState.spotSuggestionsCount = suggestions.value.length
     appState.requestClearSpotSuggestion()
-  } catch {
-    alert('Kunne ikke fjerne forslaget.')
+    alert(`«${spot.name}» er nå godkjent og publisert som offentlig turpost!`)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ukjent feil'
+    alert(`Kunne ikke godkjenne forslaget: ${msg}`)
   }
 }
 
@@ -607,7 +624,8 @@ function formatDate(isoStr?: string): string {
   color: #ffffff;
 }
 
-.btn-delete-suggestion {
+.btn-delete-suggestion,
+.btn-approve-suggestion {
   background: rgba(16, 185, 129, 0.15);
   border: 1px solid rgba(16, 185, 129, 0.35);
   color: #6ee7b7;
@@ -618,7 +636,8 @@ function formatDate(isoStr?: string): string {
   cursor: pointer;
   transition: all 0.2s;
 }
-.btn-delete-suggestion:hover {
+.btn-delete-suggestion:hover,
+.btn-approve-suggestion:hover {
   background: rgba(16, 185, 129, 0.3);
   border-color: #10b981;
   color: #ffffff;
