@@ -4,14 +4,14 @@ set -e
 # Naviger til katalogen der dette skriptet ligger
 cd "$(dirname "$0")"
 
-echo "🚀 Deployer uploadCheckinImage til Google Cloud Functions (europe-west1)..."
+echo "🚀 Deployer <FUNCTION_NAME> til Google Cloud Functions (europe-west1)..."
 
-gcloud functions deploy uploadCheckinImage \
+gcloud functions deploy <FUNCTION_NAME> \
   --gen2 \
   --runtime=nodejs22 \
   --region=europe-west1 \
   --source=. \
-  --entry-point=uploadCheckinImage \
+  --entry-point=<FUNCTION_NAME> \
   --trigger-http \
   --allow-unauthenticated \
   --memory=256MiB \

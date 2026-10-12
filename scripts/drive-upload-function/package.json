@@ -1,7 +1,7 @@
 {
   "name": "tortur-drive-upload-function",
-  "version": "1.0.0",
-  "description": "Google Cloud Function for direkte opplasting av turbilder til Google Drive",
+  "version": "1.1.0",
+  "description": "Google Cloud Function for opplasting av turbilder til Google Drive og API mot Google Sheets",
   "main": "src/index.js",
   "type": "module",
   "engines": {
