@@ -21,6 +21,7 @@ import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import { useAppStateStore } from '@/stores/appState'
 import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
 import WebcamCapture from '@/components/checkin/WebcamCapture.vue'
+import { useIsMobileDevice } from '@/composables/useIsMobileDevice'
 import CheckinVisibilitySelector from '@/components/checkin/CheckinVisibilitySelector.vue'
 import TrackPickerModal from '@/components/TrackPickerModal.vue'
 
@@ -54,6 +55,7 @@ const trackStore = useGpsTrackStore()
 const appState = useAppStateStore()
 const selectedTrackId = ref<string | null>(null)
 const isTrackPickerOpen = ref(false)
+const dragPosition = ref({ x: 0, y: 0 })
 
 const attachedTrack = computed<SavedTrack | null>(() => {
   if (!selectedTrackId.value) return null
@@ -84,18 +86,12 @@ async function handleViewTrackOnMap() {
   emit('close')
 }
 
+const cameraInputRef = useTemplateRef<HTMLInputElement>('cameraInputRef')
 const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef')
 const isWebcamActive = ref(false)
 const isProcessingImage = ref(false)
 
-const isMobileDevice = computed(() => {
-  if (typeof navigator === 'undefined') return false
-  return (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-    (Boolean(navigator.maxTouchPoints && navigator.maxTouchPoints > 2) &&
-      /Macintosh/i.test(navigator.userAgent))
-  )
-})
+const { isMobileDevice } = useIsMobileDevice()
 
 // Aktivt bilde som skal forhåndsvises (nyopplastet preview, eller eksisterende bilde hvis ikke fjernet)
 const currentDisplayImageUrl = computed(() => {
@@ -130,7 +126,7 @@ watch(
 const handleTakePhoto = () => {
   errorMessage.value = null
   if (isMobileDevice.value) {
-    fileInputRef.value?.click()
+    cameraInputRef.value?.click()
   } else {
     isWebcamActive.value = true
   }
@@ -142,6 +138,7 @@ const handleFileChange = async (event: Event) => {
   if (file) {
     await processAndSetFile(file)
   }
+  target.value = ''
 }
 
 async function processAndSetFile(file: File) {
@@ -168,7 +165,7 @@ const setFile = (file: File) => {
   previewUrl.value = URL.createObjectURL(file)
 }
 
-const clearSelectedFile = () => {
+function clearSelectedFile() {
   isWebcamActive.value = false
   if (previewUrl.value) {
     URL.revokeObjectURL(previewUrl.value)
@@ -177,6 +174,9 @@ const clearSelectedFile = () => {
   previewUrl.value = null
   if (fileInputRef.value) {
     fileInputRef.value.value = ''
+  }
+  if (cameraInputRef.value) {
+    cameraInputRef.value.value = ''
   }
 }
 
@@ -302,8 +302,7 @@ async function handleDeleteCheckin() {
 }
 
 // Dra/flytt logikk for modalen
-const modalRef = ref<HTMLElement | null>(null)
-const dragPosition = ref({ x: 0, y: 0 })
+const modalRef = useTemplateRef<HTMLElement>('modalRef')
 const isDragging = ref(false)
 let dragStart = { x: 0, y: 0 }
 let initialPosition = { x: 0, y: 0 }
@@ -479,7 +478,17 @@ onUnmounted(() => {
                 </button>
               </div>
 
-              <!-- Skjult fil-inndata (uten capture, slik at mobil lagrer til kamerarull og gir valg) -->
+              <!-- Skjult fil-inndata for direkte kamera på mobil (med capture="environment") -->
+              <input
+                ref="cameraInputRef"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                class="hidden-input"
+                @change="handleFileChange"
+              />
+
+              <!-- Skjult fil-inndata (uten capture, for bildegalleri/filvelger) -->
               <input
                 ref="fileInputRef"
                 type="file"
@@ -505,19 +514,32 @@ onUnmounted(() => {
                   </span>
                   <div class="preview-actions">
                     <button
+                      v-if="isMobileDevice"
+                      type="button"
+                      class="btn-preview-action"
+                      @click="cameraInputRef?.click()"
+                      title="Ta nytt bilde med kamera"
+                      aria-label="Ta nytt bilde med kamera"
+                    >
+                      <Camera :size="13" />
+                      <span>Kamera</span>
+                    </button>
+                    <button
                       type="button"
                       class="btn-preview-action"
                       @click="fileInputRef?.click()"
-                      title="Velg et annet bilde"
+                      :title="isMobileDevice ? 'Velg bilde fra bildegalleri' : 'Velg et annet bilde'"
+                      :aria-label="isMobileDevice ? 'Velg bilde fra bildegalleri' : 'Velg et annet bilde'"
                     >
                       <ImageIcon :size="13" />
-                      <span>Erstatt</span>
+                      <span>{{ isMobileDevice ? 'Galleri' : 'Erstatt' }}</span>
                     </button>
                     <button
                       type="button"
                       class="btn-preview-action danger"
                       @click="handleRemoveImage"
                       title="Fjern bildet fra innsjekkingen"
+                      aria-label="Fjern bildet fra innsjekkingen"
                     >
                       <Trash2 :size="13" />
                       <span>Fjern bilde</span>
@@ -532,21 +554,37 @@ onUnmounted(() => {
                   <span>Bildet vil bli fjernet ved lagring.</span>
                 </div>
 
-                <div class="photo-btn-grid" :class="{ 'single-choice': isMobileDevice }">
-                  <!-- På mobil/nettbrett: Én enkel felles knapp for kamera/galleri -->
-                  <button
-                    v-if="isMobileDevice"
-                    type="button"
-                    class="btn-photo-action"
-                    :disabled="isSubmitting || isProcessingImage"
-                    @click="fileInputRef?.click()"
-                  >
-                    <Camera :size="18" class="action-icon" />
-                    <div class="btn-text-wrap">
-                      <span class="btn-title">Ta eller velg bilde</span>
-                      <span class="btn-sub">Kamera eller bildegalleri</span>
-                    </div>
-                  </button>
+                <div class="photo-btn-grid">
+                  <!-- På mobil/nettbrett: To knapper – Ta bilde (kamera) og Velg bilde (galleri) -->
+                  <template v-if="isMobileDevice">
+                    <button
+                      type="button"
+                      class="btn-photo-action"
+                      :disabled="isSubmitting || isProcessingImage"
+                      aria-label="Ta bilde med kamera"
+                      @click="cameraInputRef?.click()"
+                    >
+                      <Camera :size="18" class="action-icon" />
+                      <div class="btn-text-wrap">
+                        <span class="btn-title">Ta bilde</span>
+                        <span class="btn-sub">Med kamera nå</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn-photo-action"
+                      :disabled="isSubmitting || isProcessingImage"
+                      aria-label="Velg bilde fra bildegalleri"
+                      @click="fileInputRef?.click()"
+                    >
+                      <ImageIcon :size="18" class="action-icon" />
+                      <div class="btn-text-wrap">
+                        <span class="btn-title">Velg bilde</span>
+                        <span class="btn-sub">Fra bildegalleri</span>
+                      </div>
+                    </button>
+                  </template>
 
                   <!-- På PC/Mac: To valg – Webkamera eller filvelger -->
                   <template v-else>
@@ -554,6 +592,7 @@ onUnmounted(() => {
                       type="button"
                       class="btn-photo-action"
                       :disabled="isSubmitting || isProcessingImage"
+                      aria-label="Ta bilde med webkamera"
                       @click="handleTakePhoto"
                     >
                       <Camera :size="18" class="action-icon" />
@@ -567,6 +606,7 @@ onUnmounted(() => {
                       type="button"
                       class="btn-photo-action"
                       :disabled="isSubmitting || isProcessingImage"
+                      aria-label="Velg bilde fra datamaskin"
                       @click="fileInputRef?.click()"
                     >
                       <ImageIcon :size="18" class="action-icon" />

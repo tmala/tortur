@@ -8,6 +8,7 @@ import { useFriends, type CheckinVisibility } from '@/composables/useFriends'
 import { compressImageWithExif } from '@/utils/imageCompression'
 import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import WebcamCapture from '@/components/checkin/WebcamCapture.vue'
+import { useIsMobileDevice } from '@/composables/useIsMobileDevice'
 import CheckinVisibilitySelector from '@/components/checkin/CheckinVisibilitySelector.vue'
 import TrackPickerModal from '@/components/TrackPickerModal.vue'
 import {
@@ -57,19 +58,13 @@ function removeTrack() {
   selectedTrackId.value = null
 }
 
+const cameraInputRef = useTemplateRef<HTMLInputElement>('cameraInputRef')
 const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef')
 const lastSubmittedResult = ref<CheckinResult | null>(null)
 const isWebcamActive = ref(false)
 const isProcessingImage = ref(false)
 
-// Sjekk om enheten er mobil eller nettbrett (for å åpne native kamera vs webkamera)
-const isMobileDevice = computed(() => {
-  if (typeof navigator === 'undefined') return false
-  return (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-    (Boolean(navigator.maxTouchPoints && navigator.maxTouchPoints > 2) && /Macintosh/i.test(navigator.userAgent))
-  )
-})
+const { isMobileDevice } = useIsMobileDevice()
 
 // Avstandsberegning til turposten
 const distance = computed(() => {
@@ -112,7 +107,7 @@ watch(
 const handleTakePhoto = () => {
   errorMessage.value = null
   if (isMobileDevice.value) {
-    fileInputRef.value?.click()
+    cameraInputRef.value?.click()
   } else {
     isWebcamActive.value = true
   }
@@ -123,6 +118,7 @@ const handleFileInputChange = (e: Event) => {
   const file = target.files?.[0]
   if (!file) return
   processAndSetImage(file)
+  target.value = ''
 }
 
 async function processAndSetImage(file: File) {
@@ -169,6 +165,9 @@ const clearFile = () => {
   previewUrl.value = null
   if (fileInputRef.value) {
     fileInputRef.value.value = ''
+  }
+  if (cameraInputRef.value) {
+    cameraInputRef.value.value = ''
   }
 }
 
@@ -377,23 +376,41 @@ onUnmounted(() => {
               />
 
               <!-- Valg mellom å ta nytt bilde eller velge eksisterende bilde -->
-              <div v-else class="photo-choice-grid" :class="{ 'single-choice': isMobileDevice }">
-                <!-- På mobil/nettbrett: Enkel felles knapp som åpner enhetens native dialog (kamera/galleri) -->
-                <button
-                  v-if="isMobileDevice"
-                  type="button"
-                  class="photo-choice-btn"
-                  :disabled="isSubmitting"
-                  @click="fileInputRef?.click()"
-                >
-                  <div class="photo-choice-icon camera">
-                    <Camera :size="20" />
-                  </div>
-                  <div class="photo-choice-text">
-                    <strong>Ta eller velg bilde</strong>
-                    <span>Kamera eller bildegalleri</span>
-                  </div>
-                </button>
+              <div v-else class="photo-choice-grid">
+                <!-- På mobil/nettbrett: To valg – Ta bilde (kamera) eller Velg bilde (galleri) -->
+                <template v-if="isMobileDevice">
+                  <button
+                    type="button"
+                    class="photo-choice-btn"
+                    :disabled="isSubmitting"
+                    aria-label="Ta bilde med kamera"
+                    @click="cameraInputRef?.click()"
+                  >
+                    <div class="photo-choice-icon camera">
+                      <Camera :size="20" />
+                    </div>
+                    <div class="photo-choice-text">
+                      <strong>Ta bilde</strong>
+                      <span>Med kamera nå</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="photo-choice-btn"
+                    :disabled="isSubmitting"
+                    aria-label="Velg bilde fra bildegalleri"
+                    @click="fileInputRef?.click()"
+                  >
+                    <div class="photo-choice-icon gallery">
+                      <ImageIcon :size="20" />
+                    </div>
+                    <div class="photo-choice-text">
+                      <strong>Velg bilde</strong>
+                      <span>Fra bildegalleri</span>
+                    </div>
+                  </button>
+                </template>
 
                 <!-- På PC/Mac: To valg – Webkamera eller filvelger -->
                 <template v-else>
@@ -401,6 +418,7 @@ onUnmounted(() => {
                     type="button"
                     class="photo-choice-btn"
                     :disabled="isSubmitting"
+                    aria-label="Ta bilde med webkamera"
                     @click="handleTakePhoto"
                   >
                     <div class="photo-choice-icon camera">
@@ -416,6 +434,7 @@ onUnmounted(() => {
                     type="button"
                     class="photo-choice-btn"
                     :disabled="isSubmitting"
+                    aria-label="Velg bilde fra datamaskin"
                     @click="fileInputRef?.click()"
                   >
                     <div class="photo-choice-icon gallery">
@@ -429,7 +448,17 @@ onUnmounted(() => {
                 </template>
               </div>
 
-              <!-- Skjult fil-inngang (uten capture, slik at mobil lagrer til kamerarull og gir valg mellom kamera/galleri) -->
+              <!-- Skjult fil-inngang for direkte kamera på mobil (med capture="environment") -->
+              <input
+                ref="cameraInputRef"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                class="hidden-file-input"
+                @change="handleFileInputChange"
+              />
+
+              <!-- Skjult fil-inngang for bildegalleri / filvelger (uten capture) -->
               <input
                 ref="fileInputRef"
                 type="file"
