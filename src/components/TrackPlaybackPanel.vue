@@ -36,11 +36,13 @@ const props = withDefaults(
     showKmMarkers: boolean
     showPhotosOnMap: boolean
     onTrackPhotosCount: number
+    photosAvailable?: boolean
   }>(),
   {
     replayProgress: 0,
     replayElapsedMs: 0,
-    replayDurationMs: 0
+    replayDurationMs: 0,
+    photosAvailable: true
   }
 )
 
@@ -738,7 +740,11 @@ defineExpose({
       </div>
 
       <!-- LINJE 3: Valg om bilder tilknyttet turen skal vises på kartet som små thumbnails -->
-      <div class="panel-row row-toggle" :class="{ 'is-disabled': onTrackPhotosCount === 0 }">
+      <div
+        v-if="photosAvailable"
+        class="panel-row row-toggle"
+        :class="{ 'is-disabled': onTrackPhotosCount === 0 }"
+      >
         <div class="toggle-info">
           <Camera :size="14" class="toggle-icon text-sky" />
           <div class="toggle-text-block">

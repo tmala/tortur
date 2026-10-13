@@ -618,7 +618,9 @@ watch(
     replayDurationMs.value = 0
     if (track) {
       handleViewSavedTrack(track)
-      if (track.userId && track.userId !== 'guest') {
+      const isOwner = track.userId && track.userId === trackStore.currentUserId
+      const isSharedWithFriends = !!track.sharePhotosWithFriends
+      if (track.userId && track.userId !== 'guest' && (isOwner || isSharedWithFriends)) {
         const key = track.firebaseKey || formatTrackKey(track.startTime || track.createdAt)
         activeTrackPhotos.value = await fetchTrackPhotos(track.userId, key)
       } else {
@@ -630,6 +632,14 @@ watch(
   },
   { immediate: true },
 )
+
+// Avgjør om turbilder er tilgjengelige for det aktive sporet (eget spor eller delt med venner)
+const isPhotosAvailableForTrack = computed(() => {
+  const track = trackStore.activeTrack
+  if (!track || !track.userId || track.userId === 'guest') return false
+  const isOwner = track.userId === trackStore.currentUserId
+  return isOwner || !!track.sharePhotosWithFriends
+})
 
 // Beregn turbilder som er på/nær sporet (innenfor 300m)
 const onTrackPhotos = computed(() => {
@@ -1085,6 +1095,7 @@ onUnmounted(() => {
           :show-km-markers="showKmMarkers"
           :show-photos-on-map="showPhotosOnMap"
           :on-track-photos-count="onTrackPhotos.length"
+          :photos-available="isPhotosAvailableForTrack"
           @focus-track="handleViewSavedTrack(trackStore.activeTrack)"
           @close="trackStore.clearActiveTrack()"
           @update:show-km-markers="showKmMarkers = $event"

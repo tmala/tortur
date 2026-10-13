@@ -11,9 +11,10 @@ import {
   Loader2,
   MapPin,
   AlertCircle,
-  X
+  X,
+  Users
 } from 'lucide-vue-next'
-import type { SavedTrack } from '@/stores/gpsTrack'
+import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import { formatTrackKey } from '@/composables/useFirebaseTracks'
 import {
   useTrackPhotos,
@@ -51,6 +52,14 @@ const fileInputRef = useTemplateRef<HTMLInputElement>('fileInput')
 const trackKey = computed(() => {
   return props.track.firebaseKey || formatTrackKey(props.track.startTime || props.track.createdAt)
 })
+
+const trackStore = useGpsTrackStore()
+const isPhotosSharedWithFriends = computed(() => !!props.track.sharePhotosWithFriends)
+
+function handleToggleSharePhotos(event: Event): void {
+  const checked = (event.target as HTMLInputElement).checked
+  trackStore.setPhotoSharing(props.track.id, checked)
+}
 
 const photoCount = computed(() => photos.value.length)
 
@@ -292,6 +301,26 @@ onMounted(() => {
         </button>
       </div>
 
+      <!-- Bryter for deling av bilder med venner -->
+      <div class="photos-share-row">
+        <div class="share-info">
+          <Users :size="14" class="share-icon" />
+          <div class="share-text-block">
+            <span class="share-text">Del bilder med venner</span>
+            <span class="share-subtext">Venner kan se bildene dine når de åpner dette sporet</span>
+          </div>
+        </div>
+        <label class="switch-control">
+          <input
+            type="checkbox"
+            :checked="isPhotosSharedWithFriends"
+            @change="handleToggleSharePhotos"
+            aria-label="Del turbilder med venner for dette sporet"
+          />
+          <span class="slider round"></span>
+        </label>
+      </div>
+
       <!-- Bildegalleri -->
       <div v-if="photos.length > 0" class="photo-grid">
         <div
@@ -518,6 +547,97 @@ onMounted(() => {
 .photos-actions-bar {
   display: flex;
   gap: 8px;
+}
+
+.photos-share-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  background: rgba(30, 41, 59, 0.45);
+  border: 1px solid rgba(51, 65, 85, 0.4);
+  border-radius: 6px;
+  gap: 8px;
+}
+
+.share-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.share-icon {
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.share-text-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.share-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.share-subtext {
+  font-size: 10.5px;
+  color: #94a3b8;
+}
+
+.switch-control {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.switch-control input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #334155;
+  transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #cbd5e1;
+  transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+input:checked + .slider {
+  background-color: #0284c7;
+}
+
+input:checked + .slider:before {
+  transform: translateX(14px);
+  background-color: #ffffff;
+}
+
+.slider.round {
+  border-radius: 20px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
 }
 
 .btn-drive-connect,

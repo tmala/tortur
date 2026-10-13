@@ -20,6 +20,7 @@ export interface SavedTrack {
   startTime: number | null
   endTime: number | null
   firebaseKey?: string
+  sharePhotosWithFriends?: boolean
 }
 
 const STORAGE_PREFIX = 'tortur_saved_tracks_'
@@ -269,6 +270,25 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
     return true
   }
 
+  // Endre deling av turbilder med venner for et spor
+  const setPhotoSharing = (id: string, shareWithFriends: boolean): boolean => {
+    const track = savedTracks.value.find((t) => t.id === id)
+    if (!track) return false
+
+    track.sharePhotosWithFriends = shareWithFriends
+    persistTracks()
+
+    // Oppdater i Firebase i bakgrunnen hvis innlogget
+    if (currentUserId.value && currentUserId.value !== 'guest') {
+      const { setTrackPhotoSharingInFirebase } = useFirebaseTracks()
+      setTrackPhotoSharingInFirebase(currentUserId.value, track, shareWithFriends).catch((err) => {
+        console.warn('[gpsTrackStore] Oppdatering av bildedeling i Firebase feilet:', err)
+      })
+    }
+
+    return true
+  }
+
   // Vis spor på kartet (tar enten spor-ID eller et komplett SavedTrack-objekt for eksterne/venners spor)
   const viewTrackOnMap = (trackOrId: string | SavedTrack, forceActive: boolean = false) => {
     if (typeof trackOrId === 'string') {
@@ -392,6 +412,7 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
     saveTrack,
     deleteTrack,
     renameTrack,
+    setPhotoSharing,
     viewTrackOnMap,
     clearActiveTrack,
     downloadGpx,

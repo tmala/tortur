@@ -63,6 +63,8 @@ export function useFirebaseTracks() {
         const id = typeof item.id === 'string' ? item.id : `track_${key}`
         const name = typeof item.name === 'string' ? item.name : `Tur ${new Date(startTime).toLocaleDateString('no-NO')}`
         const firebaseKey = typeof item.firebaseKey === 'string' ? item.firebaseKey : key
+        const sharePhotosWithFriends =
+          typeof item.sharePhotosWithFriends === 'boolean' ? item.sharePhotosWithFriends : undefined
 
         tracks.push({
           id,
@@ -74,7 +76,8 @@ export function useFirebaseTracks() {
           distanceMeters,
           durationMs,
           points,
-          firebaseKey
+          firebaseKey,
+          sharePhotosWithFriends
         })
       }
 
@@ -182,6 +185,36 @@ export function useFirebaseTracks() {
     }
   }
 
+  /**
+   * Oppdaterer innstilling for deling av turbilder med venner i Firebase.
+   */
+  async function setTrackPhotoSharingInFirebase(
+    userId: string,
+    track: SavedTrack,
+    shareWithFriends: boolean
+  ): Promise<boolean> {
+    if (!userId || userId === 'guest') return false
+
+    const config = await getFirebaseConfig()
+    if (!config) return false
+
+    try {
+      const key = track.firebaseKey || formatTrackKey(track.startTime || track.createdAt)
+      const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/tracks/${encodeURIComponent(key)}.json`
+
+      const res = await fetchFirebase(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sharePhotosWithFriends: shareWithFriends })
+      })
+
+      return res.ok
+    } catch (err) {
+      console.warn('[useFirebaseTracks] Kunne ikke oppdatere bildedeling i Firebase:', err)
+      return false
+    }
+  }
+
   return {
     formatTrackKey,
     parseTrackKeyTimestamp,
@@ -189,6 +222,7 @@ export function useFirebaseTracks() {
     fetchUserTrackById,
     saveTrackToFirebase,
     deleteTrackFromFirebase,
-    renameTrackInFirebase
+    renameTrackInFirebase,
+    setTrackPhotoSharingInFirebase
   }
 }

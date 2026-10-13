@@ -73,7 +73,10 @@
           },
           "track_photos": {
             ".read": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)",
-            ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)"
+            ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)",
+            "$trackKey": {
+              ".read": "auth != null && root.child($prefix).child('brukere').child($userId).child('tracks').child($trackKey).child('sharePhotosWithFriends').val() == true && root.child($prefix).child('brukere').child($userId).child('friends').child(root.child($prefix).child('auth_uids').child(auth.uid).val()).exists()"
+            }
           }
         }
       },
