@@ -15,6 +15,8 @@ import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
 import EditCheckinModal from './EditCheckinModal.vue'
 import UserCheckinCard from './profile/UserCheckinCard.vue'
 import UserProfileShortcuts from './profile/UserProfileShortcuts.vue'
+import MonthGroupHeader from './MonthGroupHeader.vue'
+import { useMonthGroups } from '@/composables/useMonthGroups'
 
 const props = defineProps<{
   isOpen: boolean
@@ -165,6 +167,16 @@ const uniqueTurpostIds = computed(() => {
   return new Set(sortedCheckins.value.map((c) => String(c.turpostId)))
 })
 
+// Gruppering av innsjekkinger per måned
+const {
+  monthGroups,
+  isMonthExpanded,
+  toggleMonth,
+  resetToLatest,
+} = useMonthGroups(sortedCheckins, {
+  getDate: (item) => item.timestamp,
+})
+
 // Dra/flytte-logikk for profilmodalen
 const modalRef = ref<HTMLElement | null>(null)
 const dragPosition = ref({ x: 0, y: 0 })
@@ -237,6 +249,7 @@ watch(
     if (open) {
       dragPosition.value = { x: 0, y: 0 }
       expandedCheckinIds.value.clear()
+      resetToLatest()
     }
   },
 )
@@ -413,21 +426,37 @@ onUnmounted(() => {
               </p>
             </div>
 
-            <!-- Innsjekkingsliste (ekspanderbar) -->
-            <div v-else class="checkin-cards-list">
-              <UserCheckinCard
-                v-for="(item, idx) in sortedCheckins"
-                :key="item.id || idx"
-                :item="item"
-                :is-expanded="isExpanded(item.id || idx)"
-                :current-user-id="user?.userId"
-                @toggle-expand="toggleExpand(item.id || idx)"
-                @view-on-map="handleViewOnMap"
-                @view-track="handleViewTrack"
-                @edit="editingCheckin = $event"
-                @view-photo="lightboxImage = $event"
-                @social-updated="handleSocialUpdated"
-              />
+            <!-- Innsjekkingsliste (månedsgruppert) -->
+            <div v-else class="checkins-month-groups">
+              <div
+                v-for="group in monthGroups"
+                :key="group.key"
+                class="month-group"
+              >
+                <MonthGroupHeader
+                  :label="group.label"
+                  :count="group.items.length"
+                  :is-expanded="isMonthExpanded(group.key)"
+                  accent-color="#38bdf8"
+                  @toggle="toggleMonth(group.key)"
+                />
+
+                <div v-if="isMonthExpanded(group.key)" class="month-items-list checkin-cards-list">
+                  <UserCheckinCard
+                    v-for="(item, idx) in group.items"
+                    :key="item.id || `${group.key}-${idx}`"
+                    :item="item"
+                    :is-expanded="isExpanded(item.id || `${group.key}-${idx}`)"
+                    :current-user-id="user?.userId"
+                    @toggle-expand="toggleExpand(item.id || `${group.key}-${idx}`)"
+                    @view-on-map="handleViewOnMap"
+                    @view-track="handleViewTrack"
+                    @edit="editingCheckin = $event"
+                    @view-photo="lightboxImage = $event"
+                    @social-updated="handleSocialUpdated"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -873,7 +902,34 @@ onUnmounted(() => {
   }
 }
 
-/* Innsjekkingskort */
+/* Innsjekkingskort og månedsgruppering */
+.checkins-month-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.month-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.month-items-list {
+  animation: expand-fade 0.2s ease-out;
+}
+
+@keyframes expand-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .checkin-cards-list {
   display: flex;
   flex-direction: column;

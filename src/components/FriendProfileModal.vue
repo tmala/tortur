@@ -20,6 +20,8 @@ import { useGpsTrackStore } from '@/stores/gpsTrack'
 import { useAppStateStore } from '@/stores/appState'
 import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
 import CheckinSocialSection from './CheckinSocialSection.vue'
+import MonthGroupHeader from './MonthGroupHeader.vue'
+import { useMonthGroups } from '@/composables/useMonthGroups'
 
 const props = defineProps<{
   isOpen: boolean
@@ -114,19 +116,6 @@ async function loadCheckins() {
   }
 }
 
-watch(
-  () => [props.isOpen, props.friend?.userId],
-  ([newOpen, newFriendId]) => {
-    if (newOpen && newFriendId) {
-      dragPosition.value = { x: 0, y: 0 }
-      searchQuery.value = ''
-      expandedCheckinIds.value.clear()
-      loadCheckins()
-    }
-  },
-  { immediate: true },
-)
-
 const uniqueTurpostIds = computed(() => {
   return new Set(checkins.value.map((c) => String(c.turpostId)))
 })
@@ -140,6 +129,31 @@ const filteredCheckins = computed(() => {
       (c.description && c.description.toLowerCase().includes(q)),
   )
 })
+
+// Månedsgruppering av vennens innsjekkinger (alle måneder åpnes ved aktivt søk)
+const {
+  monthGroups,
+  isMonthExpanded,
+  toggleMonth,
+  resetToLatest,
+} = useMonthGroups(filteredCheckins, {
+  getDate: (item) => item.timestamp,
+  autoExpandAll: () => Boolean(searchQuery.value.trim()),
+})
+
+watch(
+  () => [props.isOpen, props.friend?.userId],
+  ([newOpen, newFriendId]) => {
+    if (newOpen && newFriendId) {
+      dragPosition.value = { x: 0, y: 0 }
+      searchQuery.value = ''
+      expandedCheckinIds.value.clear()
+      loadCheckins()
+      resetToLatest()
+    }
+  },
+  { immediate: true },
+)
 
 function toggleExpand(id: string) {
   const next = new Set(expandedCheckinIds.value)
@@ -311,15 +325,29 @@ onUnmounted(() => {
             <p v-else>{{ friend.userName }} har ingen delte innsjekkinger enda.</p>
           </div>
 
-          <div v-else class="checkins-accordion">
+          <div v-else class="checkins-month-groups">
             <div
-              v-for="item in filteredCheckins"
-              :key="item.id"
-              class="checkin-item"
-              :class="{ expanded: isExpanded(item.id) }"
+              v-for="group in monthGroups"
+              :key="group.key"
+              class="month-group"
             >
-              <!-- Overskriftsrad (klikkbar for ekspandering) -->
-              <button type="button" class="checkin-header-btn" @click="toggleExpand(item.id)">
+              <MonthGroupHeader
+                :label="group.label"
+                :count="group.items.length"
+                :is-expanded="isMonthExpanded(group.key)"
+                accent-color="#38bdf8"
+                @toggle="toggleMonth(group.key)"
+              />
+
+              <div v-if="isMonthExpanded(group.key)" class="month-items-list checkins-accordion">
+                <div
+                  v-for="item in group.items"
+                  :key="item.id"
+                  class="checkin-item"
+                  :class="{ expanded: isExpanded(item.id) }"
+                >
+                  <!-- Overskriftsrad (klikkbar for ekspandering) -->
+                  <button type="button" class="checkin-header-btn" @click="toggleExpand(item.id)">
                 <div class="checkin-title-left">
                   <span class="turpost-name">{{ item.turpostName || 'Navnløs turpost' }}</span>
                   <span
@@ -418,6 +446,8 @@ onUnmounted(() => {
                   :current-user-id="currentUserId"
                   @updated="handleSocialUpdated"
                 />
+              </div>
+            </div>
               </div>
             </div>
           </div>
@@ -717,6 +747,33 @@ onUnmounted(() => {
   font-size: 13px;
   text-align: center;
   gap: 8px;
+}
+
+.checkins-month-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.month-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.month-items-list {
+  animation: expand-fade 0.2s ease-out;
+}
+
+@keyframes expand-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .checkins-accordion {
