@@ -1,11 +1,37 @@
 # To get started with Dependabot version updates, you'll need to specify which
 # package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options: 
+# Please see the documentation for all configuration options:
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # 1. NPM-pakker (Vue, Vite, Leaflet, Firebase, etc.)
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
+      day: 'monday'
+      time: '07:00'
+      timezone: 'Europe/Oslo'
+    # Maksimalt antall åpne PR-er samtidig så du ikke drukner
+    open-pull-requests-limit: 5
+    # Gruppering: Slår sammen oppdateringer til færre, ryddige PR-er
+    groups:
+      # Alle utviklerverktøy (ESLint, Prettier, TypeScript, Vitest) i én felles PR
+      dev-dependencies:
+        dependency-type: 'development'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Kjerne-Vue pakker (Vue, Pinia, Vue Router) holdes sammen
+      vue-core:
+        patterns:
+          - 'vue*'
+          - 'pinia*'
+        update-types:
+          - 'minor'
+          - 'patch'
+    # Prefiks på commit- og PR-titler iht. konvensjonelle commits
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
