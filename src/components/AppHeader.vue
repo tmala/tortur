@@ -24,6 +24,7 @@ const props = withDefaults(
     isAdminActive?: boolean
     isLoadingLocalTurposter?: boolean
     isLocating?: boolean
+    isLiveLocating?: boolean
     isTracking?: boolean
     hasTrack?: boolean
     savedTracksCount?: number
@@ -194,6 +195,7 @@ const handleInstallClick = async () => {
       :turpost-count="turpostCount"
       :is-loading-local-turposter="isLoadingLocalTurposter"
       :is-locating="isLocating"
+      :is-live-locating="isLiveLocating"
       :is-tracking="isTracking"
       :has-track="hasTrack"
       :is-admin="isAdmin && isAdminActive"

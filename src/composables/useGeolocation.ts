@@ -1,4 +1,4 @@
-import { ref, onUnmounted } from 'vue'
+import { ref, onUnmounted, getCurrentInstance } from 'vue'
 
 export interface GeoLocationState {
   lat: number
@@ -15,6 +15,24 @@ export interface TrackPoint {
   lng: number
   timestamp?: number
   ele?: number
+}
+
+interface WakeLockSentinelLike {
+  release: () => Promise<void>
+}
+
+interface NavigatorWithWakeLock {
+  wakeLock?: {
+    request: (type: 'screen') => Promise<WakeLockSentinelLike>
+  }
+}
+
+interface DeviceOrientationWithPermission {
+  requestPermission?: () => Promise<'granted' | 'denied'>
+}
+
+interface DeviceOrientationWithCompass extends DeviceOrientationEvent {
+  webkitCompassHeading?: number
 }
 
 const STORAGE_KEY_TRACK = 'tortur_track_points'
@@ -47,18 +65,22 @@ const saveTrackToStorage = (points: TrackPoint[]) => {
 export function useGeolocation() {
   const isSupported = ref('geolocation' in navigator)
   const isLocating = ref(false)
+  const isLiveLocating = ref(false)
   const isTracking = ref(false)
   const error = ref<string | null>(null)
   const coords = ref<GeoLocationState | null>(null)
+  const compassHeading = ref<number | null>(null)
   const trackPoints = ref<TrackPoint[]>(loadTrackFromStorage())
 
   let watchId: number | null = null
-  let wakeLock: any = null
+  let wakeLock: WakeLockSentinelLike | null = null
+  let orientationListenerActive = false
 
   const requestWakeLock = async () => {
     try {
-      if ('wakeLock' in navigator) {
-        wakeLock = await (navigator as any).wakeLock.request('screen')
+      const nav = navigator as unknown as NavigatorWithWakeLock
+      if (nav.wakeLock) {
+        wakeLock = await nav.wakeLock.request('screen')
       }
     } catch {
       // Ignorer dersom enheten nekter skjermlås-overstyring
@@ -96,7 +118,7 @@ export function useGeolocation() {
       const pt: TrackPoint = {
         lat: point.lat,
         lng: point.lng,
-        timestamp: point.timestamp || Date.now()
+        timestamp: point.timestamp || Date.now(),
       }
       if (point.altitude !== null && point.altitude !== undefined && !isNaN(point.altitude)) {
         pt.ele = Math.round(point.altitude * 10) / 10
@@ -126,19 +148,111 @@ export function useGeolocation() {
     saveTrackToStorage([])
   }
 
+  // Håndtering av kompassretning (orientering)
+  const requestOrientationPermission = async (): Promise<boolean> => {
+    if (typeof DeviceOrientationEvent !== 'undefined') {
+      const devOrientation = DeviceOrientationEvent as unknown as DeviceOrientationWithPermission
+      if (typeof devOrientation.requestPermission === 'function') {
+        try {
+          const res = await devOrientation.requestPermission()
+          return res === 'granted'
+        } catch (err) {
+          console.warn('[useGeolocation] Feil ved forespørsel om orientering:', err)
+          return false
+        }
+      }
+    }
+    return true
+  }
+
+  const handleOrientationEvent = (event: DeviceOrientationEvent) => {
+    let heading: number | null = null
+
+    // 1. iOS Safari (webkitCompassHeading er 0-360 grader med klokken fra nord)
+    const compassEvt = event as DeviceOrientationWithCompass
+    if (typeof compassEvt.webkitCompassHeading === 'number' && !isNaN(compassEvt.webkitCompassHeading) && compassEvt.webkitCompassHeading >= 0) {
+      heading = compassEvt.webkitCompassHeading
+    } else if (event.alpha !== null && event.alpha !== undefined && !isNaN(event.alpha)) {
+      // 2. Android / standard DeviceOrientationEvent
+      // alpha øker mot klokken, så 360 - alpha gir grader med klokken fra nord
+      heading = (360 - event.alpha) % 360
+    }
+
+    if (heading !== null) {
+      // Juster for skjermrotasjon (dersom enheten holdes liggende)
+      let screenAngle = 0
+      if (typeof window !== 'undefined') {
+        if (window.screen?.orientation?.angle !== undefined) {
+          screenAngle = window.screen.orientation.angle
+        } else {
+          const winWithOri = window as unknown as { orientation?: number }
+          if (typeof winWithOri.orientation === 'number') {
+            screenAngle = winWithOri.orientation || 0
+          }
+        }
+      }
+
+      let adjustedHeading = (heading + screenAngle) % 360
+      if (adjustedHeading < 0) adjustedHeading += 360
+      adjustedHeading = Math.round(adjustedHeading)
+
+      // Unngå mikroskopisk jitter (oppdater hvis endring >= 1 grad)
+      if (compassHeading.value === null || Math.abs(compassHeading.value - adjustedHeading) >= 1) {
+        compassHeading.value = adjustedHeading
+        if (coords.value && coords.value.heading !== adjustedHeading) {
+          coords.value = {
+            ...coords.value,
+            heading: adjustedHeading,
+          }
+        }
+      }
+    }
+  }
+
+  const startOrientationTracking = async () => {
+    if (typeof window === 'undefined' || orientationListenerActive) return
+    const granted = await requestOrientationPermission()
+    if (!granted) return
+
+    const hasAbsolute = 'ondeviceorientationabsolute' in (window as object)
+    if (hasAbsolute) {
+      window.addEventListener('deviceorientationabsolute', handleOrientationEvent as EventListener, true)
+    } else if (typeof DeviceOrientationEvent !== 'undefined') {
+      const currentWin = window as Window
+      currentWin.addEventListener('deviceorientation', handleOrientationEvent as EventListener, true)
+    }
+    orientationListenerActive = true
+  }
+
+  const stopOrientationTracking = () => {
+    if (typeof window === 'undefined' || !orientationListenerActive) return
+    window.removeEventListener('deviceorientationabsolute', handleOrientationEvent as EventListener, true)
+    window.removeEventListener('deviceorientation', handleOrientationEvent as EventListener, true)
+    orientationListenerActive = false
+    compassHeading.value = null
+  }
+
   const handleSuccess = (position: GeolocationPosition) => {
+    const effectiveHeading =
+      compassHeading.value !== null
+        ? compassHeading.value
+        : position.coords.heading !== null && !isNaN(position.coords.heading)
+          ? Math.round(position.coords.heading)
+          : coords.value?.heading ?? null
+
     coords.value = {
       lat: position.coords.latitude,
       lng: position.coords.longitude,
       accuracy: position.coords.accuracy,
-      heading: position.coords.heading,
+      heading: effectiveHeading,
       speed: position.coords.speed,
       altitude: position.coords.altitude,
-      timestamp: position.timestamp
+      timestamp: position.timestamp,
     }
     isLocating.value = false
     error.value = null
 
+    // Kun lagre til sporlogg hvis faktisk spor-opptak ("Spor meg") pågår
     if (isTracking.value) {
       recordTrackPoint(coords.value)
     }
@@ -164,7 +278,7 @@ export function useGeolocation() {
         enableHighAccuracy: true,
         timeout: 10000,
         maximumAge: 0,
-        ...options
+        ...options,
       }
 
       navigator.geolocation.getCurrentPosition(
@@ -178,36 +292,30 @@ export function useGeolocation() {
           handleError(err)
           reject(err)
         },
-        geoOptions
+        geoOptions,
       )
     })
   }
 
-  const startTracking = (options?: PositionOptions, onUpdate?: (coords: GeoLocationState) => void) => {
+  const ensureWatching = (options?: PositionOptions, onUpdate?: (coords: GeoLocationState) => void) => {
     if (!isSupported.value) {
       error.value = 'Geolokasjon støttes ikke i denne nettleseren.'
       return
     }
 
-    if (watchId !== null) {
-      navigator.geolocation.clearWatch(watchId)
-    }
+    requestWakeLock()
+    startOrientationTracking()
 
-    isTracking.value = true
+    if (watchId !== null) return
+
     isLocating.value = true
     error.value = null
-    requestWakeLock()
-
-    // Hvis vi allerede har koordinater og ingen punkter i sporet, legg til startpunkt
-    if (coords.value && trackPoints.value.length === 0) {
-      recordTrackPoint(coords.value)
-    }
 
     const geoOptions: PositionOptions = {
       enableHighAccuracy: true,
       timeout: 15000,
       maximumAge: 1000,
-      ...options
+      ...options,
     }
 
     watchId = navigator.geolocation.watchPosition(
@@ -220,35 +328,79 @@ export function useGeolocation() {
       (err) => {
         handleError(err)
       },
-      geoOptions
+      geoOptions,
     )
   }
 
-  const stopTracking = () => {
-    releaseWakeLock()
-    if (watchId !== null) {
-      navigator.geolocation.clearWatch(watchId)
-      watchId = null
+  const stopWatchingIfUnneeded = () => {
+    if (!isTracking.value && !isLiveLocating.value) {
+      releaseWakeLock()
+      stopOrientationTracking()
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId)
+        watchId = null
+      }
+      isLocating.value = false
     }
-    isTracking.value = false
-    isLocating.value = false
   }
 
-  onUnmounted(() => {
-    stopTracking()
-  })
+  // "Hvor er jeg" – kontinuerlig live-posisjon og retningsvisning uten sporlagring
+  const startLiveLocating = (options?: PositionOptions, onUpdate?: (coords: GeoLocationState) => void) => {
+    isLiveLocating.value = true
+    ensureWatching(options, onUpdate)
+  }
+
+  const stopLiveLocating = () => {
+    isLiveLocating.value = false
+    stopWatchingIfUnneeded()
+  }
+
+  const toggleLiveLocating = (options?: PositionOptions, onUpdate?: (coords: GeoLocationState) => void) => {
+    if (isLiveLocating.value) {
+      stopLiveLocating()
+    } else {
+      startLiveLocating(options, onUpdate)
+    }
+  }
+
+  // "Spor meg" – kontinuerlig opptak og lagring av GPS-spor
+  const startTracking = (options?: PositionOptions, onUpdate?: (coords: GeoLocationState) => void) => {
+    isTracking.value = true
+    if (coords.value && trackPoints.value.length === 0) {
+      recordTrackPoint(coords.value)
+    }
+    ensureWatching(options, onUpdate)
+  }
+
+  const stopTracking = () => {
+    isTracking.value = false
+    stopWatchingIfUnneeded()
+  }
+
+  if (getCurrentInstance()) {
+    onUnmounted(() => {
+      isLiveLocating.value = false
+      isTracking.value = false
+      stopWatchingIfUnneeded()
+    })
+  }
 
   return {
     isSupported,
     isLocating,
+    isLiveLocating,
     isTracking,
     error,
     coords,
+    compassHeading,
     trackPoints,
     getCurrentPosition,
+    startLiveLocating,
+    stopLiveLocating,
+    toggleLiveLocating,
     startTracking,
     stopTracking,
-    clearTrack
+    clearTrack,
   }
 }
 
@@ -261,7 +413,7 @@ export function calculateDistanceMeters(
   lat1: number,
   lon1: number,
   lat2: number,
-  lon2: number
+  lon2: number,
 ): number {
   const R = 6371000 // Jordens radius i meter
   const toRad = (deg: number) => (deg * Math.PI) / 180
@@ -284,4 +436,3 @@ export function formatDistance(meters: number | null | undefined): string {
   }
   return `${(meters / 1000).toFixed(1)} km`
 }
-

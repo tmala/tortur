@@ -2,9 +2,10 @@ import L from 'leaflet'
 import type { AisVessel } from '@/composables/useAis'
 
 export const createUserIcon = (heading: number | null) => {
-  const headingStyle = heading !== null 
-    ? `transform: rotate(${heading}deg); display: block;` 
-    : 'display: none;'
+  const headingStyle =
+    heading !== null && heading !== undefined && !isNaN(heading)
+      ? `transform: rotate(${heading}deg); display: block;`
+      : 'display: none;'
 
   return L.divIcon({
     className: 'custom-user-pin',

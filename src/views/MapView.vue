@@ -40,11 +40,14 @@ const appState = useAppStateStore()
 
 const {
   isLocating,
+  isLiveLocating,
   isTracking,
   error: geoError,
   coords,
   trackPoints,
   getCurrentPosition,
+  startLiveLocating,
+  stopLiveLocating,
   startTracking,
   stopTracking,
   clearTrack,
@@ -849,14 +852,25 @@ const handleClearAllTurposter = () => {
   clearSelection()
 }
 
-// Håndter "Finn min posisjon"
+// Håndter "Hvor er jeg" (slå på/av kontinuerlig posisjon og retningsvisning)
 const handleLocate = async () => {
+  if (isLiveLocating.value) {
+    stopLiveLocating()
+    return
+  }
+
   try {
-    const location = await getCurrentPosition()
-    if (location) {
-      await checkAndApplyAbroadLayer(location.lat, location.lng)
-      if (mapViewerRef.value) {
-        mapViewerRef.value.centerOnUser(true, 16)
+    startLiveLocating({ enableHighAccuracy: true }, (newCoords) => {
+      checkAndApplyAbroadLayer(newCoords.lat, newCoords.lng)
+    })
+    if (coords.value && mapViewerRef.value) {
+      await checkAndApplyAbroadLayer(coords.value.lat, coords.value.lng)
+      mapViewerRef.value.centerOnUser(true, 16)
+    } else {
+      const location = await getCurrentPosition()
+      if (location) {
+        await checkAndApplyAbroadLayer(location.lat, location.lng)
+        mapViewerRef.value?.centerOnUser(true, 16)
       }
     }
   } catch (err) {
@@ -1092,6 +1106,7 @@ onUnmounted(() => {
       :user-location="coords"
       :active-layer="activeLayer"
       :is-tracking="isTracking"
+      :is-live-locating="isLiveLocating"
       :track-points="displayedTrackPoints"
       :track-name="displayedTrackTitle"
       :track-distance-meters="displayedTrackDistance"
@@ -1243,6 +1258,7 @@ onUnmounted(() => {
       :is-admin-active="appState.adminModeActive"
       :is-loading-local-turposter="isLoadingLocalTurposter"
       :is-locating="isLocating"
+      :is-live-locating="isLiveLocating"
       :is-tracking="isTracking"
       :has-track="trackPoints.length > 0"
       :saved-tracks-count="trackStore.savedTracks.length"

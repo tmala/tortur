@@ -28,6 +28,7 @@ const props = defineProps<{
   userLocation: GeoLocationState | null
   activeLayer: string
   isTracking: boolean
+  isLiveLocating?: boolean
   turposter: TurpostItem[]
   showMunicipalities: boolean
   selectedKommuneName: string | null
@@ -148,7 +149,18 @@ const updateUserMarker = (loc: GeoLocationState | null) => {
     }).addTo(map)
   } else {
     userMarker.setLatLng(latLng)
-    userMarker.setIcon(createUserIcon(loc.heading))
+    const markerEl = userMarker.getElement()
+    const headingEl = markerEl?.querySelector('.heading-indicator') as HTMLElement | null
+    if (headingEl) {
+      if (loc.heading !== null && loc.heading !== undefined && !isNaN(loc.heading)) {
+        headingEl.style.transform = `rotate(${loc.heading}deg)`
+        headingEl.style.display = 'block'
+      } else {
+        headingEl.style.display = 'none'
+      }
+    } else {
+      userMarker.setIcon(createUserIcon(loc.heading))
+    }
   }
 
   if (loc.accuracy && loc.accuracy > 0) {
@@ -765,7 +777,7 @@ watch(
       if (!hasInitiallyCenteredOnUser.value && isAutoCenter.value && map) {
         hasInitiallyCenteredOnUser.value = true
         map.setView([newLoc.lat, newLoc.lng], 15)
-      } else if (props.isTracking && isAutoCenter.value && map) {
+      } else if ((props.isTracking || props.isLiveLocating) && isAutoCenter.value && map) {
         map.panTo([newLoc.lat, newLoc.lng], { animate: true, duration: 0.5 })
       }
     }
@@ -774,9 +786,9 @@ watch(
 )
 
 watch(
-  () => props.isTracking,
-  (tracking) => {
-    if (tracking) {
+  () => [props.isTracking, props.isLiveLocating],
+  ([tracking, liveLocating]) => {
+    if (tracking || liveLocating) {
       isAutoCenter.value = true
       if (props.userLocation && map) {
         map.panTo([props.userLocation.lat, props.userLocation.lng], { animate: true, duration: 0.5 })

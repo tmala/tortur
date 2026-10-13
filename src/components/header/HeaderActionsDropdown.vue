@@ -22,6 +22,7 @@ defineProps<{
   turpostCount?: number
   isLoadingLocalTurposter?: boolean
   isLocating?: boolean
+  isLiveLocating?: boolean
   isTracking?: boolean
   hasTrack?: boolean
   isAdmin?: boolean
@@ -72,13 +73,20 @@ const emit = defineEmits<{
         <!-- Hvor er jeg? -->
         <button
           class="icon-btn btn-locate"
-          :disabled="isLocating"
+          :class="{ active: isLiveLocating, 'is-live-locating': isLiveLocating }"
+          :disabled="isLocating && !isLiveLocating"
           @click="emit('locate')"
-          :title="isLocating ? 'Finner posisjon...' : 'Hvor er jeg?'"
+          :title="
+            isLiveLocating
+              ? 'Hvor er jeg (på – trykk for å slå av)'
+              : isLocating
+                ? 'Finner posisjon...'
+                : 'Hvor er jeg?'
+          "
           aria-label="Hvor er jeg?"
         >
-          <Loader2 v-if="isLocating" class="spinner" :size="18" />
-          <LocateFixed v-else :size="18" />
+          <Loader2 v-if="isLocating && !isLiveLocating" class="spinner" :size="18" />
+          <LocateFixed v-else :size="18" :class="{ 'pulse-slow': isLiveLocating }" />
         </button>
 
         <!-- Vis turposter der jeg er -->
@@ -305,6 +313,13 @@ const emit = defineEmits<{
   background: #0284c7;
   border-color: #38bdf8;
   color: #ffffff;
+}
+
+.icon-btn.btn-locate.is-live-locating {
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
 }
 
 .btn-local-turposter {
