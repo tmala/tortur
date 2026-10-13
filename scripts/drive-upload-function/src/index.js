@@ -8,7 +8,7 @@ import {
   handleCheckin,
   handleDeleteCheckin,
   handleUpdateCheckin,
-  handleGetConfig
+  handleGetConfig,
 } from './sheetsService.js'
 
 const authVerifier = new OAuth2Client()
@@ -44,7 +44,10 @@ function setCorsHeaders(req, res) {
  */
 function cleanFilename(str) {
   if (!str) return ''
-  return str.normalize('NFC').replace(/[\/\\]/g, '_').trim()
+  return str
+    .normalize('NFC')
+    .replace(/[\/\\]/g, '_')
+    .trim()
 }
 
 /**
@@ -56,7 +59,7 @@ function parseMultipartRequest(req) {
   return new Promise((resolve, reject) => {
     const bb = busboy({
       headers: req.headers,
-      defParamCharset: 'utf8'
+      defParamCharset: 'utf8',
     })
     const fields = {}
     let fileData = null
@@ -72,7 +75,7 @@ function parseMultipartRequest(req) {
         fileData = {
           buffer: Buffer.concat(fileChunks),
           filename: safeFilename,
-          mimeType
+          mimeType,
         }
       })
     })
@@ -170,7 +173,7 @@ export async function uploadCheckinImage(req, res) {
         sheet_brukere: process.env.SHEET_BRUKERE || 'Brukere',
         sheet_system: process.env.SHEET_SYSTEM || 'SystemKonfigurasjon',
         sheet_innsjekk: process.env.SHEET_INNSJEKK || 'TurpostInnsjekk',
-        innsjekk_folder_id: process.env.INNSJEKK_FOLDER_ID ? 'configured' : 'not_set'
+        innsjekk_folder_id: process.env.INNSJEKK_FOLDER_ID ? 'configured' : 'not_set',
       },
       sheets_auth: sheetsStatus,
       drive_auth: driveStatus,
@@ -180,8 +183,8 @@ export async function uploadCheckinImage(req, res) {
         'checkin',
         'delete_checkin',
         'update_checkin',
-        'getconfig'
-      ]
+        'getconfig',
+      ],
     })
   }
 
@@ -203,13 +206,15 @@ export async function uploadCheckinImage(req, res) {
       }
 
       if (!idToken) {
-        return res.status(401).json({ success: false, error: 'Mangler idToken – autentisering påkrevd.' })
+        return res
+          .status(401)
+          .json({ success: false, error: 'Mangler idToken – autentisering påkrevd.' })
       }
 
       try {
         const ticket = await authVerifier.verifyIdToken({
           idToken,
-          audience: process.env.CLIENT_ID
+          audience: process.env.CLIENT_ID,
         })
         const payload = ticket.getPayload()
         if (!payload?.email) {
@@ -228,7 +233,9 @@ export async function uploadCheckinImage(req, res) {
           }
         }
       } catch (authErr) {
-        return res.status(403).json({ success: false, error: `Ugyldig ID-token: ${authErr.message}` })
+        return res
+          .status(403)
+          .json({ success: false, error: `Ugyldig ID-token: ${authErr.message}` })
       }
 
       const authClient = await getDriveAuthClient()
@@ -237,14 +244,14 @@ export async function uploadCheckinImage(req, res) {
         turpostId,
         fileBuffer: file.buffer,
         mimeType: file.mimeType || 'image/jpeg',
-        fileName: file.filename || ''
+        fileName: file.filename || '',
       })
 
       return res.status(200).json({
         success: true,
         imageUrl: result.imageUrl,
         fileId: result.fileId,
-        turpostId
+        turpostId,
       })
     }
 
@@ -253,15 +260,17 @@ export async function uploadCheckinImage(req, res) {
     if (!body || typeof body !== 'object') {
       return res.status(400).json({
         success: false,
-        error: 'Ugyldig eller manglende JSON i forespørselsinnholdet.'
+        error: 'Ugyldig eller manglende JSON i forespørselsinnholdet.',
       })
     }
 
-    const action = String(body.action || 'login').toLowerCase().trim()
-    const spreadsheetId = process.env.SPREADSHEET_ID || '<GOOGLESHEET-ID>'
-    const sheetBrukere = process.env.SHEET_BRUKERE || 'Brukere'
-    const sheetSystem = process.env.SHEET_SYSTEM || 'SystemKonfigurasjon'
-    const sheetInnsjekk = process.env.SHEET_INNSJEKK || 'TurpostInnsjekk'
+    const action = String(body.action || 'login')
+      .toLowerCase()
+      .trim()
+    const spreadsheetId = process.env.SPREADSHEET_ID
+    const sheetBrukere = process.env.SHEET_BRUKERE
+    const sheetSystem = process.env.SHEET_SYSTEM
+    const sheetInnsjekk = process.env.SHEET_INNSJEKK
     const clientId = process.env.CLIENT_ID
 
     // Håndter Google Sheets-handlinger
@@ -276,7 +285,7 @@ export async function uploadCheckinImage(req, res) {
           sheetBrukere,
           sheetSystem,
           authVerifier,
-          clientId
+          clientId,
         })
         return res.status(200).json(result)
       }
@@ -284,7 +293,7 @@ export async function uploadCheckinImage(req, res) {
       case 'checkin': {
         const [sheetsAuth, driveAuth] = await Promise.all([
           getSheetsAuthClient(),
-          getDriveAuthClient()
+          getDriveAuthClient(),
         ])
         const sheets = getSheetsClient(sheetsAuth)
         const result = await handleCheckin({
@@ -296,7 +305,7 @@ export async function uploadCheckinImage(req, res) {
           sheetInnsjekk,
           authVerifier,
           clientId,
-          driveAuthClient: driveAuth
+          driveAuthClient: driveAuth,
         })
         return res.status(200).json(result)
       }
@@ -304,7 +313,7 @@ export async function uploadCheckinImage(req, res) {
       case 'delete_checkin': {
         const [sheetsAuth, driveAuth] = await Promise.all([
           getSheetsAuthClient(),
-          getDriveAuthClient()
+          getDriveAuthClient(),
         ])
         const sheets = getSheetsClient(sheetsAuth)
         const result = await handleDeleteCheckin({
@@ -314,7 +323,7 @@ export async function uploadCheckinImage(req, res) {
           sheetInnsjekk,
           authVerifier,
           clientId,
-          driveAuthClient: driveAuth
+          driveAuthClient: driveAuth,
         })
         return res.status(200).json(result)
       }
@@ -323,7 +332,7 @@ export async function uploadCheckinImage(req, res) {
       case 'update_checkin_image': {
         const [sheetsAuth, driveAuth] = await Promise.all([
           getSheetsAuthClient(),
-          getDriveAuthClient()
+          getDriveAuthClient(),
         ])
         const sheets = getSheetsClient(sheetsAuth)
         const result = await handleUpdateCheckin({
@@ -334,7 +343,7 @@ export async function uploadCheckinImage(req, res) {
           sheetSystem,
           authVerifier,
           clientId,
-          driveAuthClient: driveAuth
+          driveAuthClient: driveAuth,
         })
         return res.status(200).json(result)
       }
@@ -349,7 +358,7 @@ export async function uploadCheckinImage(req, res) {
           spreadsheetId,
           sheetSystem,
           authVerifier,
-          clientId
+          clientId,
         })
         return res.status(200).json(result)
       }
@@ -364,7 +373,9 @@ export async function uploadCheckinImage(req, res) {
           base64Data = base64Data.split(',')[1]
         }
         if (!base64Data) {
-          return res.status(400).json({ success: false, error: 'Mangler bildedata i base64-feltet.' })
+          return res
+            .status(400)
+            .json({ success: false, error: 'Mangler bildedata i base64-feltet.' })
         }
 
         if (!idToken) {
@@ -373,7 +384,7 @@ export async function uploadCheckinImage(req, res) {
 
         const ticket = await authVerifier.verifyIdToken({
           idToken,
-          audience: process.env.CLIENT_ID
+          audience: process.env.CLIENT_ID,
         })
         const payload = ticket.getPayload()
         if (!payload?.email) {
@@ -387,21 +398,21 @@ export async function uploadCheckinImage(req, res) {
           turpostId,
           fileBuffer,
           mimeType: imageObj.mimeType || 'image/jpeg',
-          fileName: imageObj.fileName || ''
+          fileName: imageObj.fileName || '',
         })
 
         return res.status(200).json({
           success: true,
           imageUrl: result.imageUrl,
           fileId: result.fileId,
-          turpostId
+          turpostId,
         })
       }
 
       default: {
         return res.status(400).json({
           success: false,
-          error: `Ukjent action: ${action}`
+          error: `Ukjent action: ${action}`,
         })
       }
     }
@@ -409,7 +420,7 @@ export async function uploadCheckinImage(req, res) {
     console.error('[uploadCheckinImage] Feil under behandling av forespørsel:', err)
     return res.status(500).json({
       success: false,
-      error: 'Serverfeil: ' + (err.message || 'Ukjent feil.')
+      error: 'Serverfeil: ' + (err.message || 'Ukjent feil.'),
     })
   }
 }
