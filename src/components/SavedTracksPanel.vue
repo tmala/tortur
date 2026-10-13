@@ -16,7 +16,8 @@ import {
   AlertTriangle,
   FolderHeart,
   RefreshCw,
-  Loader2
+  Loader2,
+  ChevronDown
 } from 'lucide-vue-next'
 import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import { formatDistance, type TrackPoint } from '@/composables/useGeolocation'
@@ -122,6 +123,24 @@ const scrollToHighlightedTrack = () => {
     activeHighlightId.value = null
   }, 2500)
 
+  // Finn og ekspander måneden sporet tilhører
+  const targetTrack = trackStore.savedTracks.find((t) => t.id === targetId)
+  if (targetTrack) {
+    const time = targetTrack.startTime || targetTrack.createdAt
+    const d = new Date(time)
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const nextMonths = new Set(expandedMonthKeys.value)
+    nextMonths.add(monthKey)
+    expandedMonthKeys.value = nextMonths
+  }
+
+  // Ekspander det highlightede sporet automatisk
+  if (!expandedTrackIds.value.has(targetId)) {
+    const next = new Set(expandedTrackIds.value)
+    next.add(targetId)
+    expandedTrackIds.value = next
+  }
+
   nextTick(() => {
     const el = document.getElementById(`track-card-${targetId}`)
     if (el && typeof el.scrollIntoView === 'function') {
@@ -138,7 +157,12 @@ watch(
       editingTrackId.value = null
       trackToDelete.value = null
       isSavingLiveTrack.value = false
-      scrollToHighlightedTrack()
+      if (monthGroups.value.length > 0) {
+        expandedMonthKeys.value = new Set([monthGroups.value[0]!.key])
+      }
+      if (props.highlightedTrackId) {
+        scrollToHighlightedTrack()
+      }
     }
   }
 )
@@ -199,11 +223,113 @@ const totalAllTracksDistanceMeters = computed(() => {
   return trackStore.savedTracks.reduce((acc, t) => acc + (t.distanceMeters || 0), 0)
 })
 
+export interface MonthGroup {
+  key: string
+  label: string
+  tracks: SavedTrack[]
+  totalDistanceMeters: number
+}
+
+// Gruppering av spor per måned
+const expandedMonthKeys = ref<Set<string>>(new Set())
+const hasInitializedDefaultMonth = ref(false)
+
+const isMonthExpanded = (key: string): boolean => {
+  return expandedMonthKeys.value.has(key)
+}
+
+const toggleMonth = (key: string) => {
+  const next = new Set(expandedMonthKeys.value)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  expandedMonthKeys.value = next
+}
+
+const monthGroups = computed<MonthGroup[]>(() => {
+  const groupsMap = new Map<string, { label: string; tracks: SavedTrack[]; totalDistance: number }>()
+
+  // Sorter sporer nyeste først
+  const sorted = [...trackStore.savedTracks].sort((a, b) => {
+    const timeA = a.startTime || a.createdAt
+    const timeB = b.startTime || b.createdAt
+    return timeB - timeA
+  })
+
+  for (const track of sorted) {
+    const time = track.startTime || track.createdAt
+    const d = new Date(time)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+
+    if (!groupsMap.has(key)) {
+      const monthName = d.toLocaleDateString('no-NO', { month: 'long', year: 'numeric' })
+      const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1)
+      groupsMap.set(key, {
+        label: capitalized,
+        tracks: [],
+        totalDistance: 0
+      })
+    }
+
+    const group = groupsMap.get(key)!
+    group.tracks.push(track)
+    group.totalDistance += track.distanceMeters || 0
+  }
+
+  return Array.from(groupsMap.entries()).map(([key, data]) => ({
+    key,
+    label: data.label,
+    tracks: data.tracks,
+    totalDistanceMeters: data.totalDistance
+  }))
+})
+
+// Åpne nyeste måned som standard ved initialisering
+watch(
+  monthGroups,
+  (groups) => {
+    if (groups.length > 0 && !hasInitializedDefaultMonth.value) {
+      hasInitializedDefaultMonth.value = true
+      expandedMonthKeys.value = new Set([groups[0]!.key])
+    }
+  },
+  { immediate: true }
+)
+
+// Ekspandering av spor (flere kan være åpne samtidig)
+const expandedTrackIds = ref<Set<string>>(new Set())
+
+const isExpanded = (id: string): boolean => {
+  return expandedTrackIds.value.has(id)
+}
+
+const toggleExpand = (id: string) => {
+  const next = new Set(expandedTrackIds.value)
+  if (next.has(id)) {
+    next.delete(id)
+  } else {
+    next.add(id)
+  }
+  expandedTrackIds.value = next
+}
+
+const onTrackHeaderClick = (track: SavedTrack) => {
+  if (editingTrackId.value === track.id) return
+  toggleExpand(track.id)
+}
+
 // Redigering av navn
 const editingTrackId = ref<string | null>(null)
 const editingName = ref('')
 
 const startEditing = (track: SavedTrack) => {
+  if (!expandedTrackIds.value.has(track.id)) {
+    const next = new Set(expandedTrackIds.value)
+    next.add(track.id)
+    expandedTrackIds.value = next
+  }
   editingTrackId.value = track.id
   editingName.value = track.name
 }
@@ -229,7 +355,13 @@ const confirmDelete = (track: SavedTrack) => {
 const executeDelete = () => {
   if (trackToDelete.value) {
     const wasActive = trackStore.activeTrackId === trackToDelete.value.id
-    trackStore.deleteTrack(trackToDelete.value.id)
+    const idToDelete = trackToDelete.value.id
+    trackStore.deleteTrack(idToDelete)
+    if (expandedTrackIds.value.has(idToDelete)) {
+      const next = new Set(expandedTrackIds.value)
+      next.delete(idToDelete)
+      expandedTrackIds.value = next
+    }
     if (wasActive) {
       emit('view-track', null)
     }
@@ -427,114 +559,179 @@ const handleConfirmSaveLiveTrack = () => {
           </p>
         </div>
 
-        <!-- Spor-kort -->
+        <!-- Månedsgruppert liste over spor -->
         <div
-          v-for="track in trackStore.savedTracks"
-          :id="`track-card-${track.id}`"
-          :key="track.id"
-          class="track-card"
-          :class="{
-            'is-active-on-map': trackStore.activeTrackId === track.id,
-            'is-highlighted': activeHighlightId === track.id
-          }"
+          v-for="group in monthGroups"
+          :key="group.key"
+          class="month-group"
         >
-          <!-- Topprad: Tittel og rediger-ikon -->
-          <div class="track-card-header">
-            <div v-if="editingTrackId !== track.id" class="track-title-wrap">
-              <span class="track-name" :title="track.name">{{ track.name }}</span>
-              <button
-                class="btn-icon-subtle"
-                @click="startEditing(track)"
-                title="Endre navn"
-              >
-                <Edit2 :size="13" />
-              </button>
+          <!-- Måneds-overskrift (klikkbar for å ekspandere / kollapse måneden) -->
+          <button
+            type="button"
+            class="month-group-header"
+            :aria-expanded="isMonthExpanded(group.key)"
+            @click="toggleMonth(group.key)"
+          >
+            <div class="month-header-left">
+              <Calendar :size="14" class="month-cal-icon" />
+              <span class="month-label">{{ group.label }}</span>
+              <span class="month-count-badge">{{ group.tracks.length }} {{ group.tracks.length === 1 ? 'tur' : 'turer' }}</span>
             </div>
-
-            <!-- Inline redigering av navn -->
-            <div v-else class="track-rename-row">
-              <input
-                v-model="editingName"
-                type="text"
-                class="input-inline-rename"
-                @keydown.enter="saveEditing(track)"
-                @keydown.esc="cancelEditing"
-                autofocus
+            <div class="month-header-right">
+              <span class="month-distance">{{ formatDistance(group.totalDistanceMeters) }}</span>
+              <ChevronDown
+                :size="15"
+                class="month-chevron"
+                :class="{ rotated: isMonthExpanded(group.key) }"
               />
-              <button class="btn-icon-check" @click="saveEditing(track)" title="Lagre">
-                <Check :size="14" />
-              </button>
-              <button class="btn-icon-cancel" @click="cancelEditing" title="Avbryt">
-                <X :size="14" />
-              </button>
             </div>
+          </button>
 
-            <!-- Aktiv status-indikator på kart -->
-            <span
-              v-if="trackStore.activeTrackId === track.id"
-              class="badge-active-map"
-              title="Vises nå på kartet"
+          <!-- Spor i denne måneden -->
+          <div v-if="isMonthExpanded(group.key)" class="month-tracks-list">
+            <!-- Spor-kort -->
+            <div
+              v-for="track in group.tracks"
+              :id="`track-card-${track.id}`"
+              :key="track.id"
+              class="track-card"
+              :class="{
+                'is-active-on-map': trackStore.activeTrackId === track.id,
+                'is-highlighted': activeHighlightId === track.id,
+                'is-expanded': isExpanded(track.id)
+              }"
             >
-              Vises på kart
-            </span>
+              <!-- Topprad: Tittel og chevron (klikkbar for å ekspandere / kollapse) -->
+              <div
+                class="track-card-header"
+                :class="{ 'is-clickable': editingTrackId !== track.id }"
+                @click="onTrackHeaderClick(track)"
+              >
+                <div v-if="editingTrackId !== track.id" class="track-title-wrap">
+                  <span class="track-name" :title="track.name">{{ track.name }}</span>
+                  <button
+                    v-if="isExpanded(track.id)"
+                    class="btn-icon-subtle"
+                    @click.stop="startEditing(track)"
+                    title="Endre navn"
+                    aria-label="Endre navn"
+                  >
+                    <Edit2 :size="13" />
+                  </button>
+                </div>
+
+                <!-- Inline redigering av navn -->
+                <div v-else class="track-rename-row" @click.stop>
+                  <input
+                    v-model="editingName"
+                    type="text"
+                    class="input-inline-rename"
+                    @keydown.enter="saveEditing(track)"
+                    @keydown.esc="cancelEditing"
+                    autofocus
+                  />
+                  <button class="btn-icon-check" @click="saveEditing(track)" title="Lagre" aria-label="Lagre">
+                    <Check :size="14" />
+                  </button>
+                  <button class="btn-icon-cancel" @click="cancelEditing" title="Avbryt" aria-label="Avbryt">
+                    <X :size="14" />
+                  </button>
+                </div>
+
+                <div class="track-header-right">
+                  <!-- Aktiv status-indikator på kart -->
+                  <span
+                    v-if="trackStore.activeTrackId === track.id"
+                    class="badge-active-map"
+                    title="Vises nå på kartet"
+                  >
+                    Vises på kart
+                  </span>
+
+                  <!-- Ekspander / kollaps chevron -->
+                  <button
+                    type="button"
+                    class="btn-icon-expand"
+                    :title="isExpanded(track.id) ? 'Kollaps spor' : 'Ekspander spor'"
+                    :aria-label="isExpanded(track.id) ? 'Kollaps spor' : 'Ekspander spor'"
+                    :aria-expanded="isExpanded(track.id)"
+                    @click.stop="toggleExpand(track.id)"
+                  >
+                    <ChevronDown
+                      :size="16"
+                      class="chevron-icon"
+                      :class="{ rotated: isExpanded(track.id) }"
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Metadata-rad: Distanse, varighet, dato -->
+              <div
+                class="track-meta-row"
+                :class="{ 'is-clickable': !isExpanded(track.id) }"
+                @click="!isExpanded(track.id) && toggleExpand(track.id)"
+              >
+                <div class="meta-item">
+                  <MapPin :size="13" class="meta-icon" />
+                  <span>{{ formatDistance(track.distanceMeters) }}</span>
+                </div>
+                <div class="meta-item">
+                  <Clock :size="13" class="meta-icon" />
+                  <span>{{ formatDuration(track.durationMs) }}</span>
+                </div>
+                <div class="meta-item">
+                  <Calendar :size="13" class="meta-icon" />
+                  <span>{{ formatDate(track.startTime || track.createdAt) }}</span>
+                </div>
+              </div>
+
+              <!-- Ekspandert innhold: Handlingsknapper og turbilder -->
+              <div v-if="isExpanded(track.id)" class="track-expanded-body">
+                <!-- Handlingsknapper -->
+                <div class="track-actions-row">
+                  <!-- Vis på kart / Skjul -->
+                  <button
+                    class="btn-track-action btn-view-map"
+                    :class="{ active: trackStore.activeTrackId === track.id }"
+                    @click="handleToggleViewOnMap(track)"
+                    :title="trackStore.activeTrackId === track.id ? 'Skjul fra kart' : 'Vis på kart og zoom til sporet'"
+                  >
+                    <EyeOff v-if="trackStore.activeTrackId === track.id" :size="14" />
+                    <Eye v-else :size="14" />
+                    <span>{{ trackStore.activeTrackId === track.id ? 'Skjul fra kart' : 'Vis på kart' }}</span>
+                  </button>
+
+                  <!-- Last ned GPX -->
+                  <button
+                    class="btn-track-action btn-download-gpx"
+                    @click="trackStore.downloadGpx(track)"
+                    title="Last ned standard .gpx-fil"
+                  >
+                    <Download :size="14" />
+                    <span>GPX</span>
+                  </button>
+
+                  <!-- Slett -->
+                  <button
+                    class="btn-track-action btn-delete-track"
+                    @click="confirmDelete(track)"
+                    title="Slett spor"
+                    aria-label="Slett spor"
+                  >
+                    <Trash2 :size="14" />
+                  </button>
+                </div>
+
+                <!-- Turbilder for sporet (kun for egne spor når innlogget) -->
+                <TrackPhotosSection
+                  v-if="isLoggedIn && track.userId === trackStore.currentUserId"
+                  :track="track"
+                  :user-id="trackStore.currentUserId"
+                />
+              </div>
+            </div>
           </div>
-
-          <!-- Metadata-rad: Distanse, varighet, dato -->
-          <div class="track-meta-row">
-            <div class="meta-item">
-              <MapPin :size="13" class="meta-icon" />
-              <span>{{ formatDistance(track.distanceMeters) }}</span>
-            </div>
-            <div class="meta-item">
-              <Clock :size="13" class="meta-icon" />
-              <span>{{ formatDuration(track.durationMs) }}</span>
-            </div>
-            <div class="meta-item">
-              <Calendar :size="13" class="meta-icon" />
-              <span>{{ formatDate(track.startTime || track.createdAt) }}</span>
-            </div>
-          </div>
-
-          <!-- Handlingsknapper -->
-          <div class="track-actions-row">
-            <!-- Vis på kart / Skjul -->
-            <button
-              class="btn-track-action btn-view-map"
-              :class="{ active: trackStore.activeTrackId === track.id }"
-              @click="handleToggleViewOnMap(track)"
-              :title="trackStore.activeTrackId === track.id ? 'Skjul fra kart' : 'Vis på kart og zoom til sporet'"
-            >
-              <EyeOff v-if="trackStore.activeTrackId === track.id" :size="14" />
-              <Eye v-else :size="14" />
-              <span>{{ trackStore.activeTrackId === track.id ? 'Skjul fra kart' : 'Vis på kart' }}</span>
-            </button>
-
-            <!-- Last ned GPX -->
-            <button
-              class="btn-track-action btn-download-gpx"
-              @click="trackStore.downloadGpx(track)"
-              title="Last ned standard .gpx-fil"
-            >
-              <Download :size="14" />
-              <span>GPX</span>
-            </button>
-
-            <!-- Slett -->
-            <button
-              class="btn-track-action btn-delete-track"
-              @click="confirmDelete(track)"
-              title="Slett spor"
-            >
-              <Trash2 :size="14" />
-            </button>
-          </div>
-
-          <!-- Turbilder for sporet (kun for egne spor når innlogget) -->
-          <TrackPhotosSection
-            v-if="isLoggedIn && track.userId === trackStore.currentUserId"
-            :track="track"
-            :user-id="trackStore.currentUserId"
-          />
         </div>
       </div>
     </div>
@@ -1032,16 +1229,104 @@ const handleConfirmSaveLiveTrack = () => {
   max-width: 290px;
 }
 
+/* Månedsgruppering */
+.month-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.month-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  border-radius: 10px;
+  color: #f1f5f9;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.month-group-header:hover {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: #64748b;
+}
+
+.month-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.month-cal-icon {
+  color: #ea580c;
+  flex-shrink: 0;
+}
+
+.month-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.month-count-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(51, 65, 85, 0.6);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.month-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.month-distance {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.month-chevron {
+  color: #64748b;
+  transition: transform 0.2s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.month-chevron.rotated {
+  transform: rotate(180deg);
+  color: #ea580c;
+}
+
+.month-tracks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: expand-fade 0.2s ease-out;
+}
+
 /* Spor-kort */
 .track-card {
   background: #1e293b;
   border: 1px solid #334155;
   border-radius: 12px;
-  padding: 12px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   transition: all 0.15s ease;
+}
+
+.track-card.is-expanded {
+  padding: 12px;
+  gap: 10px;
 }
 
 .track-card:hover {
@@ -1074,6 +1359,71 @@ const handleConfirmSaveLiveTrack = () => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.track-card-header.is-clickable {
+  cursor: pointer;
+}
+
+.track-card-header.is-clickable:hover .track-name {
+  color: #38bdf8;
+}
+
+.track-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-icon-expand {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 3px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-icon-expand:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+.chevron-icon {
+  color: #64748b;
+  transition: transform 0.2s ease, color 0.15s ease;
+}
+
+.chevron-icon.rotated {
+  transform: rotate(180deg);
+  color: #ea580c;
+}
+
+.track-meta-row.is-clickable {
+  cursor: pointer;
+}
+
+.track-expanded-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: expand-fade 0.2s ease-out;
+}
+
+@keyframes expand-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .track-title-wrap {

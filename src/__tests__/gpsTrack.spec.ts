@@ -11,6 +11,7 @@ describe('useGpsTrackStore', () => {
 
   afterEach(() => {
     localStorage.clear()
+    document.body.innerHTML = ''
   })
 
   it('initializes with empty tracks list and guest user', () => {
@@ -166,7 +167,18 @@ describe('useGpsTrackStore', () => {
   })
 })
 
-describe('SavedTracksPanel highlighting', () => {
+describe('SavedTracksPanel', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    document.body.innerHTML = ''
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    document.body.innerHTML = ''
+  })
+
   it('assigns unique track-card id and applies is-highlighted class', async () => {
     const { mount } = await import('@vue/test-utils')
     const SavedTracksPanel = (await import('../components/SavedTracksPanel.vue')).default
@@ -191,6 +203,129 @@ describe('SavedTracksPanel highlighting', () => {
     const card = document.querySelector(`#track-card-${saved!.id}`)
     expect(card).not.toBeNull()
     expect(card?.classList.contains('is-highlighted')).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('renders track cards in compact view by default and expands on click', async () => {
+    const { mount } = await import('@vue/test-utils')
+    const SavedTracksPanel = (await import('../components/SavedTracksPanel.vue')).default
+    const store = useGpsTrackStore()
+
+    const p1: TrackPoint[] = [{ lat: 60.3913, lng: 5.3221, timestamp: 1725450000000 }]
+    const p2: TrackPoint[] = [{ lat: 60.4013, lng: 5.3321, timestamp: 1725460000000 }]
+    const t1 = store.saveTrack(p1, 'Tur 1')
+    const t2 = store.saveTrack(p2, 'Tur 2')
+
+    const wrapper = mount(SavedTracksPanel, {
+      props: {
+        isOpen: true,
+        highlightedTrackId: null
+      },
+      attachTo: document.body
+    })
+
+    await wrapper.vm.$nextTick()
+
+    const getCard1 = () => document.querySelector(`#track-card-${t1!.id}`)
+    const getCard2 = () => document.querySelector(`#track-card-${t2!.id}`)
+
+    expect(getCard1()).not.toBeNull()
+    expect(getCard2()).not.toBeNull()
+
+    // Som standard er kortene kompakte (ikke ekspandert)
+    expect(getCard1()?.classList.contains('is-expanded')).toBe(false)
+    expect(getCard2()?.classList.contains('is-expanded')).toBe(false)
+    expect(getCard1()?.querySelector('.btn-view-map')).toBeNull()
+    expect(getCard2()?.querySelector('.btn-view-map')).toBeNull()
+
+    // Klikk på første spor for å ekspandere det
+    const header1 = getCard1()?.querySelector('.track-card-header') as HTMLElement | null
+    header1?.click()
+    await wrapper.vm.$nextTick()
+
+    expect(getCard1()?.classList.contains('is-expanded')).toBe(true)
+    expect(getCard1()?.querySelector('.btn-view-map')).not.toBeNull()
+    expect(getCard1()?.querySelector('.btn-download-gpx')).not.toBeNull()
+    // Andre spor er fortsatt kollapset
+    expect(getCard2()?.classList.contains('is-expanded')).toBe(false)
+    expect(getCard2()?.querySelector('.btn-view-map')).toBeNull()
+
+    // Klikk på andre spor – begge skal nå kunne være ekspandert samtidig
+    const header2 = getCard2()?.querySelector('.track-card-header') as HTMLElement | null
+    header2?.click()
+    await wrapper.vm.$nextTick()
+
+    expect(getCard1()?.classList.contains('is-expanded')).toBe(true)
+    expect(getCard2()?.classList.contains('is-expanded')).toBe(true)
+    expect(getCard1()?.querySelector('.btn-view-map')).not.toBeNull()
+    expect(getCard2()?.querySelector('.btn-view-map')).not.toBeNull()
+
+    // Klikk på første spor chevron igjen for å kollapse det
+    const expandBtn1 = getCard1()?.querySelector('.btn-icon-expand') as HTMLElement | null
+    expandBtn1?.click()
+    await wrapper.vm.$nextTick()
+
+    expect(getCard1()?.classList.contains('is-expanded')).toBe(false)
+    expect(getCard1()?.querySelector('.btn-view-map')).toBeNull()
+    // Andre spor er fortsatt ekspandert
+    expect(getCard2()?.classList.contains('is-expanded')).toBe(true)
+    expect(getCard2()?.querySelector('.btn-view-map')).not.toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('groups tracks by month and allows expanding and collapsing months', async () => {
+    const { mount } = await import('@vue/test-utils')
+    const SavedTracksPanel = (await import('../components/SavedTracksPanel.vue')).default
+    const store = useGpsTrackStore()
+
+    const octTime = Date.parse('2026-10-12T10:00:00Z')
+    const sepTime = Date.parse('2026-09-15T10:00:00Z')
+
+    const pOct: TrackPoint[] = [{ lat: 60.3913, lng: 5.3221, timestamp: octTime }]
+    const pSep: TrackPoint[] = [{ lat: 60.4013, lng: 5.3321, timestamp: sepTime }]
+
+    const trackOct = store.saveTrack(pOct, 'Oktober-tur')
+    const trackSep = store.saveTrack(pSep, 'September-tur')
+
+    const wrapper = mount(SavedTracksPanel, {
+      props: {
+        isOpen: true,
+        highlightedTrackId: null
+      },
+      attachTo: document.body
+    })
+
+    await wrapper.vm.$nextTick()
+
+    // Sjekk at begge måneds-headere finnes i DOM
+    const monthHeaders = Array.from(document.querySelectorAll('.month-group-header')) as HTMLElement[]
+    expect(monthHeaders.length).toBe(2)
+
+    const octHeader = monthHeaders.find(h => h.textContent?.includes('Oktober'))
+    const sepHeader = monthHeaders.find(h => h.textContent?.includes('September'))
+    expect(octHeader).toBeDefined()
+    expect(sepHeader).toBeDefined()
+
+    // Nyeste måned (Oktober) er åpen som standard, eldre måned (September) er kollapset
+    expect(document.querySelector(`#track-card-${trackOct!.id}`)).not.toBeNull()
+    expect(document.querySelector(`#track-card-${trackSep!.id}`)).toBeNull()
+
+    // Klikk på September for å ekspandere September
+    sepHeader?.click()
+    await wrapper.vm.$nextTick()
+
+    // Nå skal begge være synlige i listen
+    expect(document.querySelector(`#track-card-${trackOct!.id}`)).not.toBeNull()
+    expect(document.querySelector(`#track-card-${trackSep!.id}`)).not.toBeNull()
+
+    // Klikk på Oktober for å kollapse Oktober
+    octHeader?.click()
+    await wrapper.vm.$nextTick()
+
+    expect(document.querySelector(`#track-card-${trackOct!.id}`)).toBeNull()
+    expect(document.querySelector(`#track-card-${trackSep!.id}`)).not.toBeNull()
 
     wrapper.unmount()
   })

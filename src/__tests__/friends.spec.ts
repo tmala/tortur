@@ -6,6 +6,7 @@ import * as friendsModule from '../composables/useFriends'
 import { setCachedMountainsListForTest, setCachedApprovedSpotsForTest } from '../composables/useTurposter'
 import { useAuth } from '../composables/useAuth'
 import FriendProfileModal from '../components/FriendProfileModal.vue'
+import FriendSearchTab from '../components/friends/FriendSearchTab.vue'
 
 describe('useFriends - Friends system and check-in visibility', () => {
   beforeEach(() => {
@@ -181,7 +182,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
     expect(delOutgoing).toBeDefined()
   })
 
-  it('searchPublicUsers filters users by name or email case-insensitively', async () => {
+  it('searchPublicUsers filters users by name case-insensitively and ignores email', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       if (String(url).includes('/users_public.json')) {
         return {
@@ -207,7 +208,11 @@ describe('useFriends - Friends system and check-in visibility', () => {
     expect(res1.map(u => u.userName)).toContain('Per Hansen')
     expect(res1.map(u => u.userName)).toContain('Ola Hansen')
 
-    const res2 = await searchPublicUsers('fjord.no')
+    // Skal ikke matche på e-post
+    const resEmail = await searchPublicUsers('fjord.no')
+    expect(resEmail.length).toBe(0)
+
+    const res2 = await searchPublicUsers('nordmann')
     expect(res2.length).toBe(1)
     expect(res2[0]!.userName).toBe('Kari Nordmann')
   })
@@ -781,6 +786,35 @@ describe('useFriends - Friends system and check-in visibility', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).not.toContain('Flott tur til Storronden!')
     expect(wrapper.text()).not.toContain('Vindfullt på toppen')
+
+    wrapper.unmount()
+  })
+
+  it('FriendSearchTab does not show email addresses in search results list', async () => {
+    const mockUsers = [
+      { userId: 'u1', userName: 'Per Hansen', email: 'per@test.no' },
+      { userId: 'u2', userName: 'Kari Nordmann', email: 'kari@fjord.no' }
+    ]
+
+    const wrapper = mount(FriendSearchTab, {
+      props: {
+        searchQuery: '',
+        searchResults: mockUsers,
+        isSearching: false,
+        actionLoadingId: null,
+        outgoingTargetIds: new Set<string>(),
+        incomingSenderIds: new Set<string>(),
+        isFriend: () => false
+      }
+    })
+
+    expect(wrapper.text()).toContain('Per Hansen')
+    expect(wrapper.text()).toContain('Kari Nordmann')
+    expect(wrapper.text()).not.toContain('per@test.no')
+    expect(wrapper.text()).not.toContain('kari@fjord.no')
+
+    const input = wrapper.find<HTMLInputElement>('input.search-input')
+    expect(input.attributes('placeholder')).toBe('Søk etter turgåere på navn...')
 
     wrapper.unmount()
   })

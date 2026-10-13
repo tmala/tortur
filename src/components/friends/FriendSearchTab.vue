@@ -39,7 +39,7 @@ const emit = defineEmits<{
         @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
         type="text"
         class="search-input"
-        placeholder="Søk etter turgåere på navn eller e-post..."
+        placeholder="Søk etter turgåere på navn..."
       />
       <button
         v-if="searchQuery"
@@ -84,7 +84,6 @@ const emit = defineEmits<{
           </div>
           <div class="search-user-names">
             <span class="user-display-name">{{ user.userName }}</span>
-            <span v-if="user.email" class="user-email-text">{{ user.email }}</span>
           </div>
         </div>
 
@@ -277,13 +276,6 @@ const emit = defineEmits<{
   text-overflow: ellipsis;
 }
 
-.user-email-text {
-  font-size: 0.72rem;
-  color: #9ca3af;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .user-status-action {
   display: flex;

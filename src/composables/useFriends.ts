@@ -407,8 +407,7 @@ export async function searchPublicUsers(query: string = ''): Promise<PublicUser[
 
     return allUsers.filter(u => {
       const name = (u.userName || '').toLowerCase()
-      const email = (u.email || '').toLowerCase()
-      return name.includes(q) || email.includes(q)
+      return name.includes(q)
     })
   } catch (err) {
     console.warn('[useFriends] Kunne ikke søke etter brukere:', err)
