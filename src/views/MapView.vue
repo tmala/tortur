@@ -466,7 +466,6 @@ const displayFilteredTurposter = computed(() => {
 const mapViewerRef = ref<InstanceType<typeof MapViewer> | null>(null)
 const centerCoords = ref<{ lat: number; lng: number; zoom: number } | null>(null)
 const isTurposterOpen = ref(false)
-const showMunicipalities = ref(false)
 const trackStore = useGpsTrackStore()
 
 // Synkroniser innlogget bruker med Pinia-sporene
@@ -1152,7 +1151,6 @@ onUnmounted(() => {
       :turposter="displayTurposter"
       :private-turposter="appState.mySpots"
       :is-add-spot-active="appState.isAddSpotModeActive"
-      :show-municipalities="showMunicipalities"
       :selected-kommune-name="selectedKommune ? selectedKommune.name : null"
       :get-kommune-info="getKommuneInfo"
       :vessels="vessels"
@@ -1172,7 +1170,6 @@ onUnmounted(() => {
       @delete-private-spot="handleDeletePrivateSpot"
       @click-track="handleTrackClick"
       @click-track-photo="handlePhotoClick"
-      @disable-municipalities="showMunicipalities = false"
       @track-replay-change="handleTrackReplayChange"
       @track-replay-progress="handleTrackReplayProgress"
       @map-longpress="handleMapLongpress"
@@ -1283,7 +1280,6 @@ onUnmounted(() => {
       :is-turposter-open="isTurposterOpen"
       :active-kommune-name="selectedKommune ? selectedKommune.name : null"
       :turpost-count="displayTurposter.length"
-      :show-municipalities="showMunicipalities"
       :is-ais-toggled="isAisToggled"
       :is-zoom-sufficient="isZoomSufficient"
       :ais-vessel-count="vessels.length"
@@ -1311,7 +1307,6 @@ onUnmounted(() => {
       @open-my-spots="router?.push('/mine-turposter')"
       @toggle-add-spot-mode="appState.isAddSpotModeActive = !appState.isAddSpotModeActive"
       @toggle-turposter="handleToggleTurposter"
-      @toggle-municipalities="showMunicipalities = !showMunicipalities"
       @toggle-ais="handleToggleAis"
       @show-local-turposter="handleShowLocalTurposter"
       @open-profile="router?.push('/profil')"

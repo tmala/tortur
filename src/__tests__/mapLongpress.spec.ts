@@ -551,8 +551,12 @@ describe('MapView Longpress Context Menu Integration', () => {
 })
 
 describe('AddTurpostModal Direct Form Rendering', () => {
-  it('renders all form fields on mount when opened with coordinates', async () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
     document.body.innerHTML = ''
+  })
+
+  it('renders all form fields on mount when opened with coordinates', async () => {
     mount(AddTurpostModal, {
       props: {
         isOpen: true,
@@ -600,5 +604,146 @@ describe('AddTurpostModal Direct Form Rendering', () => {
 
     // Now save button must be enabled
     expect(saveBtn?.disabled).toBe(false)
+  })
+
+  it('automatically fills in altitude from Geonorge when creating turpost in Norway', async () => {
+    document.body.innerHTML = ''
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url)
+      if (urlStr.includes('kommuner.geojson')) {
+        return {
+          ok: true,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            type: 'FeatureCollection',
+            features: [
+              {
+                type: 'Feature',
+                properties: { name: 'Kvam' },
+                geometry: {
+                  type: 'Polygon',
+                  coordinates: [
+                    [
+                      [6.0, 60.1],
+                      [6.3, 60.1],
+                      [6.3, 60.4],
+                      [6.0, 60.4],
+                      [6.0, 60.1]
+                    ]
+                  ]
+                }
+              }
+            ]
+          })
+        } as unknown as Response
+      }
+      if (urlStr.includes('hierarchy.json')) {
+        return {
+          ok: true,
+          headers: { get: () => 'application/json' },
+          json: async () => [
+            {
+              name: 'Vestland',
+              slug: 'vestland',
+              count: 10,
+              kommuner: [{ name: 'Kvam', slug: 'kvam', count: 5 }]
+            }
+          ]
+        } as unknown as Response
+      }
+      if (urlStr.includes('ws.geonorge.no/hoydedata/v1/punkt')) {
+        return {
+          ok: true,
+          json: async () => ({
+            punkter: [
+              {
+                ost: 280000,
+                nord: 6680000,
+                koordsys: 4258,
+                z: 580.4,
+                terreng: 580.4,
+                datakilde: 'NDH'
+              }
+            ]
+          })
+        } as unknown as Response
+      }
+      return { ok: false, headers: { get: () => '' } } as unknown as Response
+    })
+
+    mount(AddTurpostModal, {
+      props: {
+        isOpen: true,
+        lat: 60.29411,
+        lng: 6.159547,
+        isAdmin: false,
+        userId: 'test-user-1',
+        userName: 'Ola Nordmann',
+        userEmail: 'ola@example.com'
+      }
+    })
+
+    await flushPromises()
+
+    const altInput = document.body.querySelector('#turpost-alt') as HTMLInputElement | null
+    expect(altInput).not.toBeNull()
+    expect(altInput?.value).toBe('580')
+    expect(document.body.textContent).toContain('Hentet fra koter/høydedata')
+
+    // Verify Geonorge API was indeed called
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('ws.geonorge.no/hoydedata/v1/punkt'),
+      expect.any(Object)
+    )
+  })
+
+  it('does not call Geonorge elevation API when creating turpost outside Norway', async () => {
+    document.body.innerHTML = ''
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url)
+      if (urlStr.includes('kommuner.geojson')) {
+        return {
+          ok: true,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            type: 'FeatureCollection',
+            features: []
+          })
+        } as unknown as Response
+      }
+      if (urlStr.includes('hierarchy.json')) {
+        return {
+          ok: true,
+          headers: { get: () => 'application/json' },
+          json: async () => []
+        } as unknown as Response
+      }
+      return { ok: false, headers: { get: () => '' } } as unknown as Response
+    })
+
+    mount(AddTurpostModal, {
+      props: {
+        isOpen: true,
+        lat: 38.0904, // Guardamar, Spania
+        lng: -0.6577,
+        isAdmin: false,
+        userId: 'test-user-1',
+        userName: 'Ola Nordmann',
+        userEmail: 'ola@example.com'
+      }
+    })
+
+    await flushPromises()
+
+    const altInput = document.body.querySelector('#turpost-alt') as HTMLInputElement | null
+    expect(altInput).not.toBeNull()
+    expect(altInput?.value).toBe('')
+    expect(document.body.textContent).not.toContain('Hentet fra koter/høydedata')
+
+    // Verify Geonorge API was NOT called for abroad coordinates
+    const geonorgeCalls = fetchSpy.mock.calls.filter((call) =>
+      String(call[0]).includes('ws.geonorge.no')
+    )
+    expect(geonorgeCalls.length).toBe(0)
   })
 })

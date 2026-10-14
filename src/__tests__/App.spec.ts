@@ -33,7 +33,6 @@ describe('AppHeader', () => {
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,
-        showMunicipalities: true,
       },
     })
 
@@ -63,7 +62,6 @@ describe('AppHeader', () => {
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,
-        showMunicipalities: true,
         isLoggedIn: true,
         isAdmin: false,
         isAdminActive: false,
@@ -95,7 +93,6 @@ describe('AppHeader', () => {
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,
-        showMunicipalities: true,
       },
     })
 
@@ -115,7 +112,6 @@ describe('AppHeader', () => {
         isTurposterOpen: false,
         activeKommuneName: 'Luster',
         turpostCount: 412,
-        showMunicipalities: true,
       },
     })
 
@@ -139,7 +135,6 @@ describe('AppHeader', () => {
         isTurposterOpen: false,
         activeKommuneName: 'Bergen',
         turpostCount: 240,
-        showMunicipalities: true,
       },
     })
 
@@ -152,7 +147,7 @@ describe('AppHeader', () => {
     expect(wrapper.find('.brand-menu-dropdown').exists()).toBe(false)
   })
 
-  it('emits toggle-municipalities when clicking boundary button in menu', async () => {
+  it('does not render boundary button in menu', async () => {
     const wrapper = mount(AppHeader, {
       props: {
         isLocating: false,
@@ -161,15 +156,12 @@ describe('AppHeader', () => {
         isTurposterOpen: false,
         activeKommuneName: null,
         turpostCount: 0,
-        showMunicipalities: true,
       },
     })
 
     await wrapper.find('.brand-badge-btn').trigger('click')
     const boundaryBtn = wrapper.find('button[title="Slå av/på visning av kommunegrenser"]')
-    await boundaryBtn.trigger('click')
-
-    expect(wrapper.emitted('toggle-municipalities')).toBeTruthy()
+    expect(boundaryBtn.exists()).toBe(false)
   })
 })
 
@@ -1269,32 +1261,7 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
     expect(centerOnUserSpy).toHaveBeenCalledWith(true, 15)
   })
 
-  it('deaktiverer kommunegrenser når MapViewer emitter disable-municipalities', async () => {
-    const wrapper = mount(MapView, {
-      global: {
-        plugins: [createPinia()],
-        stubs: {
-          MapViewer: true,
-          AppHeader: true,
-          RouterView: true
-        }
-      }
-    })
 
-    // Slå på kommunegrenser via AppHeader emit
-    const appHeader = wrapper.findComponent({ name: 'AppHeader' })
-    appHeader.vm.$emit('toggle-municipalities')
-    await wrapper.vm.$nextTick()
-
-    const mapViewer = wrapper.findComponent({ name: 'MapViewer' })
-    expect(mapViewer.props('showMunicipalities')).toBe(true)
-
-    // Deaktiver via MapViewer emit (slik popupen gjør)
-    mapViewer.vm.$emit('disable-municipalities')
-    await wrapper.vm.$nextTick()
-
-    expect(mapViewer.props('showMunicipalities')).toBe(false)
-  })
 })
 
 describe('MapLayerButton', () => {

@@ -2,7 +2,6 @@
 import {
   LocateFixed,
   Route,
-  Map as MapIcon,
   Mountain,
   Layers,
   MapPin,
@@ -80,12 +79,12 @@ const emit = defineEmits<{
           </div>
 
           <div class="info-feature-item">
-            <span class="feature-icon-badge" title="Grenser">
-              <MapIcon :size="15" />
+            <span class="feature-icon-badge" title="Turposter i området">
+              <MapPin :size="15" />
             </span>
             <div class="feature-text">
-              <strong>Grenser:</strong> Slå på kommunegrenser og klikk direkte på en kommune i
-              kartet for å hente turpostene der (fungerer kun for Norge).
+              <strong>Turposter i området:</strong> Trykk lenge på kartet og velg «Vis turposter her»
+              for å hente turposter for området du trykket på.
             </div>
           </div>
           <div class="info-feature-item">

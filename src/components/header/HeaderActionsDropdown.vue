@@ -7,7 +7,6 @@ import {
   Info,
   LocateFixed,
   Mountain,
-  Map as MapIcon,
   Anchor,
   Radio,
   MapPin,
@@ -29,7 +28,6 @@ defineProps<{
   isAisToggled?: boolean
   isZoomSufficient?: boolean
   aisVesselCount?: number
-  showMunicipalities?: boolean
   showAisModal?: boolean
   showInfoModal?: boolean
   showInstallPrompt?: boolean
@@ -44,7 +42,6 @@ const emit = defineEmits<{
   (e: 'toggle-tracking'): void
   (e: 'open-track-modal'): void
   (e: 'toggle-ais'): void
-  (e: 'toggle-municipalities'): void
   (e: 'toggle-ais-modal'): void
   (e: 'toggle-info-modal'): void
   (e: 'install'): void
@@ -101,16 +98,6 @@ const emit = defineEmits<{
           <MapPin v-else :size="18" />
         </button>
 
-        <!-- Kommunegrenser-knapp -->
-        <button
-          class="icon-btn btn-municipalities"
-          :class="{ active: showMunicipalities }"
-          @click="emit('toggle-municipalities')"
-          title="Slå av/på visning av kommunegrenser"
-          aria-label="Slå av eller på visning av kommunegrenser"
-        >
-          <MapIcon :size="18" />
-        </button>
 
         <!-- Sporlogg / Følg meg -->
         <button

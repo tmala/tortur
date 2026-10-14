@@ -81,16 +81,28 @@
             </div>
             <div class="admin-form-row">
               <label for="turpost-alt">Høyde i meter *</label>
-              <input
-                id="turpost-alt"
-                v-model.number="turpostAlt"
-                type="number"
-                placeholder="F.eks. 456"
-                min="0"
-                max="9000"
-                class="admin-input admin-input-small"
-                @input="onInputChange"
-              />
+              <div class="alt-input-group">
+                <input
+                  id="turpost-alt"
+                  v-model.number="turpostAlt"
+                  type="number"
+                  :placeholder="isFetchingAlt ? 'Henter...' : 'F.eks. 456'"
+                  min="0"
+                  max="9000"
+                  class="admin-input admin-input-small"
+                  @input="onAltManualInput"
+                />
+                <span v-if="isFetchingAlt" class="alt-badge alt-badge-loading">
+                  <span class="spinner">⏳</span> Henter fra Kartverket...
+                </span>
+                <span
+                  v-else-if="altFetchedFromGeonorge"
+                  class="alt-badge alt-badge-success"
+                  title="Høyde hentet fra Kartverket basert på koter/høydemodell. Kan overstyres manuelt."
+                >
+                  ✓ Hentet fra koter/høydedata
+                </span>
+              </div>
             </div>
 
             <!-- Turpost-ID (kun for admin) -->
@@ -195,6 +207,7 @@ import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { useGeoDetect, type GeoResult } from '@/composables/useGeoDetect'
 import { usePrivateTurposter, type CsvPlacementResult } from '@/composables/usePrivateTurposter'
 import type { TurpostItem } from '@/composables/useTurposter'
+import { fetchElevationNorway } from '@/services/elevation'
 
 const props = defineProps<{
   isOpen: boolean
@@ -220,6 +233,15 @@ const isOutsideNorway = ref(false)
 const customKommune = ref('Utlandet')
 const turpostName = ref('')
 const turpostAlt = ref<number | null>(null)
+const isFetchingAlt = ref(false)
+const altFetchedFromGeonorge = ref(false)
+let altLookupId = 0
+let altAbortController: AbortController | null = null
+
+function onAltManualInput() {
+  altFetchedFromGeonorge.value = false
+  onInputChange()
+}
 function generateId(): string {
   const bytes = new Uint8Array(12)
   crypto.getRandomValues(bytes)
@@ -368,11 +390,19 @@ async function handleSaveSpot() {
 
 // Kjør geo-deteksjon når modalen åpnes eller koordinater endres
 watch(
-  () => [props.isOpen, props.lat, props.lng] as [boolean, number, number],
+  [() => props.isOpen, () => props.lat, () => props.lng],
   async ([open, lat, lng]) => {
     if (!open) return
+    if (altAbortController) {
+      altAbortController.abort()
+      altAbortController = null
+    }
+
     turpostName.value = ''
     turpostAlt.value = null
+    isFetchingAlt.value = false
+    altFetchedFromGeonorge.value = false
+    const currentAltId = ++altLookupId
     turpostId.value = generateId()
     geoResult.value = null
     copied.value = false
@@ -405,6 +435,29 @@ watch(
       }
     } finally {
       isDetecting.value = false
+    }
+
+    // Hent høyde automatisk fra Kartverkets Høyde-API for punkter i Norge
+    if (!isOutsideNorway.value) {
+      isFetchingAlt.value = true
+      altAbortController = new AbortController()
+      try {
+        const alt = await fetchElevationNorway(lat, lng, altAbortController.signal)
+        if (
+          currentAltId === altLookupId &&
+          props.isOpen &&
+          turpostAlt.value === null &&
+          alt !== null
+        ) {
+          turpostAlt.value = alt
+          altFetchedFromGeonorge.value = true
+          onInputChange()
+        }
+      } finally {
+        if (currentAltId === altLookupId) {
+          isFetchingAlt.value = false
+        }
+      }
     }
   },
   { immediate: true }
@@ -475,6 +528,10 @@ onUnmounted(() => {
   window.removeEventListener('pointerup', onDragEnd)
   window.removeEventListener('pointercancel', onDragEnd)
   clearTimeout(placementTimeout)
+  if (altAbortController) {
+    altAbortController.abort()
+    altAbortController = null
+  }
 })
 </script>
 
@@ -643,6 +700,28 @@ onUnmounted(() => {
 .admin-input:focus { border-color: #f7c948; }
 .admin-input-small { max-width: 140px; }
 .admin-input-mono { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; }
+
+.alt-input-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.alt-badge {
+  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.alt-badge-loading {
+  color: #94a3b8;
+}
+
+.alt-badge-success {
+  color: #34d399;
+}
 
 .admin-id-row {
   display: flex;
