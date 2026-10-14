@@ -35,7 +35,24 @@ describe('Track Photo Sharing with Friends', () => {
               startTime: 1726401600000,
               createdAt: 1726401600000,
               sharePhotosWithFriends: true,
+              visibility: 'friends',
               points: [{ lat: 60.1, lng: 5.2, timestamp: 1726401600000 }]
+            },
+            '2026-09-16T12-00-00-000Z': {
+              id: 'track_2',
+              name: 'Hemmelig privat tur',
+              startTime: 1726488000000,
+              createdAt: 1726488000000,
+              visibility: 'private',
+              points: [{ lat: 60.2, lng: 5.3, timestamp: 1726488000000 }]
+            },
+            '2026-09-17T12-00-00-000Z': {
+              id: 'track_3',
+              name: 'Offentlig tur for alle',
+              startTime: 1726574400000,
+              createdAt: 1726574400000,
+              visibility: 'all',
+              points: [{ lat: 60.3, lng: 5.4, timestamp: 1726574400000 }]
             }
           })
         } as unknown as Response)
@@ -72,13 +89,54 @@ describe('Track Photo Sharing with Friends', () => {
   })
 
   describe('useFirebaseTracks', () => {
-    it('parser sharePhotosWithFriends riktig fra Firebase', async () => {
+    it('parser sharePhotosWithFriends og visibility riktig fra Firebase', async () => {
       const { fetchUserTracksFromFirebase } = useFirebaseTracks()
       const tracks = await fetchUserTracksFromFirebase('user_test_1')
 
-      expect(tracks).toHaveLength(1)
-      expect(tracks[0]?.id).toBe('track_1')
-      expect(tracks[0]?.sharePhotosWithFriends).toBe(true)
+      expect(tracks).toHaveLength(3)
+      const t1 = tracks.find(t => t.id === 'track_1')
+      const t2 = tracks.find(t => t.id === 'track_2')
+      const t3 = tracks.find(t => t.id === 'track_3')
+
+      expect(t1?.sharePhotosWithFriends).toBe(true)
+      expect(t1?.visibility).toBe('friends')
+      expect(t2?.visibility).toBe('private')
+      expect(t3?.visibility).toBe('all')
+    })
+
+    it('fetchFriendTracks utelater private spor og returnerer kun venner- og all-spor', async () => {
+      const { fetchFriendTracks } = useFirebaseTracks()
+      const friendTracks = await fetchFriendTracks('user_test_1')
+
+      expect(friendTracks).toHaveLength(2)
+      expect(friendTracks.map(t => t.id)).toEqual(expect.arrayContaining(['track_1', 'track_3']))
+      expect(friendTracks.find(t => t.id === 'track_2')).toBeUndefined()
+    })
+
+    it('setTrackVisibilityInFirebase sender PATCH med visibility', async () => {
+      const { setTrackVisibilityInFirebase } = useFirebaseTracks()
+      const mockTrack: SavedTrack = {
+        id: 'track_1',
+        userId: 'user_test_1',
+        name: 'Veten på Varaldsøy',
+        createdAt: 1726401600000,
+        startTime: 1726401600000,
+        endTime: 1726405200000,
+        distanceMeters: 2200,
+        durationMs: 3600000,
+        points: [],
+        firebaseKey: '2026-09-15T12-00-00-000Z'
+      }
+
+      const ok = await setTrackVisibilityInFirebase('user_test_1', mockTrack, 'friends')
+      expect(ok).toBe(true)
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('/tracks/2026-09-15T12-00-00-000Z.json'),
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ visibility: 'friends' })
+        })
+      )
     })
 
     it('setTrackPhotoSharingInFirebase sender PATCH med sharePhotosWithFriends', async () => {

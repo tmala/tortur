@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 import { useFriends, registerPublicUser, searchPublicUsers, fetchFriendCheckins, fetchFriendsCheckinsForTurpost, clearFriendsCheckinsCache, type CheckinVisibility, type FriendUser, type FriendRequest } from '../composables/useFriends'
 import * as friendsModule from '../composables/useFriends'
 import { setCachedMountainsListForTest, setCachedApprovedSpotsForTest } from '../composables/useTurposter'
@@ -10,6 +11,7 @@ import FriendSearchTab from '../components/friends/FriendSearchTab.vue'
 
 describe('useFriends - Friends system and check-in visibility', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.clearAllMocks()
     localStorage.clear()
     sessionStorage.clear()
@@ -786,6 +788,86 @@ describe('useFriends - Friends system and check-in visibility', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).not.toContain('Flott tur til Storronden!')
     expect(wrapper.text()).not.toContain('Vindfullt på toppen')
+
+    wrapper.unmount()
+  })
+
+  it('FriendProfileModal: allows switching between Innsjekkinger and GPS-spor tabs and renders friend tracks', async () => {
+    const firebaseTracksModule = await import('../composables/useFirebaseTracks')
+    const mockTracks = [
+      {
+        id: 'track_1',
+        userId: 'friend_test',
+        name: 'Tur over Vidden',
+        createdAt: 1726401600000,
+        startTime: 1726401600000,
+        endTime: 1726416000000,
+        distanceMeters: 14500,
+        durationMs: 14400000,
+        points: [],
+        visibility: 'friends' as const
+      }
+    ]
+
+    vi.spyOn(firebaseTracksModule, 'useFirebaseTracks').mockReturnValue({
+      fetchFriendTracks: vi.fn().mockResolvedValue(mockTracks),
+      formatTrackKey: vi.fn(),
+      parseTrackKeyTimestamp: vi.fn(),
+      fetchUserTracksFromFirebase: vi.fn().mockResolvedValue(mockTracks),
+      fetchUserTrackById: vi.fn(),
+      saveTrackToFirebase: vi.fn(),
+      deleteTrackFromFirebase: vi.fn(),
+      renameTrackInFirebase: vi.fn(),
+      setTrackPhotoSharingInFirebase: vi.fn(),
+      setTrackVisibilityInFirebase: vi.fn()
+    } as unknown as ReturnType<typeof firebaseTracksModule.useFirebaseTracks>)
+
+    const wrapper = mount(FriendProfileModal, {
+      props: {
+        isOpen: true,
+        friend: {
+          userId: 'friend_test',
+          userName: 'Fjellturvenn'
+        },
+        currentUserId: 'me_user'
+      }
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // Sjekk at fanene finnes
+    const tabBtns = wrapper.findAll('.profile-tab-btn')
+    expect(tabBtns.length).toBe(2)
+    expect(tabBtns[0]!.text()).toContain('Innsjekkinger')
+    expect(tabBtns[1]!.text()).toContain('GPS-spor')
+
+    // Klikk på GPS-spor fanen
+    await tabBtns[1]!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    // Sjekk at vennens delte spor nå vises
+    expect(wrapper.text()).toContain('Tur over Vidden')
+    expect(wrapper.text()).toContain('14.5 km')
+    expect(wrapper.text()).toContain('Delte turer')
+
+    // Klikk for å ekspandere sporet
+    const trackHeaderBtn = wrapper.find('.track-header-btn')
+    expect(trackHeaderBtn.exists()).toBe(true)
+    await trackHeaderBtn.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    // Sjekk at "Vis på kart" vises, men GPX-nedlasting IKKE er tilgjengelig for venner
+    const viewMapBtn = wrapper.find('.btn-view-map')
+    expect(viewMapBtn.exists()).toBe(true)
+    expect(wrapper.find('.btn-download-gpx').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('GPX')
+
+    // Klikk på "Vis på kart" og sjekk at view-track-on-map emittes direkte uten å lukke tilbake til venner-modal
+    await viewMapBtn.trigger('click')
+    expect(wrapper.emitted('view-track-on-map')).toBeTruthy()
+    expect(wrapper.emitted('view-track-on-map')![0]![0]).toMatchObject({ id: 'track_1' })
+    expect(wrapper.emitted('close')).toBeFalsy()
 
     wrapper.unmount()
   })

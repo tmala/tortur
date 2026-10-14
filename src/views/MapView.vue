@@ -15,6 +15,7 @@ import {
   useGeolocation,
   calculateDistanceMeters,
   type GeoLocationState,
+  type TrackPoint,
 } from '@/composables/useGeolocation'
 import { X as CloseIcon, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { useTrackPhotos, type TrackPhoto, isPhotoNearTrack } from '@/composables/useTrackPhotos'
@@ -512,13 +513,38 @@ const handleTrackClick = () => {
   }
 }
 
-const handleViewSavedTrack = (track: SavedTrack | null) => {
+// Sjekk om et GPS-spor befinner seg i utlandet, og bytt til OpenStreetMap hvis Norgeskart er valgt
+const checkAndApplyAbroadLayerForTrack = async (points: TrackPoint[]) => {
+  if (!points || points.length === 0) return
+  if (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart') {
+    // Rask sjekk: Utenfor Norges koordinatavgrensning (57.0° - 71.5° N, 4.0° - 31.5° Ø)?
+    const outsidePoint = points.find(
+      (p) => p.lat < 57.0 || p.lat > 71.5 || p.lng < 4.0 || p.lng > 31.5
+    )
+    if (outsidePoint) {
+      activeLayer.value = 'standard'
+      return
+    }
+    // Hvis punktene er innenfor boksen (f.eks. Sverige/Danmark), verifiser med kommunesøk
+    const sample = points.find(
+      (p) => typeof p.lat === 'number' && typeof p.lng === 'number'
+    )
+    if (sample) {
+      await checkAndApplyAbroadLayer(sample.lat, sample.lng)
+    }
+  }
+}
+
+const handleViewSavedTrack = async (track: SavedTrack | null) => {
   if (track) {
+    if (track.points && track.points.length > 0) {
+      await checkAndApplyAbroadLayerForTrack(track.points)
+    }
     if (mapViewerRef.value) {
-      mapViewerRef.value.zoomToTrack(track.points)
+      mapViewerRef.value?.zoomToTrack?.(track.points)
     } else {
       nextTick(() => {
-        mapViewerRef.value?.zoomToTrack(track.points)
+        mapViewerRef.value?.zoomToTrack?.(track.points)
       })
     }
   }
@@ -617,7 +643,7 @@ watch(
     replayElapsedMs.value = 0
     replayDurationMs.value = 0
     if (track) {
-      handleViewSavedTrack(track)
+      await handleViewSavedTrack(track)
       const isOwner = track.userId && track.userId === trackStore.currentUserId
       const isSharedWithFriends = !!track.sharePhotosWithFriends
       if (track.userId && track.userId !== 'guest' && (isOwner || isSharedWithFriends)) {
@@ -1024,9 +1050,9 @@ watch(
 
 watch(
   () => appState.viewTrack,
-  (track) => {
+  async (track) => {
     if (track) {
-      handleViewSavedTrack(track)
+      await handleViewSavedTrack(track)
       appState.clearViewTrack()
     }
   },

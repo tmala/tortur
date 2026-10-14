@@ -854,18 +854,6 @@ defineExpose({
           <Square :size="10" fill="currentColor" />
         </button>
 
-        <!-- 3D filmavspilling -->
-        <button
-          type="button"
-          class="btn-playback-control btn-playback-3d"
-          @click="emit('play-3d')"
-          title="Opplev sporet i 3D-terreng med flyover-kamera"
-          aria-label="3D-film flyover"
-        >
-          <Film :size="12" />
-          <span>3D-film</span>
-        </button>
-
         <!-- Hastighetsindikator med minus foran og pluss bak -->
         <div class="speed-stepper-control" role="group" aria-label="Juster avspillingsfart">
           <button
@@ -898,6 +886,18 @@ defineExpose({
             <Plus :size="11" />
           </button>
         </div>
+
+        <!-- 3D filmavspilling -->
+        <button
+          type="button"
+          class="btn-playback-control btn-playback-3d"
+          @click="emit('play-3d')"
+          title="Opplev sporet i 3D-terreng med flyover-kamera"
+          aria-label="3D-film flyover"
+        >
+          <Film :size="12" />
+          <span>3D-film</span>
+        </button>
       </div>
 
       <span v-if="isReplaying" class="replay-status-indicator">
@@ -1447,13 +1447,15 @@ input:checked + .slider:before {
   border-top: 1px solid rgba(51, 65, 85, 0.4);
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .playback-buttons {
   display: flex;
   align-items: center;
   gap: 5px;
-  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .btn-playback-control {
@@ -1531,11 +1533,14 @@ input:checked + .slider:before {
 
 /* 3D-film knapp */
 .btn-playback-3d {
+  margin-left: auto;
   background: rgba(249, 115, 22, 0.2);
   border: 1px solid rgba(249, 115, 22, 0.55);
   color: #fb923c;
   font-weight: 700;
   box-shadow: 0 0 10px rgba(249, 115, 22, 0.15);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-playback-3d:hover {
@@ -1604,6 +1609,8 @@ input:checked + .slider:before {
   font-size: 11px;
   color: #fb923c;
   font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .pulse-dot {

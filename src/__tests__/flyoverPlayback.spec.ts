@@ -147,7 +147,35 @@ describe('TrackPlaybackPanel 3D-film knapp', () => {
     expect(btn3d.exists()).toBe(true)
     expect(btn3d.text()).toContain('3D-film')
 
+    // Sjekk at 3D-film knappen er plassert etter hastighetsvelgeren (speed-stepper-control)
+    const playbackButtons = wrapper.find('.playback-buttons')
+    const children = playbackButtons.element.children
+    const stepperIndex = Array.from(children).findIndex(el => el.classList.contains('speed-stepper-control'))
+    const btn3dIndex = Array.from(children).findIndex(el => el.classList.contains('btn-playback-3d'))
+    expect(stepperIndex).toBeGreaterThan(-1)
+    expect(btn3dIndex).toBeGreaterThan(stepperIndex)
+
     await btn3d.trigger('click')
     expect(wrapper.emitted('play-3d')).toHaveLength(1)
   })
+
+  it('viser 3D-film knapp til venstre for spiller av-indikatoren under avspilling', async () => {
+    const wrapper = mount(TrackPlaybackPanel, {
+      props: {
+        track: mockTrack,
+        isReplaying: true,
+        replaySpeed: 40,
+        showKmMarkers: true,
+        showPhotosOnMap: true,
+        onTrackPhotosCount: 0
+      }
+    })
+
+    const btn3d = wrapper.find('.btn-playback-3d')
+    const indicator = wrapper.find('.replay-status-indicator')
+    expect(btn3d.exists()).toBe(true)
+    expect(indicator.exists()).toBe(true)
+    expect(indicator.text()).toContain('Spiller av...')
+  })
 })
+

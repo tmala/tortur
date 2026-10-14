@@ -11,14 +11,17 @@ import {
   Loader2,
   Map as MapIcon,
   Globe,
-  Search,
   Route,
+  MapPin,
+  Clock,
+  Eye,
 } from 'lucide-vue-next'
 import type { FirebaseCheckinItem } from '@/composables/useAuth'
 import { useFriends, type FriendUser } from '@/composables/useFriends'
-import { useGpsTrackStore } from '@/stores/gpsTrack'
+import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import { useAppStateStore } from '@/stores/appState'
 import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
+import { formatDistance } from '@/composables/useGeolocation'
 import CheckinSocialSection from './CheckinSocialSection.vue'
 import MonthGroupHeader from './MonthGroupHeader.vue'
 import { useMonthGroups } from '@/composables/useMonthGroups'
@@ -32,13 +35,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'view-turpost-on-map', checkin: FirebaseCheckinItem): void
+  (e: 'view-track-on-map', track: SavedTrack): void
 }>()
 
 const { fetchFriendCheckins } = useFriends()
 
 const checkins = ref<FirebaseCheckinItem[]>([])
 const isLoading = ref(false)
-const searchQuery = ref('')
 // Sporer hvilke innsjekkinger som er manuelt ekspandert i listen.
 // Som standard er alle innsjekkinger minimert (ikke ekspandert).
 const expandedCheckinIds = ref<Set<string>>(new Set())
@@ -120,36 +123,101 @@ const uniqueTurpostIds = computed(() => {
   return new Set(checkins.value.map((c) => String(c.turpostId)))
 })
 
-const filteredCheckins = computed(() => {
-  if (!searchQuery.value.trim()) return checkins.value
-  const q = searchQuery.value.toLowerCase().trim()
-  return checkins.value.filter(
-    (c) =>
-      (c.turpostName && c.turpostName.toLowerCase().includes(q)) ||
-      (c.description && c.description.toLowerCase().includes(q)),
-  )
-})
-
-// Månedsgruppering av vennens innsjekkinger (alle måneder åpnes ved aktivt søk)
+// Månedsgruppering av vennens innsjekkinger
 const {
   monthGroups,
   isMonthExpanded,
   toggleMonth,
   resetToLatest,
-} = useMonthGroups(filteredCheckins, {
+} = useMonthGroups(checkins, {
   getDate: (item) => item.timestamp,
-  autoExpandAll: () => Boolean(searchQuery.value.trim()),
 })
+
+// Tab-tilstand ('checkins' eller 'tracks')
+const activeTab = ref<'checkins' | 'tracks'>('checkins')
+const friendTracks = ref<SavedTrack[]>([])
+const isLoadingTracks = ref(false)
+const expandedTrackIds = ref<Set<string>>(new Set())
+
+async function loadTracks() {
+  if (!props.friend?.userId) {
+    friendTracks.value = []
+    return
+  }
+
+  isLoadingTracks.value = true
+  try {
+    const { fetchFriendTracks } = useFirebaseTracks()
+    const data = await fetchFriendTracks(props.friend.userId)
+    friendTracks.value = data
+    expandedTrackIds.value.clear()
+  } catch (err) {
+    console.warn('Kunne ikke laste vennens GPS-spor:', err)
+    friendTracks.value = []
+  } finally {
+    isLoadingTracks.value = false
+  }
+}
+
+const totalTracksDistanceMeters = computed(() => {
+  return friendTracks.value.reduce((acc, t) => acc + (t.distanceMeters || 0), 0)
+})
+
+const {
+  monthGroups: trackMonthGroups,
+  isMonthExpanded: isTrackMonthExpanded,
+  toggleMonth: toggleTrackMonth,
+  resetToLatest: resetTrackToLatest,
+} = useMonthGroups(friendTracks, {
+  getDate: (item) => item.startTime || item.createdAt,
+})
+
+function toggleTrackExpand(id: string) {
+  const next = new Set(expandedTrackIds.value)
+  if (next.has(id)) {
+    next.delete(id)
+  } else {
+    next.add(id)
+  }
+  expandedTrackIds.value = next
+}
+
+function isTrackExpanded(id: string): boolean {
+  return expandedTrackIds.value.has(id)
+}
+
+function handleViewFriendTrack(track: SavedTrack) {
+  const trackStore = useGpsTrackStore()
+  const appState = useAppStateStore()
+  trackStore.viewTrackOnMap(track, true)
+  appState.requestViewTrack(track)
+  emit('view-track-on-map', track)
+}
+
+function computeGroupDistance(tracks: SavedTrack[]): number {
+  return tracks.reduce((acc, t) => acc + (t.distanceMeters || 0), 0)
+}
+
+function formatDuration(ms: number): string {
+  if (!ms || ms <= 0) return '< 1 min'
+  const totalMin = Math.round(ms / 60000)
+  if (totalMin < 60) return `${totalMin} min`
+  const hours = Math.floor(totalMin / 60)
+  const remMin = totalMin % 60
+  return remMin > 0 ? `${hours} t ${remMin} min` : `${hours} t`
+}
 
 watch(
   () => [props.isOpen, props.friend?.userId],
   ([newOpen, newFriendId]) => {
     if (newOpen && newFriendId) {
       dragPosition.value = { x: 0, y: 0 }
-      searchQuery.value = ''
       expandedCheckinIds.value.clear()
+      expandedTrackIds.value.clear()
       loadCheckins()
+      loadTracks()
       resetToLatest()
+      resetTrackToLatest()
     }
   },
   { immediate: true },
@@ -171,7 +239,6 @@ function isExpanded(id: string): boolean {
 
 function handleViewOnMap(item: FirebaseCheckinItem) {
   emit('view-turpost-on-map', item)
-  emit('close')
 }
 
 async function handleViewTrack(item: FirebaseCheckinItem) {
@@ -182,17 +249,19 @@ async function handleViewTrack(item: FirebaseCheckinItem) {
   if (local) {
     trackStore.viewTrackOnMap(local, true)
     appState.requestViewTrack(local)
+    emit('view-track-on-map', local)
   } else {
     const { fetchUserTrackById } = useFirebaseTracks()
     const remote = await fetchUserTrackById(item.userId, item.trackId)
     if (remote) {
       trackStore.viewTrackOnMap(remote, true)
       appState.requestViewTrack(remote)
+      emit('view-track-on-map', remote)
     } else {
       trackStore.viewTrackOnMap(item.trackId, true)
+      emit('view-track-on-map', { id: item.trackId, name: 'GPS-spor' } as SavedTrack)
     }
   }
-  emit('close')
 }
 
 function handleSocialUpdated(updatedItem: FirebaseCheckinItem) {
@@ -273,57 +342,88 @@ onUnmounted(() => {
 
         <!-- Statistikk-brikker -->
         <div class="stats-row">
-          <div class="stat-box">
-            <div class="stat-icon-wrap trophy">
-              <Trophy :size="20" />
+          <template v-if="activeTab === 'checkins'">
+            <div class="stat-box">
+              <div class="stat-icon-wrap trophy">
+                <Trophy :size="20" />
+              </div>
+              <div class="stat-content">
+                <span class="stat-num">{{ checkins.length }}</span>
+                <span class="stat-label">Innsjekkinger</span>
+              </div>
             </div>
-            <div class="stat-content">
-              <span class="stat-num">{{ checkins.length }}</span>
-              <span class="stat-label">Innsjekkinger</span>
-            </div>
-          </div>
 
-          <div class="stat-box">
-            <div class="stat-icon-wrap mountain">
-              <Mountain :size="20" />
+            <div class="stat-box">
+              <div class="stat-icon-wrap mountain">
+                <Mountain :size="20" />
+              </div>
+              <div class="stat-content">
+                <span class="stat-num">{{ uniqueTurpostIds.size }}</span>
+                <span class="stat-label">Unike turposter</span>
+              </div>
             </div>
-            <div class="stat-content">
-              <span class="stat-num">{{ uniqueTurpostIds.size }}</span>
-              <span class="stat-label">Unike turposter</span>
+          </template>
+
+          <template v-else>
+            <div class="stat-box">
+              <div class="stat-icon-wrap route-icon-wrap">
+                <Route :size="20" />
+              </div>
+              <div class="stat-content">
+                <span class="stat-num">{{ friendTracks.length }}</span>
+                <span class="stat-label">Delte turer</span>
+              </div>
             </div>
-          </div>
+
+            <div class="stat-box">
+              <div class="stat-icon-wrap distance-icon-wrap">
+                <MapPin :size="20" />
+              </div>
+              <div class="stat-content">
+                <span class="stat-num">{{ formatDistance(totalTracksDistanceMeters) }}</span>
+                <span class="stat-label">Total distanse</span>
+              </div>
+            </div>
+          </template>
         </div>
 
-        <!-- Innsjekkinger seksjon -->
-        <div class="checkins-section-header">
-          <div class="title-with-count">
-            <h4>Synlige innsjekkinger</h4>
-            <span class="count-badge">{{ filteredCheckins.length }}</span>
-          </div>
+        <!-- Tabs for Innsjekkinger og GPS-spor -->
+        <div class="profile-tabs-nav">
+          <button
+            type="button"
+            class="profile-tab-btn"
+            :class="{ active: activeTab === 'checkins' }"
+            @click="activeTab = 'checkins'"
+          >
+            <Trophy :size="13" />
+            <span>Innsjekkinger</span>
+            <span class="tab-badge checkins">{{ checkins.length }}</span>
+          </button>
 
-          <!-- Søkefelt hvis flere enn 3 innsjekkinger -->
-          <div v-if="checkins.length > 3" class="search-wrap">
-            <Search :size="12" class="search-icon" />
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Filtrer turer..."
-              class="search-input"
-            />
-          </div>
+          <button
+            type="button"
+            class="profile-tab-btn"
+            :class="{ active: activeTab === 'tracks' }"
+            @click="activeTab = 'tracks'"
+          >
+            <Route :size="13" />
+            <span>GPS-spor</span>
+            <span class="tab-badge tracks">{{ friendTracks.length }}</span>
+          </button>
         </div>
 
-        <!-- Scroll-område for innsjekkinger -->
-        <div class="checkins-scroll-area">
-          <div v-if="isLoading" class="loading-state">
-            <Loader2 :size="24" class="spin text-sky" />
-            <span>Laster {{ friend.userName }}s turer...</span>
-          </div>
+        <!-- Fane 1: Innsjekkinger seksjon -->
+        <template v-if="activeTab === 'checkins'">
+          <!-- Scroll-område for innsjekkinger -->
+          <div class="checkins-scroll-area">
+            <div v-if="isLoading" class="loading-state">
+              <Loader2 :size="24" class="spin text-sky" />
+              <span>Laster {{ friend.userName }}s turer...</span>
+            </div>
 
-          <div v-else-if="filteredCheckins.length === 0" class="empty-state">
-            <p v-if="searchQuery">Ingen turer matchet søket «{{ searchQuery }}».</p>
-            <p v-else>{{ friend.userName }} har ingen delte innsjekkinger enda.</p>
-          </div>
+            <div v-else-if="checkins.length === 0" class="empty-state">
+              <p>{{ friend.userName }} har ingen delte innsjekkinger enda.</p>
+            </div>
 
           <div v-else class="checkins-month-groups">
             <div
@@ -452,6 +552,108 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+        </template>
+
+        <!-- Fane 2: GPS-spor seksjon -->
+        <template v-else>
+          <!-- Scroll-område for GPS-spor -->
+          <div class="checkins-scroll-area">
+            <div v-if="isLoadingTracks" class="loading-state">
+              <Loader2 :size="24" class="spin text-orange" />
+              <span>Laster {{ friend.userName }}s GPS-spor...</span>
+            </div>
+
+            <div v-else-if="friendTracks.length === 0" class="empty-state">
+              <p>{{ friend.userName }} har ingen delte GPS-spor enda.</p>
+            </div>
+
+            <div v-else class="checkins-month-groups">
+              <div
+                v-for="group in trackMonthGroups"
+                :key="group.key"
+                class="month-group"
+              >
+                <MonthGroupHeader
+                  :label="group.label"
+                  :count="group.items.length"
+                  count-unit-single="tur"
+                  count-unit-plural="turer"
+                  accent-color="#ea580c"
+                  :is-expanded="isTrackMonthExpanded(group.key)"
+                  @toggle="toggleTrackMonth(group.key)"
+                >
+                  <template #right>
+                    <span class="month-distance">
+                      {{ formatDistance(computeGroupDistance(group.items)) }}
+                    </span>
+                  </template>
+                </MonthGroupHeader>
+
+                <div v-if="isTrackMonthExpanded(group.key)" class="month-items-list tracks-accordion">
+                  <div
+                    v-for="track in group.items"
+                    :key="track.id"
+                    class="friend-track-item"
+                    :class="{ expanded: isTrackExpanded(track.id) }"
+                  >
+                    <!-- Overskriftsrad (klikkbar) -->
+                    <button type="button" class="track-header-btn" @click="toggleTrackExpand(track.id)">
+                      <div class="track-title-left">
+                        <span class="track-name" :title="track.name">{{ track.name }}</span>
+                        <span
+                          class="vis-tag"
+                          :class="track.visibility === 'all' ? 'all' : 'friends'"
+                          :title="track.visibility === 'all' ? 'Synlig for alle' : 'Delt med venner'"
+                        >
+                          <Globe v-if="track.visibility === 'all'" :size="10" />
+                          <Users v-else :size="10" />
+                          <span>{{ track.visibility === 'all' ? 'Alle' : 'Venner' }}</span>
+                        </span>
+                      </div>
+
+                      <ChevronDown
+                        :size="15"
+                        class="track-chevron"
+                        :class="{ rotated: isTrackExpanded(track.id) }"
+                      />
+                    </button>
+
+                    <!-- Metadata-rad: Distanse, varighet, dato -->
+                    <div class="track-meta-row" @click="toggleTrackExpand(track.id)">
+                      <div class="meta-item">
+                        <MapPin :size="12" class="meta-icon" />
+                        <span>{{ formatDistance(track.distanceMeters) }}</span>
+                      </div>
+                      <div class="meta-item">
+                        <Clock :size="12" class="meta-icon" />
+                        <span>{{ formatDuration(track.durationMs) }}</span>
+                      </div>
+                      <div class="meta-item">
+                        <Calendar :size="12" class="meta-icon" />
+                        <span>{{ formatDate(new Date(track.startTime || track.createdAt).toISOString()).split(',')[0] }}</span>
+                      </div>
+                    </div>
+
+                    <!-- Ekspandert del -->
+                    <div v-if="isTrackExpanded(track.id)" class="track-expanded-content">
+                      <div class="track-actions-row">
+                        <button
+                          type="button"
+                          class="btn-track-action btn-view-map"
+                          @click.stop="handleViewFriendTrack(track)"
+                          title="Vis på kart og zoom til sporet"
+                        >
+                          <Eye :size="13" />
+                          <span>Vis på kart</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
 
         <!-- Lightbox for fullskjermbilde -->
         <transition name="lightbox-fade">
@@ -644,6 +846,226 @@ onUnmounted(() => {
 .stat-icon-wrap.mountain {
   background: rgba(16, 185, 129, 0.15);
   color: #34d399;
+}
+
+.stat-icon-wrap.route-icon-wrap {
+  background: rgba(249, 115, 22, 0.15);
+  color: #fb923c;
+}
+
+.stat-icon-wrap.distance-icon-wrap {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
+/* Tabs nav */
+.profile-tabs-nav {
+  display: flex;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 6px 12px;
+  gap: 8px;
+}
+
+.profile-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.profile-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
+}
+
+.profile-tab-btn.active {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.tab-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.tab-badge.checkins {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+}
+
+.tab-badge.tracks {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+}
+
+.count-badge.badge-orange {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+}
+
+.text-orange {
+  color: #fb923c;
+}
+
+.month-distance {
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+/* Friend track items */
+.tracks-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.friend-track-item {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: all 0.15s ease;
+}
+
+.friend-track-item.expanded {
+  border-color: rgba(249, 115, 22, 0.4);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.track-header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  color: #f1f5f9;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  gap: 8px;
+}
+
+.track-title-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.friend-track-item .track-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f8fafc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friend-track-item .vis-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.friend-track-item .vis-tag.all {
+  background: rgba(14, 165, 233, 0.18);
+  border: 1px solid rgba(14, 165, 233, 0.4);
+  color: #38bdf8;
+}
+
+.friend-track-item .vis-tag.friends {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.track-chevron {
+  color: #64748b;
+  transition: transform 0.2s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.track-chevron.rotated {
+  transform: rotate(180deg);
+  color: #fb923c;
+}
+
+.friend-track-item .track-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 10px;
+  font-size: 11px;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.friend-track-item .meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.friend-track-item .meta-icon {
+  color: #64748b;
+}
+
+.track-expanded-content {
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.btn-track-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.btn-track-action.btn-view-map {
+  background: rgba(249, 115, 22, 0.18);
+  border: 1px solid rgba(249, 115, 22, 0.4);
+  color: #fb923c;
+}
+
+.btn-track-action.btn-view-map:hover {
+  background: rgba(249, 115, 22, 0.3);
+  color: #ffedd5;
 }
 
 .stat-content {

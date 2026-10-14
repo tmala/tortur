@@ -1,5 +1,5 @@
 import { getFirebaseConfig, fetchFirebase } from './useAuth'
-import type { SavedTrack } from '@/stores/gpsTrack'
+import type { SavedTrack, TrackVisibility } from '@/stores/gpsTrack'
 
 /**
  * Konverterer et tidsstempel (i millisekunder) til en gyldig Firebase Realtime Database-nøkkel i ISO-format.
@@ -65,6 +65,10 @@ export function useFirebaseTracks() {
         const firebaseKey = typeof item.firebaseKey === 'string' ? item.firebaseKey : key
         const sharePhotosWithFriends =
           typeof item.sharePhotosWithFriends === 'boolean' ? item.sharePhotosWithFriends : undefined
+        const visibility: TrackVisibility =
+          typeof item.visibility === 'string' && ['all', 'friends', 'private'].includes(item.visibility)
+            ? (item.visibility as TrackVisibility)
+            : 'private'
 
         tracks.push({
           id,
@@ -77,7 +81,8 @@ export function useFirebaseTracks() {
           durationMs,
           points,
           firebaseKey,
-          sharePhotosWithFriends
+          sharePhotosWithFriends,
+          visibility
         })
       }
 
@@ -115,7 +120,8 @@ export function useFirebaseTracks() {
       const payload: SavedTrack = {
         ...track,
         userId,
-        firebaseKey: key
+        firebaseKey: key,
+        visibility: track.visibility || 'private'
       }
 
       const res = await fetchFirebase(url, {
@@ -215,14 +221,57 @@ export function useFirebaseTracks() {
     }
   }
 
+  /**
+   * Oppdaterer innstilling for synlighet ('all' | 'friends' | 'private') for et spor i Firebase.
+   */
+  async function setTrackVisibilityInFirebase(
+    userId: string,
+    track: SavedTrack,
+    visibility: TrackVisibility
+  ): Promise<boolean> {
+    if (!userId || userId === 'guest') return false
+
+    const config = await getFirebaseConfig()
+    if (!config) return false
+
+    try {
+      const key = track.firebaseKey || formatTrackKey(track.startTime || track.createdAt)
+      const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/tracks/${encodeURIComponent(key)}.json`
+
+      const res = await fetchFirebase(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visibility })
+      })
+
+      return res.ok
+    } catch (err) {
+      console.warn('[useFirebaseTracks] Kunne ikke oppdatere synlighet i Firebase:', err)
+      return false
+    }
+  }
+
+  /**
+   * Henter spor for en venn fra Firebase.
+   * Returnerer kun spor som er synlige for venner ('friends') eller alle ('all').
+   * Private spor utelates alltid.
+   */
+  async function fetchFriendTracks(friendUserId: string): Promise<SavedTrack[]> {
+    if (!friendUserId || friendUserId === 'guest') return []
+    const tracks = await fetchUserTracksFromFirebase(friendUserId)
+    return tracks.filter((t) => t.visibility === 'friends' || t.visibility === 'all')
+  }
+
   return {
     formatTrackKey,
     parseTrackKeyTimestamp,
     fetchUserTracksFromFirebase,
+    fetchFriendTracks,
     fetchUserTrackById,
     saveTrackToFirebase,
     deleteTrackFromFirebase,
     renameTrackInFirebase,
-    setTrackPhotoSharingInFirebase
+    setTrackPhotoSharingInFirebase,
+    setTrackVisibilityInFirebase
   }
 }

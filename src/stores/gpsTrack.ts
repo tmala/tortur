@@ -9,6 +9,8 @@ import {
   formatTrackKey
 } from '@/composables/useFirebaseTracks'
 
+export type TrackVisibility = 'all' | 'friends' | 'private'
+
 export interface SavedTrack {
   id: string
   userId: string
@@ -21,6 +23,7 @@ export interface SavedTrack {
   endTime: number | null
   firebaseKey?: string
   sharePhotosWithFriends?: boolean
+  visibility?: TrackVisibility
 }
 
 const STORAGE_PREFIX = 'tortur_saved_tracks_'
@@ -189,7 +192,11 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
   }
 
   // Lagre et nytt spor
-  const saveTrack = (points: TrackPoint[], customName?: string): SavedTrack | null => {
+  const saveTrack = (
+    points: TrackPoint[],
+    customName?: string,
+    visibility: TrackVisibility = 'private'
+  ): SavedTrack | null => {
     if (!points || points.length === 0) return null
 
     const now = Date.now()
@@ -211,7 +218,8 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
       durationMs,
       startTime,
       endTime,
-      firebaseKey: formatTrackKey(startTime)
+      firebaseKey: formatTrackKey(startTime),
+      visibility
     }
 
     // Legg til øverst i listen og lagre lokalt umiddelbart
@@ -283,6 +291,25 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
       const { setTrackPhotoSharingInFirebase } = useFirebaseTracks()
       setTrackPhotoSharingInFirebase(currentUserId.value, track, shareWithFriends).catch((err) => {
         console.warn('[gpsTrackStore] Oppdatering av bildedeling i Firebase feilet:', err)
+      })
+    }
+
+    return true
+  }
+
+  // Endre synlighet for et spor (Venner, Alle eller Privat)
+  const setTrackVisibility = (id: string, visibility: TrackVisibility): boolean => {
+    const track = savedTracks.value.find((t) => t.id === id)
+    if (!track) return false
+
+    track.visibility = visibility
+    persistTracks()
+
+    // Oppdater i Firebase i bakgrunnen hvis innlogget
+    if (currentUserId.value && currentUserId.value !== 'guest') {
+      const { setTrackVisibilityInFirebase } = useFirebaseTracks()
+      setTrackVisibilityInFirebase(currentUserId.value, track, visibility).catch((err) => {
+        console.warn('[gpsTrackStore] Oppdatering av sporsynlighet i Firebase feilet:', err)
       })
     }
 
@@ -413,6 +440,7 @@ export const useGpsTrackStore = defineStore('gpsTrack', () => {
     deleteTrack,
     renameTrack,
     setPhotoSharing,
+    setTrackVisibility,
     viewTrackOnMap,
     clearActiveTrack,
     downloadGpx,
