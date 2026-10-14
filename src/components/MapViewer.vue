@@ -30,7 +30,7 @@ const props = defineProps<{
   isTracking: boolean
   isLiveLocating?: boolean
   turposter: TurpostItem[]
-  showMunicipalities: boolean
+  showMunicipalities?: boolean
   selectedKommuneName: string | null
   getKommuneInfo?: (name: string) => { fylkeName: string; count: number } | null
   vessels?: AisVessel[]

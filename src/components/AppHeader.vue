@@ -12,7 +12,6 @@ const props = withDefaults(
     isTurposterOpen: boolean
     activeKommuneName: string | null
     turpostCount: number
-    showMunicipalities: boolean
     isAisToggled?: boolean
     isZoomSufficient?: boolean
     aisVesselCount?: number
@@ -49,7 +48,6 @@ const emit = defineEmits<{
   (e: 'open-my-spots'): void
   (e: 'toggle-add-spot-mode'): void
   (e: 'toggle-turposter'): void
-  (e: 'toggle-municipalities'): void
   (e: 'toggle-ais'): void
   (e: 'show-local-turposter'): void
   (e: 'open-profile'): void
@@ -202,7 +200,6 @@ const handleInstallClick = async () => {
       :is-ais-toggled="isAisToggled"
       :is-zoom-sufficient="isZoomSufficient"
       :ais-vessel-count="aisVesselCount"
-      :show-municipalities="showMunicipalities"
       :show-ais-modal="showAisModal"
       :show-info-modal="showInfoModal"
       :show-install-prompt="!!installPrompt && !isInstalled"
@@ -214,7 +211,6 @@ const handleInstallClick = async () => {
       @toggle-tracking="emit('toggle-tracking')"
       @open-track-modal="handleOpenTrackModal"
       @toggle-ais="emit('toggle-ais')"
-      @toggle-municipalities="emit('toggle-municipalities')"
       @toggle-ais-modal="showAisModal = !showAisModal"
       @toggle-info-modal="showInfoModal = !showInfoModal"
       @install="handleInstallClick"
