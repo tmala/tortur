@@ -5,6 +5,7 @@ import FriendProfileModal from '@/components/FriendProfileModal.vue'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { useFriends, type FriendUser } from '@/composables/useFriends'
 import { useAppStateStore } from '@/stores/appState'
+import type { SavedTrack } from '@/stores/gpsTrack'
 
 const route = useRoute()
 const router = useRouter()
@@ -37,6 +38,11 @@ const handleViewTurpostOnMap = (checkin: FirebaseCheckinItem) => {
   appState.requestFlyToCheckin(checkin)
   router.push('/')
 }
+
+const handleViewTrackOnMap = (track: SavedTrack) => {
+  appState.requestViewTrack(track)
+  router.push('/')
+}
 </script>
 
 <template>
@@ -46,5 +52,6 @@ const handleViewTurpostOnMap = (checkin: FirebaseCheckinItem) => {
     :current-user-id="user?.userId"
     @close="handleClose"
     @view-turpost-on-map="handleViewTurpostOnMap"
+    @view-track-on-map="handleViewTrackOnMap"
   />
 </template>

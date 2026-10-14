@@ -85,6 +85,29 @@ describe('useGpsTrackStore', () => {
     expect(store.savedTracks[0]!.name).toBe('Nytt og bedre navn')
   })
 
+  it('updates track visibility with setTrackVisibility and persists to localStorage', () => {
+    const store = useGpsTrackStore()
+    const points: TrackPoint[] = [
+      { lat: 60.3913, lng: 5.3221, timestamp: 1725450000000 }
+    ]
+
+    const saved = store.saveTrack(points, 'Fjelltur', 'private')
+    expect(saved).not.toBeNull()
+    expect(saved?.visibility).toBe('private')
+
+    const okFriends = store.setTrackVisibility(saved!.id, 'friends')
+    expect(okFriends).toBe(true)
+    expect(store.savedTracks[0]!.visibility).toBe('friends')
+
+    const stored = localStorage.getItem('tortur_saved_tracks_guest')
+    expect(stored).not.toBeNull()
+    const parsed = JSON.parse(stored!)
+    expect(parsed[0].visibility).toBe('friends')
+
+    store.setTrackVisibility(saved!.id, 'all')
+    expect(store.savedTracks[0]!.visibility).toBe('all')
+  })
+
   it('deletes an existing track and clears activeTrack if it was active', () => {
     const store = useGpsTrackStore()
     const points: TrackPoint[] = [
@@ -327,6 +350,48 @@ describe('SavedTracksPanel', () => {
     expect(document.querySelector(`#track-card-${trackOct!.id}`)).toBeNull()
     expect(document.querySelector(`#track-card-${trackSep!.id}`)).not.toBeNull()
 
+    wrapper.unmount()
+  })
+
+  it('renders track cards with visibility badge and updates visibility on select', async () => {
+    const { mount } = await import('@vue/test-utils')
+    const SavedTracksPanel = (await import('../components/SavedTracksPanel.vue')).default
+    const store = useGpsTrackStore()
+
+    const points: TrackPoint[] = [
+      { lat: 60.3913, lng: 5.3221, timestamp: Date.parse('2026-10-12T10:00:00Z') }
+    ]
+
+    const track = store.saveTrack(points, 'Tur med synlighet', 'friends')
+
+    const wrapper = mount(SavedTracksPanel, {
+      props: {
+        isOpen: true,
+        highlightedTrackId: null
+      },
+      attachTo: document.body
+    })
+
+    await wrapper.vm.$nextTick()
+
+    // Sjekk at synlighetsmerke 'Venner' vises
+    const visBadge = document.querySelector('.badge-track-vis')
+    expect(visBadge).not.toBeNull()
+    expect(visBadge?.textContent).toContain('Venner')
+
+    // Ekspander sporkortet
+    const header = document.querySelector('.track-card-header') as HTMLElement
+    header.click()
+    await wrapper.vm.$nextTick()
+
+    // Finn og klikk på 'Alle'-knappen i TrackVisibilitySelector
+    const buttons = Array.from(document.querySelectorAll('.vis-pill-btn')) as HTMLButtonElement[]
+    const allBtn = buttons.find(b => b.textContent?.includes('Alle'))
+    expect(allBtn).toBeDefined()
+    allBtn?.click()
+    await wrapper.vm.$nextTick()
+
+    expect(store.savedTracks.find(t => t.id === track!.id)?.visibility).toBe('all')
     wrapper.unmount()
   })
 })

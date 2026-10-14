@@ -12,6 +12,8 @@ import UserProfileModal from '../components/UserProfileModal.vue'
 import MapLayerButton from '../components/MapLayerButton.vue'
 import type { FylkeInfo } from '../composables/useTurposter'
 import type { GoogleUser } from '../composables/useAuth'
+import { useAppStateStore } from '../stores/appState'
+import type { SavedTrack } from '../stores/gpsTrack'
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -1125,6 +1127,97 @@ describe('Automatisk valg av OpenStreetMap ved geolokasjon i utlandet (f.eks. Gu
     const appHeader = wrapper.findComponent(AppHeader)
     expect(appHeader.exists()).toBe(true)
     // For posisjon i Norge forblir kartet på norgeskart
+    expect(appHeader.props('activeLayer')).toBe('norgeskart')
+  })
+
+  it('bytter automatisk til Standard OpenStreetMap når brukeren viser et spor i utlandet (f.eks. Alcudia på Mallorca)', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const appState = useAppStateStore()
+
+    const wrapper = mount(MapView, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          MapViewer: true,
+          RouterView: true
+        }
+      }
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // Sjekk at initialt kartlag er norgeskart
+    const appHeader = wrapper.findComponent(AppHeader)
+    expect(appHeader.props('activeLayer')).toBe('norgeskart')
+
+    // Be om å vise et spor i Alcudia, Mallorca (Spania)
+    const mallorcaTrack: SavedTrack = {
+      id: 'alcudia_1',
+      userId: 'friend_1',
+      name: 'Alcudia GamleByRunde',
+      createdAt: 1727771000000,
+      startTime: 1727771000000,
+      endTime: 1727787500000,
+      distanceMeters: 4300,
+      durationMs: 16500000,
+      points: [
+        { lat: 39.8523, lng: 3.1215 },
+        { lat: 39.8530, lng: 3.1220 }
+      ],
+      visibility: 'friends'
+    }
+
+    appState.requestViewTrack(mallorcaTrack)
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // Kartlaget skal nå automatisk ha byttet til standard (OpenStreetMap)
+    expect(appHeader.props('activeLayer')).toBe('standard')
+  })
+
+  it('beholder Norgeskart når brukeren viser et spor i Norge (f.eks. Bergen)', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const appState = useAppStateStore()
+
+    const wrapper = mount(MapView, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          MapViewer: true,
+          RouterView: true
+        }
+      }
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    const appHeader = wrapper.findComponent(AppHeader)
+    expect(appHeader.props('activeLayer')).toBe('norgeskart')
+
+    const bergenTrack: SavedTrack = {
+      id: 'kollbudalen_1',
+      userId: 'friend_1',
+      name: 'Kollbudalen',
+      createdAt: 1728734100000,
+      startTime: 1728734100000,
+      endTime: 1728738300000,
+      distanceMeters: 2800,
+      durationMs: 4200000,
+      points: [
+        { lat: 60.4621, lng: 5.3437 },
+        { lat: 60.4630, lng: 5.3450 }
+      ],
+      visibility: 'friends'
+    }
+
+    appState.requestViewTrack(bergenTrack)
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
     expect(appHeader.props('activeLayer')).toBe('norgeskart')
   })
 

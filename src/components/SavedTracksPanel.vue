@@ -17,11 +17,15 @@ import {
   FolderHeart,
   RefreshCw,
   Loader2,
-  ChevronDown
+  ChevronDown,
+  Globe,
+  Users,
+  Lock
 } from 'lucide-vue-next'
-import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
+import { useGpsTrackStore, type SavedTrack, type TrackVisibility } from '@/stores/gpsTrack'
 import { formatDistance, type TrackPoint } from '@/composables/useGeolocation'
 import TrackPhotosSection from '@/components/TrackPhotosSection.vue'
+import TrackVisibilitySelector from '@/components/TrackVisibilitySelector.vue'
 import MonthGroupHeader from './MonthGroupHeader.vue'
 
 const props = defineProps<{
@@ -381,6 +385,10 @@ const handleToggleViewOnMap = (track: SavedTrack) => {
   }
 }
 
+const handleSetVisibility = (track: SavedTrack, visibility: TrackVisibility) => {
+  trackStore.setTrackVisibility(track.id, visibility)
+}
+
 // Lagre live-spor direkte fra dette panelet
 const isSavingLiveTrack = ref(false)
 const newLiveTrackName = ref('')
@@ -633,6 +641,32 @@ const handleConfirmSaveLiveTrack = () => {
                 </div>
 
                 <div class="track-header-right">
+                  <!-- Synlighets-badge -->
+                  <span
+                    class="badge-track-vis"
+                    :class="`vis-${track.visibility || 'private'}`"
+                    :title="
+                      track.visibility === 'all'
+                        ? 'Offentlig: Synlig for alle'
+                        : track.visibility === 'friends'
+                          ? 'Synlig for venner'
+                          : 'Privat: Kun synlig for deg'
+                    "
+                  >
+                    <Globe v-if="track.visibility === 'all'" :size="10" />
+                    <Users v-else-if="track.visibility === 'friends'" :size="10" />
+                    <Lock v-else :size="10" />
+                    <span>
+                      {{
+                        track.visibility === 'all'
+                          ? 'Alle'
+                          : track.visibility === 'friends'
+                            ? 'Venner'
+                            : 'Privat'
+                      }}
+                    </span>
+                  </span>
+
                   <!-- Aktiv status-indikator på kart -->
                   <span
                     v-if="trackStore.activeTrackId === track.id"
@@ -716,6 +750,13 @@ const handleConfirmSaveLiveTrack = () => {
                     <Trash2 :size="14" />
                   </button>
                 </div>
+
+                <!-- Synlighetsvelger -->
+                <TrackVisibilitySelector
+                  :model-value="track.visibility || 'private'"
+                  label="Hvem kan se dette sporet?"
+                  @update:model-value="(val) => handleSetVisibility(track, val)"
+                />
 
                 <!-- Turbilder for sporet (kun for egne spor når innlogget) -->
                 <TrackPhotosSection
@@ -1305,6 +1346,36 @@ const handleConfirmSaveLiveTrack = () => {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.badge-track-vis {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.badge-track-vis.vis-all {
+  background: rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(14, 165, 233, 0.4);
+  color: #38bdf8;
+}
+
+.badge-track-vis.vis-friends {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.badge-track-vis.vis-private {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #94a3b8;
 }
 
 .btn-icon-expand {
