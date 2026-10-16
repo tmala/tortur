@@ -12,9 +12,11 @@ import {
 } from '../composables/map/useMapLongpress'
 import MapContextMenu from '../components/MapContextMenu.vue'
 import AddTurpostModal from '../components/AddTurpostModal.vue'
+import MapViewer from '../components/MapViewer.vue'
 import MapView from '../views/MapView.vue'
 import { useAuth } from '../composables/useAuth'
 import { useAppStateStore } from '../stores/appState'
+import type { TurpostItem } from '../composables/useTurposter'
 
 describe('useMapLongpress', () => {
   let mockContainer: HTMLElement
@@ -516,6 +518,7 @@ describe('MapView Longpress Context Menu Integration', () => {
           MapViewer: {
             name: 'MapViewer',
             template: '<div class="map-viewer-stub"><slot /></div>',
+            props: ['suppressFitBounds'],
             methods: {
               suppressNextFitBounds: suppressNextFitBoundsMock,
               panToCoordinate: panToCoordinateMock,
@@ -547,6 +550,10 @@ describe('MapView Longpress Context Menu Integration', () => {
     expect(panToCoordinateMock).not.toHaveBeenCalled()
     // suppressNextFitBounds MUST be called to prevent zooming out to the whole municipality
     expect(suppressNextFitBoundsMock).toHaveBeenCalled()
+    expect(mapViewer.props('suppressFitBounds')).toBe(true)
+
+    await flushPromises()
+    expect(mapViewer.props('suppressFitBounds')).toBe(false)
   })
 })
 
@@ -747,3 +754,123 @@ describe('AddTurpostModal Direct Form Rendering', () => {
     expect(geonorgeCalls.length).toBe(0)
   })
 })
+
+describe('MapViewer fitBounds suppression', () => {
+  let fitBoundsMock: ReturnType<typeof vi.fn>
+  let mockMapInstance: Record<string, unknown>
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    fitBoundsMock = vi.fn()
+    mockMapInstance = {
+      fitBounds: fitBoundsMock,
+      flyTo: vi.fn(),
+      panTo: vi.fn(),
+      setView: vi.fn(),
+      getZoom: vi.fn().mockReturnValue(13),
+      getCenter: vi.fn().mockReturnValue({ lat: 60.39, lng: 5.32 }),
+      getBounds: vi.fn().mockReturnValue({
+        getNorth: () => 61,
+        getSouth: () => 60,
+        getEast: () => 6,
+        getWest: () => 5
+      }),
+      on: vi.fn(),
+      off: vi.fn(),
+      removeLayer: vi.fn(),
+      addLayer: vi.fn(),
+      closePopup: vi.fn(),
+      remove: vi.fn(),
+      invalidateSize: vi.fn(),
+      latLngToContainerPoint: vi.fn().mockReturnValue({ x: 0, y: 0 })
+    }
+
+    vi.spyOn(L, 'map').mockReturnValue(mockMapInstance as unknown as L.Map)
+    vi.spyOn(L, 'layerGroup').mockReturnValue({
+      addTo: vi.fn().mockReturnThis(),
+      clearLayers: vi.fn(),
+      addLayer: vi.fn(),
+      removeLayer: vi.fn()
+    } as unknown as L.LayerGroup)
+    vi.spyOn(L, 'tileLayer').mockReturnValue({
+      addTo: vi.fn().mockReturnThis()
+    } as unknown as L.TileLayer)
+    vi.spyOn(L, 'marker').mockReturnValue({
+      addTo: vi.fn().mockReturnThis(),
+      bindPopup: vi.fn().mockReturnThis(),
+      on: vi.fn().mockReturnThis(),
+      setPopupContent: vi.fn().mockReturnThis()
+    } as unknown as L.Marker)
+  })
+
+  it('does NOT call fitBounds when suppressFitBounds is true', async () => {
+    const wrapper = mount(MapViewer, {
+      props: {
+        userLocation: null,
+        activeLayer: 'norgeskart',
+        isTracking: false,
+        turposter: [],
+        selectedKommuneName: 'Bergen',
+        suppressFitBounds: true
+      }
+    })
+
+    wrapper.vm.resetAutoCenter()
+
+    const samplePosts: TurpostItem[] = [
+      { id: '1', name: 'Fløyen', lat: 60.39, lng: 5.33, alt: 400, fylke: 'Vestland', kommune: 'Bergen' }
+    ]
+    await wrapper.setProps({ turposter: samplePosts })
+    await wrapper.vm.$nextTick()
+
+    expect(fitBoundsMock).not.toHaveBeenCalled()
+  })
+
+  it('calls fitBounds when suppressFitBounds is false and auto-center is disabled', async () => {
+    const wrapper = mount(MapViewer, {
+      props: {
+        userLocation: null,
+        activeLayer: 'norgeskart',
+        isTracking: false,
+        turposter: [],
+        selectedKommuneName: 'Bergen',
+        suppressFitBounds: false
+      }
+    })
+
+    wrapper.vm.resetAutoCenter()
+
+    const samplePosts: TurpostItem[] = [
+      { id: '1', name: 'Fløyen', lat: 60.39, lng: 5.33, alt: 400, fylke: 'Vestland', kommune: 'Bergen' }
+    ]
+    await wrapper.setProps({ turposter: samplePosts })
+    await wrapper.vm.$nextTick()
+
+    expect(fitBoundsMock).toHaveBeenCalled()
+  })
+
+  it('does NOT call fitBounds when suppressNextFitBounds() is invoked', async () => {
+    const wrapper = mount(MapViewer, {
+      props: {
+        userLocation: null,
+        activeLayer: 'norgeskart',
+        isTracking: false,
+        turposter: [],
+        selectedKommuneName: 'Bergen',
+        suppressFitBounds: false
+      }
+    })
+
+    wrapper.vm.resetAutoCenter()
+    wrapper.vm.suppressNextFitBounds()
+
+    const samplePosts: TurpostItem[] = [
+      { id: '1', name: 'Fløyen', lat: 60.39, lng: 5.33, alt: 400, fylke: 'Vestland', kommune: 'Bergen' }
+    ]
+    await wrapper.setProps({ turposter: samplePosts })
+    await wrapper.vm.$nextTick()
+
+    expect(fitBoundsMock).not.toHaveBeenCalled()
+  })
+})
+
