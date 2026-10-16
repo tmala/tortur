@@ -916,6 +916,7 @@ const handleLocate = async () => {
 // Håndter "Vis turposter i min kommune" / "Vis turposter her"
 const isLoadingLocalTurposter = ref(false)
 const hasLoadedDefaultTurposter = ref(false)
+const isSuppressingFitBounds = ref(false)
 
 const loadTurposterForCoordinates = async (
   targetCoords: { lat: number; lng: number },
@@ -924,13 +925,16 @@ const loadTurposterForCoordinates = async (
 ) => {
   if (isLoadingLocalTurposter.value) return
   isLoadingLocalTurposter.value = true
+  if (centerMode === 'none') {
+    isSuppressingFitBounds.value = true
+    mapViewerRef.value?.resetAutoCenter?.()
+    mapViewerRef.value?.suppressNextFitBounds?.()
+  }
   try {
     if (centerMode === 'user') {
       mapViewerRef.value?.centerOnUser?.(true, 15)
     } else if (centerMode === 'pan') {
       mapViewerRef.value?.panToCoordinate(targetCoords.lat, targetCoords.lng, 14)
-    } else if (centerMode === 'none') {
-      mapViewerRef.value?.suppressNextFitBounds?.()
     }
     await checkAndApplyAbroadLayer(targetCoords.lat, targetCoords.lng)
     const geoResult = await detectKommune(targetCoords.lat, targetCoords.lng)
@@ -960,6 +964,8 @@ const loadTurposterForCoordinates = async (
     console.warn('Kunne ikke finne lokal kommune:', err)
   } finally {
     isLoadingLocalTurposter.value = false
+    await nextTick()
+    isSuppressingFitBounds.value = false
   }
 }
 
@@ -1149,6 +1155,7 @@ onUnmounted(() => {
       :show-km-markers="showKmMarkers"
       :track-photos="displayedTrackPhotos"
       :turposter="displayTurposter"
+      :suppress-fit-bounds="isSuppressingFitBounds"
       :private-turposter="appState.mySpots"
       :is-add-spot-active="appState.isAddSpotModeActive"
       :selected-kommune-name="selectedKommune ? selectedKommune.name : null"

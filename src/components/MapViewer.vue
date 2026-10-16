@@ -46,6 +46,7 @@ const props = defineProps<{
   isAddSpotActive?: boolean
   showKmMarkers?: boolean
   trackPhotos?: TrackPhoto[]
+  suppressFitBounds?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -814,8 +815,10 @@ watch(
     lastTurpostSignature = signature
 
     // Tilpass kun kartutsnittet med fitBounds hvis det faktisk kom et nytt utvalg av turposter, vi ikke er i auto-sentrert modus på brukeren, og fitBounds ikke er eksplisitt undertrykt
-    const shouldFit = hasChanged && !isAutoCenter.value && !skipNextFitBounds.value
-    skipNextFitBounds.value = false
+    const shouldFit = hasChanged && !isAutoCenter.value && !skipNextFitBounds.value && !props.suppressFitBounds
+    if (!props.suppressFitBounds && newPosts && newPosts.length > 0) {
+      skipNextFitBounds.value = false
+    }
     updateTurpostMarkers(newPosts || [], shouldFit)
     updatePrivateTurpostMarkers(props.privateTurposter || [])
   }
