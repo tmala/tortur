@@ -3,6 +3,7 @@ import type { MockInstance } from 'vitest'
 import {
   isFileWithinTrackTime,
   formatTrackFolderName,
+  escapeDriveQueryValue,
   isPhotoNearTrack,
   readPhotoExif,
   createThumbnailDataUrl,
@@ -119,6 +120,24 @@ describe('useTrackPhotos', () => {
         points: []
       }
       expect(formatTrackFolderName(track)).toBe('2026.09.15 Fløyen')
+    })
+  })
+
+  describe('escapeDriveQueryValue', () => {
+    it('escaper enkeltfnutter korrekt for Drive API-spørringer', () => {
+      expect(escapeDriveQueryValue("Fløyen's tur")).toBe("Fløyen\\'s tur")
+    })
+
+    it('escaper backslash korrekt før enkeltfnutter', () => {
+      expect(escapeDriveQueryValue('test\\path')).toBe('test\\\\path')
+    })
+
+    it('escaper kombinert backslash og enkeltfnutt for å hindre query injection', () => {
+      expect(escapeDriveQueryValue("test\\'injection")).toBe("test\\\\\\'injection")
+    })
+
+    it('beholder vanlige strenger uendret', () => {
+      expect(escapeDriveQueryValue('2026.09.15 Fløyen')).toBe('2026.09.15 Fløyen')
     })
   })
 
@@ -312,6 +331,33 @@ describe('useTrackPhotos', () => {
       const payload = createdPayload as { name?: string; parents?: string[] } | null
       expect(payload?.name).toBe('2026.09.17 Fløyen Tur')
       expect(payload?.parents).toEqual(['tortur_root_id'])
+    })
+
+    it('getOrCreateTrackFolder escaper spesialtegn (enkeltfnutt og backslash) i søkespørringen mot Google Drive', async () => {
+      let capturedSearchUrl = ''
+
+      fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+        const urlStr = String(url)
+        if (urlStr.includes('/files?') && urlStr.includes('parents')) {
+          capturedSearchUrl = urlStr
+          return {
+            ok: true,
+            json: async () => ({ files: [{ id: 'found_folder_special_123', name: "2026.09.17 Kongens' sti" }] })
+          } as unknown as Response
+        }
+        return { ok: false } as unknown as Response
+      })
+
+      const trackWithSpecialChars: SavedTrack = {
+        ...mockTrack,
+        name: "Kongens' sti"
+      }
+
+      const { getOrCreateTrackFolder } = useTrackPhotos()
+      const folderId = await getOrCreateTrackFolder('tortur_root_id', trackWithSpecialChars, 'fake_token')
+
+      expect(folderId).toBe('found_folder_special_123')
+      expect(capturedSearchUrl).toContain(encodeURIComponent("name = '2026.09.17 Kongens\\' sti'"))
     })
 
     it('uploadFileToDrive sender multipart-opplasting til Drive v3 API', async () => {

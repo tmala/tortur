@@ -239,6 +239,14 @@ export function isFileWithinTrackTime(
 }
 
 /**
+ * Escaper streng-literaler for bruk i Google Drive API-spørringer (`q`-parameteren).
+ * I henhold til Google Drive API og CodeQL må backslash escapes før enkeltfnutter.
+ */
+export function escapeDriveQueryValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
+/**
  * Formaterer mappenavnet for et spor i formatet "YYYY.MM.DD Spornavn",
  * f.eks. "2026.09.15 Fløyen".
  */
@@ -432,8 +440,9 @@ export function useTrackPhotos() {
 
     // Søk etter eksisterende undermappe under parentFolderId
     try {
-      const escapedName = folderName.replace(/'/g, "\\'")
-      const q = `'${parentFolderId}' in parents and name = '${escapedName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+      const escapedParentId = escapeDriveQueryValue(parentFolderId)
+      const escapedName = escapeDriveQueryValue(folderName)
+      const q = `'${escapedParentId}' in parents and name = '${escapedName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
       const searchRes = await fetch(
         `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`,
         {
