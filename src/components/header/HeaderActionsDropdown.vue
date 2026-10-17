@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import {
-  Route,
-  FileDown,
   Loader2,
-  Download,
-  Info,
   LocateFixed,
   Mountain,
   Anchor,
@@ -22,15 +18,11 @@ defineProps<{
   isLoadingLocalTurposter?: boolean
   isLocating?: boolean
   isLiveLocating?: boolean
-  isTracking?: boolean
-  hasTrack?: boolean
   isAdmin?: boolean
   isAisToggled?: boolean
   isZoomSufficient?: boolean
   aisVesselCount?: number
   showAisModal?: boolean
-  showInfoModal?: boolean
-  showInstallPrompt?: boolean
   needsUpdate?: boolean
 }>()
 
@@ -39,12 +31,8 @@ const emit = defineEmits<{
   (e: 'toggle-turposter'): void
   (e: 'show-local-turposter'): void
   (e: 'locate'): void
-  (e: 'toggle-tracking'): void
-  (e: 'open-track-modal'): void
   (e: 'toggle-ais'): void
   (e: 'toggle-ais-modal'): void
-  (e: 'toggle-info-modal'): void
-  (e: 'install'): void
   (e: 'apply-update'): void
 }>()
 </script>
@@ -98,35 +86,6 @@ const emit = defineEmits<{
           <MapPin v-else :size="18" />
         </button>
 
-
-        <!-- Sporlogg / Følg meg -->
-        <button
-          class="icon-btn btn-track"
-          :class="{ active: isTracking, 'is-tracking': isTracking, 'has-track': hasTrack }"
-          @click="emit('toggle-tracking')"
-          :title="
-            isTracking
-              ? 'Sporer deg (sporing aktiv)'
-              : hasTrack
-                ? 'Sporing stanset (sporet vises på kartet)'
-                : 'Spor meg'
-          "
-          aria-label="Spor meg"
-        >
-          <Route :size="18" :class="{ 'pulse-slow': isTracking }" />
-        </button>
-
-        <!-- Sporlogg-valg (last ned GPX eller slett) -->
-        <button
-          v-if="hasTrack"
-          class="icon-btn btn-track-menu"
-          @click="emit('open-track-modal')"
-          title="Sporlogg (last ned GPX eller slett spor)"
-          aria-label="Sporlogg"
-        >
-          <FileDown :size="18" />
-        </button>
-
         <!-- AIS Båttrafikk-knapp – kun synlig for admin -->
         <button
           v-if="isAdmin"
@@ -157,27 +116,6 @@ const emit = defineEmits<{
           title="Båttrafikk (AIS) innstillinger"
         >
           <Radio :size="18" />
-        </button>
-
-        <!-- Info-knapp -->
-        <button
-          class="icon-btn"
-          :class="{ active: showInfoModal }"
-          @click="emit('toggle-info-modal')"
-          title="Om appen"
-        >
-          <Info :size="18" />
-        </button>
-
-        <!-- PWA Install-knapp (vises hvis tilgjengelig) -->
-        <button
-          v-if="showInstallPrompt"
-          class="icon-btn btn-install"
-          @click="emit('install')"
-          title="Installer som app på enheten"
-          aria-label="Installer som app på enheten"
-        >
-          <Download :size="18" />
         </button>
 
         <div class="menu-divider" />
@@ -324,31 +262,6 @@ const emit = defineEmits<{
   cursor: wait;
 }
 
-.icon-btn.btn-track.is-tracking {
-  background: linear-gradient(135deg, #10b981, #059669);
-  border-color: #34d399;
-  color: white;
-  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4);
-}
-
-.icon-btn.btn-track.has-track:not(.is-tracking) {
-  border-color: rgba(249, 115, 22, 0.6);
-  color: #f97316;
-  background: rgba(249, 115, 22, 0.1);
-}
-
-.icon-btn.btn-track-menu {
-  color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.35);
-  background: rgba(56, 189, 248, 0.08);
-}
-
-.icon-btn.btn-track-menu:hover {
-  background: rgba(56, 189, 248, 0.22);
-  color: #ffffff;
-  border-color: #38bdf8;
-}
-
 .btn-ais {
   display: flex;
   align-items: center;
@@ -381,18 +294,6 @@ const emit = defineEmits<{
   background: rgba(245, 158, 11, 0.2);
   border-color: #f59e0b;
   color: #fde68a;
-}
-
-.icon-btn.btn-install {
-  background: linear-gradient(135deg, #0284c7, #0369a1);
-  border: 1px solid #38bdf8;
-  color: white;
-  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
-}
-
-.icon-btn.btn-install:hover {
-  background: linear-gradient(135deg, #0369a1, #0284c7);
-  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.6);
 }
 
 .update-banner {
