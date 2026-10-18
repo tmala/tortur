@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import MySpotsModal from '@/components/MySpotsModal.vue'
-import SpotSuggestionsModal from '@/components/SpotSuggestionsModal.vue'
+import MySpotsMenu from '@/components/MySpotsMenu.vue'
+import SpotSuggestionsMenu from '@/components/SpotSuggestionsMenu.vue'
 import type { TurpostItem } from '@/composables/useTurposter'
 import type { SpotSuggestion } from '@/composables/usePrivateTurposter'
 import { createPinia, setActivePinia } from 'pinia'
@@ -27,7 +27,7 @@ describe('Spot Denial Flow and UI', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
-  describe('MySpotsModal', () => {
+  describe('MySpotsMenu', () => {
     it('displays "Avvist av admin" badge and hides suggest button for denied spots', () => {
       const spots: TurpostItem[] = [
         {
@@ -62,7 +62,7 @@ describe('Spot Denial Flow and UI', () => {
         }
       ]
 
-      const wrapper = mount(MySpotsModal, {
+      const wrapper = mount(MySpotsMenu, {
         props: {
           isOpen: true,
           spots,
@@ -91,7 +91,7 @@ describe('Spot Denial Flow and UI', () => {
     })
   })
 
-  describe('SpotSuggestionsModal', () => {
+  describe('SpotSuggestionsMenu', () => {
     it('renders "Avvis forslag" and calls denySpotSuggestion when clicked', async () => {
       const mockSuggestions: SpotSuggestion[] = [
         {
@@ -111,7 +111,7 @@ describe('Spot Denial Flow and UI', () => {
 
       mockFetchSpotSuggestions.mockResolvedValue(mockSuggestions)
 
-      const wrapper = mount(SpotSuggestionsModal, {
+      const wrapper = mount(SpotSuggestionsMenu, {
         props: {
           isOpen: true
         },

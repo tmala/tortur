@@ -190,7 +190,7 @@ describe('useGpsTrackStore', () => {
   })
 })
 
-describe('SavedTracksPanel', () => {
+describe('SavedTracksMenu', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
@@ -204,7 +204,7 @@ describe('SavedTracksPanel', () => {
 
   it('assigns unique track-card id and applies is-highlighted class', async () => {
     const { mount } = await import('@vue/test-utils')
-    const SavedTracksPanel = (await import('../components/SavedTracksPanel.vue')).default
+    const SavedTracksMenu = (await import('../components/SavedTracksMenu.vue')).default
     const store = useGpsTrackStore()
 
     const points: TrackPoint[] = [
@@ -213,7 +213,7 @@ describe('SavedTracksPanel', () => {
     const saved = store.saveTrack(points, 'Høydetur')
     expect(saved).not.toBeNull()
 
-    const wrapper = mount(SavedTracksPanel, {
+    const wrapper = mount(SavedTracksMenu, {
       props: {
         isOpen: true,
         highlightedTrackId: saved!.id,
@@ -232,7 +232,7 @@ describe('SavedTracksPanel', () => {
 
   it('renders track cards in compact view by default and expands on click', async () => {
     const { mount } = await import('@vue/test-utils')
-    const SavedTracksPanel = (await import('../components/SavedTracksPanel.vue')).default
+    const SavedTracksMenu = (await import('../components/SavedTracksMenu.vue')).default
     const store = useGpsTrackStore()
 
     const p1: TrackPoint[] = [{ lat: 60.3913, lng: 5.3221, timestamp: 1725450000000 }]
@@ -240,7 +240,7 @@ describe('SavedTracksPanel', () => {
     const t1 = store.saveTrack(p1, 'Tur 1')
     const t2 = store.saveTrack(p2, 'Tur 2')
 
-    const wrapper = mount(SavedTracksPanel, {
+    const wrapper = mount(SavedTracksMenu, {
       props: {
         isOpen: true,
         highlightedTrackId: null
@@ -300,7 +300,7 @@ describe('SavedTracksPanel', () => {
 
   it('groups tracks by month and allows expanding and collapsing months', async () => {
     const { mount } = await import('@vue/test-utils')
-    const SavedTracksPanel = (await import('../components/SavedTracksPanel.vue')).default
+    const SavedTracksMenu = (await import('../components/SavedTracksMenu.vue')).default
     const store = useGpsTrackStore()
 
     const octTime = Date.parse('2026-10-12T10:00:00Z')
@@ -312,7 +312,7 @@ describe('SavedTracksPanel', () => {
     const trackOct = store.saveTrack(pOct, 'Oktober-tur')
     const trackSep = store.saveTrack(pSep, 'September-tur')
 
-    const wrapper = mount(SavedTracksPanel, {
+    const wrapper = mount(SavedTracksMenu, {
       props: {
         isOpen: true,
         highlightedTrackId: null
@@ -355,7 +355,7 @@ describe('SavedTracksPanel', () => {
 
   it('renders track cards with visibility badge and updates visibility on select', async () => {
     const { mount } = await import('@vue/test-utils')
-    const SavedTracksPanel = (await import('../components/SavedTracksPanel.vue')).default
+    const SavedTracksMenu = (await import('../components/SavedTracksMenu.vue')).default
     const store = useGpsTrackStore()
 
     const points: TrackPoint[] = [
@@ -364,7 +364,7 @@ describe('SavedTracksPanel', () => {
 
     const track = store.saveTrack(points, 'Tur med synlighet', 'friends')
 
-    const wrapper = mount(SavedTracksPanel, {
+    const wrapper = mount(SavedTracksMenu, {
       props: {
         isOpen: true,
         highlightedTrackId: null

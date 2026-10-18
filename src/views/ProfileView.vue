@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import UserProfileModal from '@/components/UserProfileModal.vue'
+import UserProfileMenu from '@/components/UserProfileMenu.vue'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { useFriends } from '@/composables/useFriends'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
@@ -51,7 +51,7 @@ const handleViewTurpostOnMap = (checkin: FirebaseCheckinItem) => {
 </script>
 
 <template>
-  <UserProfileModal
+  <UserProfileMenu
     :is-open="true"
     :user="user"
     :checkins="appState.myCheckins"

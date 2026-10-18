@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import FriendProfileModal from '@/components/FriendProfileModal.vue'
+import FriendProfileMenu from '@/components/FriendProfileMenu.vue'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { useFriends, type FriendUser } from '@/composables/useFriends'
 import { useAppStateStore } from '@/stores/appState'
@@ -46,7 +46,7 @@ const handleViewTrackOnMap = (track: SavedTrack) => {
 </script>
 
 <template>
-  <FriendProfileModal
+  <FriendProfileMenu
     :is-open="true"
     :friend="friend"
     :current-user-id="user?.userId"

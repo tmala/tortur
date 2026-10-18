@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import FriendsModal from '@/components/FriendsModal.vue'
+import FriendsMenu from '@/components/FriendsMenu.vue'
 import { useAuth } from '@/composables/useAuth'
 import type { FriendUser } from '@/composables/useFriends'
 
@@ -17,7 +17,7 @@ const handleViewFriendProfile = (friend: FriendUser) => {
 </script>
 
 <template>
-  <FriendsModal
+  <FriendsMenu
     :is-open="true"
     :current-user="user"
     @close="handleClose"

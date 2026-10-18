@@ -441,7 +441,7 @@ describe('MapView Longpress Context Menu Integration', () => {
           TurposterPanel: true,
           CheckinModal: true,
           TurpostCheckinsModal: true,
-          UserProfileModal: true,
+          UserProfileMenu: true,
           AddTurpostModal: {
             name: 'AddTurpostModal',
             props: ['isOpen', 'lat', 'lng', 'isAdmin', 'userId', 'userName', 'userEmail'],
@@ -532,7 +532,7 @@ describe('MapView Longpress Context Menu Integration', () => {
           TurposterPanel: true,
           CheckinModal: true,
           TurpostCheckinsModal: true,
-          UserProfileModal: true,
+          UserProfileMenu: true,
           AddTurpostModal: true
         }
       }
