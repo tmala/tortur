@@ -725,8 +725,8 @@ const handleConfirmSaveLiveTrack = () => {
                     @click="handleToggleViewOnMap(track)"
                     :title="trackStore.activeTrackId === track.id ? 'Skjul fra kart' : 'Vis på kart og zoom til sporet'"
                   >
-                    <EyeOff v-if="trackStore.activeTrackId === track.id" :size="14" />
-                    <Eye v-else :size="14" />
+                    <EyeOff v-if="trackStore.activeTrackId === track.id" :size="13" />
+                    <Eye v-else :size="13" />
                     <span>{{ trackStore.activeTrackId === track.id ? 'Skjul fra kart' : 'Vis på kart' }}</span>
                   </button>
 
@@ -1539,28 +1539,29 @@ const handleConfirmSaveLiveTrack = () => {
 }
 
 .btn-track-action {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 7px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
+  font-family: inherit;
 }
 
 .btn-view-map {
-  flex: 1;
-  background: #0f172a;
-  border: 1px solid #334155;
-  color: #e2e8f0;
+  background: rgba(249, 115, 22, 0.18);
+  border: 1px solid rgba(249, 115, 22, 0.4);
+  color: #fb923c;
 }
 
 .btn-view-map:hover {
-  background: #334155;
-  color: white;
-  border-color: #475569;
+  background: rgba(249, 115, 22, 0.3);
+  color: #ffedd5;
+  border-color: rgba(249, 115, 22, 0.6);
 }
 
 .btn-view-map.active {
@@ -1568,9 +1569,11 @@ const handleConfirmSaveLiveTrack = () => {
   border-color: #f97316;
   color: white;
   font-weight: 600;
+  box-shadow: 0 0 10px rgba(234, 88, 12, 0.4);
 }
 
 .btn-download-gpx {
+  margin-left: auto;
   background: #0f172a;
   border: 1px solid #334155;
   color: #94a3b8;
@@ -1586,7 +1589,7 @@ const handleConfirmSaveLiveTrack = () => {
   background: #0f172a;
   border: 1px solid #334155;
   color: #94a3b8;
-  padding: 6px 8px;
+  padding: 6px 10px;
 }
 
 .btn-delete-track:hover {

@@ -42,16 +42,12 @@ const appState = useAppStateStore()
 const {
   isLocating,
   isLiveLocating,
-  isTracking,
   error: geoError,
   coords,
   trackPoints,
   getCurrentPosition,
   startLiveLocating,
   stopLiveLocating,
-  startTracking,
-  stopTracking,
-  clearTrack,
 } = useGeolocation()
 
 const { detectKommune, isAbroad } = useGeoDetect()
@@ -492,7 +488,7 @@ const displayedTrackTitle = computed(() => {
     return trackStore.activeTrack.name
   }
   if (trackPoints.value.length > 0) {
-    return isTracking.value ? 'Pågående opptak' : 'Aktiv sporlogg'
+    return 'Aktiv sporlogg'
   }
   return ''
 })
@@ -985,20 +981,6 @@ const handleShowLocalTurposter = async () => {
   await loadLocalTurposterForLocation(loc, true)
 }
 
-// Håndter live sporing / sporlogg ("Følg meg")
-const handleToggleTracking = () => {
-  if (isTracking.value) {
-    stopTracking()
-  } else {
-    trackStore.clearActiveTrack()
-    clearTrack()
-    startTracking({ enableHighAccuracy: true }, (newCoords) => {
-      if (mapViewerRef.value && newCoords) {
-        mapViewerRef.value.centerOnUser(true)
-      }
-    })
-  }
-}
 
 const handleMapDragged = () => {
   handleCloseContextMenu()
@@ -1147,7 +1129,6 @@ onUnmounted(() => {
       ref="mapViewerRef"
       :user-location="coords"
       :active-layer="activeLayer"
-      :is-tracking="isTracking"
       :is-live-locating="isLiveLocating"
       :track-points="displayedTrackPoints"
       :track-name="displayedTrackTitle"
@@ -1299,8 +1280,6 @@ onUnmounted(() => {
       :is-loading-local-turposter="isLoadingLocalTurposter"
       :is-locating="isLocating"
       :is-live-locating="isLiveLocating"
-      :is-tracking="isTracking"
-      :has-track="trackPoints.length > 0"
       :saved-tracks-count="trackStore.savedTracks.length"
       :is-saved-tracks-open="false"
       :needs-update="needsUpdate"
@@ -1308,8 +1287,6 @@ onUnmounted(() => {
       :is-my-spots-open="false"
       :is-add-spot-mode-active="appState.isAddSpotModeActive"
       @locate="handleLocate"
-      @toggle-tracking="handleToggleTracking"
-      @open-track-modal="router?.push('/gps-spor?tab=live')"
       @open-saved-tracks="router?.push('/gps-spor')"
       @open-my-spots="router?.push('/mine-turposter')"
       @toggle-add-spot-mode="appState.isAddSpotModeActive = !appState.isAddSpotModeActive"

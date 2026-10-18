@@ -24,8 +24,6 @@ const props = withDefaults(
     isLoadingLocalTurposter?: boolean
     isLocating?: boolean
     isLiveLocating?: boolean
-    isTracking?: boolean
-    hasTrack?: boolean
     savedTracksCount?: number
     isSavedTracksOpen?: boolean
     /** true når en ny versjon er tilgjengelig via Service Worker */
@@ -42,8 +40,6 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'locate'): void
-  (e: 'toggle-tracking'): void
-  (e: 'open-track-modal'): void
   (e: 'open-saved-tracks'): void
   (e: 'open-my-spots'): void
   (e: 'toggle-add-spot-mode'): void
@@ -54,15 +50,8 @@ const emit = defineEmits<{
   (e: 'apply-update'): void
 }>()
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
-}
-
 const showInfoModal = ref(false)
 const showAisModal = ref(false)
-const installPrompt = ref<BeforeInstallPromptEvent | null>(null)
-const isInstalled = ref(false)
 
 const logoUrl = `${import.meta.env.BASE_URL}icon.svg`
 const appVersion = __APP_VERSION__
@@ -73,11 +62,6 @@ const isMenuOpen = ref(false)
 const handleToggleTurposter = () => {
   isMenuOpen.value = false
   emit('toggle-turposter')
-}
-
-const handleOpenTrackModal = () => {
-  isMenuOpen.value = false
-  emit('open-track-modal')
 }
 
 const handleOpenProfile = () => {
@@ -128,32 +112,12 @@ const handleKeyDown = (e: KeyboardEvent) => {
 onMounted(() => {
   window.addEventListener('click', handleClickOutside)
   window.addEventListener('keydown', handleKeyDown)
-
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault()
-    installPrompt.value = e as BeforeInstallPromptEvent
-  })
-
-  window.addEventListener('appinstalled', () => {
-    isInstalled.value = true
-    installPrompt.value = null
-  })
 })
 
 onUnmounted(() => {
   window.removeEventListener('click', handleClickOutside)
   window.removeEventListener('keydown', handleKeyDown)
 })
-
-const handleInstallClick = async () => {
-  if (!installPrompt.value) return
-  installPrompt.value.prompt()
-  const choiceResult = await installPrompt.value.userChoice
-  if (choiceResult.outcome === 'accepted') {
-    isInstalled.value = true
-  }
-  installPrompt.value = null
-}
 </script>
 
 <template>
@@ -194,26 +158,18 @@ const handleInstallClick = async () => {
       :is-loading-local-turposter="isLoadingLocalTurposter"
       :is-locating="isLocating"
       :is-live-locating="isLiveLocating"
-      :is-tracking="isTracking"
-      :has-track="hasTrack"
       :is-admin="isAdmin && isAdminActive"
       :is-ais-toggled="isAisToggled"
       :is-zoom-sufficient="isZoomSufficient"
       :ais-vessel-count="aisVesselCount"
       :show-ais-modal="showAisModal"
-      :show-info-modal="showInfoModal"
-      :show-install-prompt="!!installPrompt && !isInstalled"
       :needs-update="needsUpdate"
       @close="isMenuOpen = false"
       @toggle-turposter="handleToggleTurposter"
       @show-local-turposter="emit('show-local-turposter')"
       @locate="emit('locate')"
-      @toggle-tracking="emit('toggle-tracking')"
-      @open-track-modal="handleOpenTrackModal"
       @toggle-ais="emit('toggle-ais')"
       @toggle-ais-modal="showAisModal = !showAisModal"
-      @toggle-info-modal="showInfoModal = !showInfoModal"
-      @install="handleInstallClick"
       @apply-update="emit('apply-update')"
     />
 

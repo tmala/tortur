@@ -27,7 +27,7 @@ import type { TrackPhoto } from '@/composables/useTrackPhotos'
 const props = defineProps<{
   userLocation: GeoLocationState | null
   activeLayer: string
-  isTracking: boolean
+  isTracking?: boolean
   isLiveLocating?: boolean
   turposter: TurpostItem[]
   showMunicipalities?: boolean

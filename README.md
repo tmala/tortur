@@ -1,6 +1,6 @@
-# ⛰️ TorTur – Turposter & GPS-opplevelser
+# ⛰️ TorTur – Ut på tur og like sur
 
-En moderne **Progressive Web App (PWA)** bygget med **Vue 3 (Composition API & `<script setup lang="ts">`)**, **TypeScript**, **Vite**, **Leaflet** og **MapLibre GL** (3D Flyover). Appen lar deg utforske interaktive kart over Norge og utvalgte områder globalt, finne din nøyaktige posisjon, ta opp og spille av GPS-spor, se turbilder langs ruten, sjekke inn på over **15 000 turposter og fjelltopper** i hele landet og utvalgte områder globalt (med datagrunnlag fra postkassetrimmen.no), opprette egne private turposter, og oppleve turene dine med en **3D Flyover** som kan eksporteres.
+En moderne **Progressive Web App (PWA)** bygget med **Vue 3 (Composition API & `<script setup lang="ts">`)**, **TypeScript**, **Vite**, **Leaflet** og **MapLibre GL** (3D Flyover). Du finner tusenvis av turposter over Norge, med mulighet for å legge til egne. Stor takk til postkassetrimmen.no for datagrunnlaget.
 
 ---
 
@@ -17,9 +17,9 @@ TorTur støtter et utvalg kartlag for å gjøre det enkelt å finne fram på tur
 5. **Tur- & Sykkelkart (CyclOSM)**: Tydelige stier, sykkelruter og turveier.
 6. **Kartverket Sjøkart**: Offisielt sjøkart fra Kartverket med dybder, dybdekurver, fyrsektorer og sjømerker.
 7. **OpenSeaMap Sjøkart**: Globalt sjøkart med fyr, bøyer og navigasjonsmerker.
-8. **Google Veikart**: Googles klassiske veikart med gater og interessepunkter *(krever innlogging og admin-tilgang)*.
-9. **Google Satellitt (Hybrid)**: Ekte Google-satellittfoto med påførte veinavn og steder *(krever innlogging og admin-tilgang)*.
-10. **Google Terreng**: Googles terrengkart med høydeforskjeller *(krever innlogging og admin-tilgang)*.
+8. **Google Veikart**: Googles klassiske veikart med gater og interessepunkter _(krever innlogging og admin-tilgang)_.
+9. **Google Satellitt (Hybrid)**: Ekte Google-satellittfoto med påførte veinavn og steder _(krever innlogging og admin-tilgang)_.
+10. **Google Terreng**: Googles terrengkart med høydeforskjeller _(krever innlogging og admin-tilgang)_.
 
 - **Smart utlandsdeteksjon**: Hvis brukeren befinner seg utenfor Norges grenser, detekteres dette automatisk via koordinatene, og kartet skifter sømløst fra Kartverket Norgeskart til OpenStreetMap for optimal visning.
 
@@ -29,116 +29,60 @@ TorTur støtter et utvalg kartlag for å gjøre det enkelt å finne fram på tur
 
 - **Finn min posisjon**: Henter nøyaktige koordinater via enhetens GPS og sentrerer kartet med jevn animasjon.
 - **Pulserende markør**: Egendefinert markør med radaranimasjon, retningsvisning (kompasskurs/heading) og nøyaktighetsradius (± meter).
-- **Kontekstmeny i kartet (Høyreklikk / Langtrykk)**: Langtrykk på berøringsskjerm eller høyreklikk med mus åpner en kontekstmeny der du kan opprette en turpost direkte på punktet, sjekke inn, eller kopiere GPS-koordinater.
-- **Automatisk kommune-gjenkjenning**: Finner automatisk ut hvilken kommune du befinner deg i basert på Kartverkets administrative grenser.
+- **Kontekstmeny i kartet (Høyreklikk / Langtrykk)**: Langtrykk på berøringsskjerm eller høyreklikk med mus åpner en kontekstmeny der du kan opprette en turpost direkte på punktet eller vise turposter i nærheten av punktet.
 
 ---
 
-### 3. ⛰️ Turposter (15 200+ registreringer)
-
-- **Trinnvis filtrering**: Velg fylke, deretter kommune, for å laste inn turposter i det aktuelle området uten å overbelaste nettleseren eller mobilminnet.
-- **Interaktivt søk**: Søk på navn på turpost/fjelltopp.
-- **Hurtignavigasjon**: Klikk på en topp i listen for å fly direkte til den på kartet og åpne detaljkortet.
-- **Fjellmarkører (`⛰️`)**: Klikk på markører på kartet for å se navn, høyde (`moh.`), fylke, kommune og GPS-koordinater.
-- **Innsjekksoversikt per turpost**: Se hvem som har sjekket inn på posten, se turbilder, les turbeskrivelser og legg igjen kommentarer.
-
----
-
-### 4. 📍 Mine Turposter & Forslag til Nye Poster
+### 3. 📍 Mine Turposter & Forslag til Nye Poster
 
 - **Mine Turposter («Mine steder»)**: Opprett egne private turposter.
 - **Forslagssystem for fellesskapet**: Foreslå nye offentlige turposter direkte fra appen.
 
 ---
 
-### 5. 🥾 GPS-spor, Ruteopptak & Geotaggede Turbilder
+### 4. 🥾 GPS-spor, Ruteopptak & Geotaggede Turbilder
 
-- **Import av GPX og GeoJSON**: Importer eksisterende turer fra smartklokker (Garmin, Polar, Apple Watch) eller turapper.
-- **Interaktiv 2D-spiller**: Spill av turen på kartet med justerbar hastighet (1x–20x), scrubber, kilometer-markører og dynamisk høydeprofil.
-- **Geotaggede turbilder langs ruten**: Velg bilder tatt under turen. Appen leser automatisk EXIF GPS-metadata (`exifr`) og matcher bildene mot GPS-sporet. Bildene vises som fotomarkører langs ruten på kartet med forhåndsvisning.
+- **Import av GPX og GeoJSON**: Importer gps-spor en app som f.eks MyGPSLog.
+- **Geotaggede turbilder langs ruten**: Velg bilder tatt under turen. Appen leser automatisk EXIF GPS-metadata (`exifr`) og matcher bildene mot GPS-sporet. Bildene vises som fotomarkører langs ruten på kartet med forhåndsvisning. Disse bildene lastes opp til din provate Google Drive under folderen "\\TorTur\\\<SPORNAVN\>\\"
+- **Interaktiv 2D-spiller**: Spill av turen på kartet med justerbar hastighet, vis kilometer-markører og evt bilder langs sporet.
+- **3D-visning av turen over terreng**: Se GPS-sporet ditt i et fullt 3D-terreng med satellitt- eller topografiske kartfliser ved hjelp av MapLibre GL.
 
----
-
-### 6. 🚁 3D Flyover & Videoeksport (MapLibre GL)
-
-- **Virtuell 3D-overflyving**: Se GPS-sporet ditt i et fullt 3D-terreng med satellitt- eller topografiske kartfliser ved hjelp av MapLibre GL.
-- **Smidig baneinterpolering**: Sporet interpoleres med Catmull-Rom-splines for cinematiske kamerabevegelser uten hakking.
-- **Fleksible kameramodi**:
-  - *Fugleperspektiv (Top-down)*
-  - *Tredjeperson (Bak løperen/turgåeren)*
-  - *Dynamisk/Cinematisk modus*
-- **Flyover HUD**: Viser sanntids høyde over havet, stigningsprosent, fart, distanse og tidsbruk.
-- **Innebygd videoopptak**: Ta opp hele overflyvingen direkte i nettleseren via `MediaRecorder` og last ned en ferdig videofil (WebM).
-- **Popout-støtte**: Kan kjøres i fullskjerm, i modal, eller spretter ut i et eget separat nettleservindu.
-
----
-
-### 7. ⛵ Sanntids Båttrafikk (AIS / BarentsWatch & Kystverket)
-
-- **Sanntids skipsdata**: Viser posisjoner, fart (`knop`), kurs (`°`), destinasjon og skipstype for fartøy i norske farvann.
-- **Roterende båtsymboler**: Symbolene roterer dynamisk etter båtens kompasskurs.
-- **Fargekoding etter fartøystype**:
-  - 🔵 Passasjerskip / Ferger (f.eks. Hurtigruten, Havila, Fjord1)
-  - 🟢 Lasteskip og bulkskip
-  - 🟡 Tankskip
-  - 🟠 Slepebåter og arbeidsbåter
-  - 🔴 Redningsskøyter og Kystvakt
-- **Smart Zoom-grense (Zoom $\ge$ 12)**: Vises kun ved tilstrekkelig innzooming for å sikre lynrask ytelse på mobil.
-- **Server-side Bounding Box & 25s Cache**: Både på webhotellet (PHP) og under lokal utvikling (Vite Dev Plugin) caches og filtreres den nasjonale AIS-strømmen slik at mobilen kun mottar båtene i aktuelt kartutsnitt.
-
----
-
-### 8. 🗺️ Interaktive Kommunegrenser & GeoJSON
-
-- **Diskrete kommunegrenser**: Viser vektorbaserte grenser for alle Norges kommuner.
-- **Klikk i kartet**: Klikk innenfor en kommune for å se fylkestilhørighet, antall turposter, og hurtigvalg for å vise eller skjule turpostene på kartet.
-
----
-
-### 9. 📸 Innsjekking & Turbilder (Google Drive & Sheets)
+### 5. 📸 Innsjekking & Turbilder (Google Drive & Sheets)
 
 - **Registrer turpostbesøk**: Dato, klokkeslett, personlig turbeskrivelse og turbilde.
 - **Klientside bildekomprimering**: Bilder komprimeres automatisk i nettleseren før opplasting for å spare mobildata og sikre rask respons.
-- **Google Cloud Function**: Bildet overføres som rå binærfil via `multipart/form-data` til en serverless Cloud Function (Node.js 22) som lagrer det strukturert i Google Drive (undermapper per turpost).
-- **Redigering og sletting**: Brukere kan i ettertid redigere turbeskrivelsen, endre synlighet eller slette egne innsjekkinger.
+- **Redigering og sletting**: Brukere kan i ettertid redigere turbeskrivelsen, endre synlighet eller slette egne innsjekkinger og/eller bilder.
 
 ---
 
-### 10. 👥 Venner, Profiler & Sanntidssynkronisering (Firebase)
+### 6. 👥 Venner, Profiler & Sanntidssynkronisering (Firebase)
 
 - **Google-innlogging (GIS)**: Sikker innlogging med offisiell Google Identity Services OAuth 2.0.
-- **Dobbelt lagringslag**: Innsjekkingen lagres sikkert i Google Sheets og propageres umiddelbart til **Firebase Realtime Database**.
 - **Synlighetskontroll**: Velg om innsjekkinger skal være offentlige, kun synlige for venner, eller helt private.
-- **Sosiale interaksjoner**: Vennefeed, venneforespørsler, emoji-reaksjoner og kommentarer på tvers av innsjekkinger.
+- **Sosiale interaksjoner**: Velg dine venner, gi emoji-reaksjoner og kommenter andres innsjekkinger.
 
 ---
 
-### 11. ⚡ PWA & Frakoblet bruk (Offline Caching)
+## Teknisk Informasjon
 
-- **Installérbar**: Fungerer som en fullverdig frittstående app på mobil (iOS Safari, Android Chrome) og datamaskin (Chrome, Edge, Safari).
-- **Service Worker Cache (Workbox)**: Cacher automatisk kartfliser, kommunegrenser og turpost-JSON.
-- **Oppdateringsvarsel**: Appen oppdager automatisk nye versjoner og gir brukeren et diskret varsel om å oppdatere (`useAppUpdate`).
-
----
-
-## 🧭 Ruting og Navigasjon
+### 🧭 Ruting og Navigasjon
 
 Appen benytter **Vue Router** med rene URL-stier for enkel deling og bokmerking:
 
-| Sti | Visning | Beskrivelse |
-|---|---|---|
-| `/` | `MapView.vue` | Hovedkartet med Leaflet, turposter, lagvelger og AIS |
-| `/profil` | `ProfileView.vue` | Brukerprofil, innsjekkingsstatistikk og personlige turer |
-| `/venner` | `FriendsView.vue` | Venneliste, vennefeed, søk og venneforespørsler |
-| `/venner/:userId` | `FriendProfileView.vue` | Se en venns offentlige profil og innsjekkinger |
-| `/mine-turposter` | `MySpotsView.vue` | Administrer egne private turposter («Mine steder») |
-| `/gps-spor` | `GpsTracksView.vue` | Bibliotek over lagrede GPS-spor med avspilling og eksport |
-| `/forslag` | `SpotSuggestionsView.vue` | Administrasjon og innsending av forslag til turposter |
-| `/spor-3d` | `TrackFlyoverView.vue` | 3D Flyover-visning med MapLibre GL og videoopptak |
+| Sti               | Visning                   | Beskrivelse                                               |
+| ----------------- | ------------------------- | --------------------------------------------------------- |
+| `/`               | `MapView.vue`             | Hovedkartet med Leaflet, turposter, lagvelger og AIS      |
+| `/profil`         | `ProfileView.vue`         | Brukerprofil, innsjekkingsstatistikk og personlige turer  |
+| `/venner`         | `FriendsView.vue`         | Venneliste, vennefeed, søk og venneforespørsler           |
+| `/venner/:userId` | `FriendProfileView.vue`   | Se en venns offentlige profil og innsjekkinger            |
+| `/mine-turposter` | `MySpotsView.vue`         | Administrer egne private turposter («Mine steder»)        |
+| `/gps-spor`       | `GpsTracksView.vue`       | Bibliotek over lagrede GPS-spor med avspilling og eksport |
+| `/forslag`        | `SpotSuggestionsView.vue` | Administrasjon og innsending av forslag til turposter     |
+| `/spor-3d`        | `TrackFlyoverView.vue`    | 3D Flyover-visning med MapLibre GL og videoopptak         |
 
 ---
 
-## ⚙️ Dataflyt og Hurtighet
+### ⚙️ Dataflyt og Hurtighet
 
 For å sikre at appen laster umiddelbart på mobil og svake nettverk, er turpostdataene fra `data/mountains.csv` optimalisert:
 
@@ -149,7 +93,7 @@ For å sikre at appen laster umiddelbart på mobil og svake nettverk, er turpost
 
 ---
 
-## 🏗️ Arkitektur og Prosjektstruktur
+### 🏗️ Arkitektur og Prosjektstruktur
 
 > [!TIP]
 > For en komplett teknisk gjennomgang med detaljerte Mermaid-diagrammer over dataflyt, sikkerhetsmodeller og skytjenester, se [ARCHITECTURE.md](file:///Users/mala/work/github/tortur/ARCHITECTURE.md).
