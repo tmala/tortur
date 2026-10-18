@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import MySpotsModal from '@/components/MySpotsModal.vue'
-import SpotSuggestionsModal from '@/components/SpotSuggestionsModal.vue'
+import MySpotsMenu from '@/components/MySpotsMenu.vue'
+import SpotSuggestionsMenu from '@/components/SpotSuggestionsMenu.vue'
 import type { TurpostItem } from '@/composables/useTurposter'
 import type { SpotSuggestion, ApprovedSpot } from '@/composables/usePrivateTurposter'
 import { createPinia, setActivePinia } from 'pinia'
@@ -44,7 +44,7 @@ describe('Approved Spots Flow and UI', () => {
     vi.spyOn(window, 'alert').mockImplementation(() => {})
   })
 
-  describe('MySpotsModal - Approved Badge', () => {
+  describe('MySpotsMenu - Approved Badge', () => {
     it('displays "✅ Godkjent av admin" badge and hides suggest button for approved spots', () => {
       const spots: TurpostItem[] = [
         {
@@ -79,7 +79,7 @@ describe('Approved Spots Flow and UI', () => {
         }
       ]
 
-      const wrapper = mount(MySpotsModal, {
+      const wrapper = mount(MySpotsMenu, {
         props: {
           isOpen: true,
           spots,
@@ -107,7 +107,7 @@ describe('Approved Spots Flow and UI', () => {
     })
   })
 
-  describe('SpotSuggestionsModal - Approve Action', () => {
+  describe('SpotSuggestionsMenu - Approve Action', () => {
     it('renders "Godkjenn og publiser" button and calls approveSpotSuggestion on click', async () => {
       const mockSuggestions: SpotSuggestion[] = [
         {
@@ -128,7 +128,7 @@ describe('Approved Spots Flow and UI', () => {
 
       mockFetchSpotSuggestions.mockResolvedValue(mockSuggestions)
 
-      const wrapper = mount(SpotSuggestionsModal, {
+      const wrapper = mount(SpotSuggestionsMenu, {
         props: {
           isOpen: true
         },

@@ -8,7 +8,7 @@ import LocationControls from '../components/LocationControls.vue'
 import TurposterPanel from '../components/TurposterPanel.vue'
 import CheckinModal from '../components/CheckinModal.vue'
 import TurpostCheckinsModal from '../components/TurpostCheckinsModal.vue'
-import UserProfileModal from '../components/UserProfileModal.vue'
+import UserProfileMenu from '../components/UserProfileMenu.vue'
 import MapLayerButton from '../components/MapLayerButton.vue'
 import type { FylkeInfo } from '../composables/useTurposter'
 import type { GoogleUser } from '../composables/useAuth'
@@ -689,7 +689,7 @@ describe('TurpostCheckinsModal', () => {
   })
 })
 
-describe('UserProfileModal', () => {
+describe('UserProfileMenu', () => {
   it('renders user details, stats, chronological checkins, and emits logout', async () => {
     const sampleUser = {
       userId: '112985692350976832637',
@@ -724,7 +724,7 @@ describe('UserProfileModal', () => {
       }
     ]
 
-    const wrapper = mount(UserProfileModal, {
+    const wrapper = mount(UserProfileMenu, {
       props: {
         isOpen: true,
         user: sampleUser,
@@ -803,7 +803,7 @@ describe('UserProfileModal', () => {
       }
     ]
 
-    mount(UserProfileModal, {
+    mount(UserProfileMenu, {
       props: {
         isOpen: true,
         user: sampleUser,
@@ -828,7 +828,7 @@ describe('UserProfileModal', () => {
       lastLogin: '2026-09-10T00:00:00Z'
     }
 
-    const wrapper = mount(UserProfileModal, {
+    const wrapper = mount(UserProfileMenu, {
       props: {
         isOpen: true,
         user: sampleUser,
@@ -903,7 +903,7 @@ describe('UserProfileModal', () => {
       }
     ]
 
-    mount(UserProfileModal, {
+    mount(UserProfileMenu, {
       props: {
         isOpen: true,
         user: sampleUser,
@@ -932,7 +932,7 @@ describe('UserProfileModal', () => {
     }
 
     // 1. Admin uten forslag: forslag-knapp vises ikke
-    const wrapperNoSuggestions = mount(UserProfileModal, {
+    const wrapperNoSuggestions = mount(UserProfileMenu, {
       props: {
         isOpen: true,
         user: sampleUser,
@@ -948,7 +948,7 @@ describe('UserProfileModal', () => {
     document.body.innerHTML = ''
 
     // 2. Admin med forslag: forslag-knapp vises med antall nye
-    const wrapperWithSuggestions = mount(UserProfileModal, {
+    const wrapperWithSuggestions = mount(UserProfileMenu, {
       props: {
         isOpen: true,
         user: sampleUser,

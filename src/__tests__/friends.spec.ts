@@ -6,7 +6,7 @@ import { useFriends, registerPublicUser, searchPublicUsers, fetchFriendCheckins,
 import * as friendsModule from '../composables/useFriends'
 import { setCachedMountainsListForTest, setCachedApprovedSpotsForTest } from '../composables/useTurposter'
 import { useAuth } from '../composables/useAuth'
-import FriendProfileModal from '../components/FriendProfileModal.vue'
+import FriendProfileMenu from '../components/FriendProfileMenu.vue'
 import FriendSearchTab from '../components/friends/FriendSearchTab.vue'
 
 describe('useFriends - Friends system and check-in visibility', () => {
@@ -706,7 +706,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
     expect(fetchCount).toBe(2)
   })
 
-  it('FriendProfileModal: starts with all check-ins minimized and expands on click', async () => {
+  it('FriendProfileMenu: starts with all check-ins minimized and expands on click', async () => {
     // Mock useFriends to inject checkins directly, bypassing Firebase
     const mockCheckins = [
       {
@@ -752,7 +752,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
       rejectSuggestion: vi.fn()
     } as unknown as ReturnType<typeof friendsModule.useFriends>)
 
-    const wrapper = mount(FriendProfileModal, {
+    const wrapper = mount(FriendProfileMenu, {
       props: {
         isOpen: true,
         friend: {
@@ -792,7 +792,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
     wrapper.unmount()
   })
 
-  it('FriendProfileModal: allows switching between Innsjekkinger and GPS-spor tabs and renders friend tracks', async () => {
+  it('FriendProfileMenu: allows switching between Innsjekkinger and GPS-spor tabs and renders friend tracks', async () => {
     const firebaseTracksModule = await import('../composables/useFirebaseTracks')
     const mockTracks = [
       {
@@ -822,7 +822,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
       setTrackVisibilityInFirebase: vi.fn()
     } as unknown as ReturnType<typeof firebaseTracksModule.useFirebaseTracks>)
 
-    const wrapper = mount(FriendProfileModal, {
+    const wrapper = mount(FriendProfileMenu, {
       props: {
         isOpen: true,
         friend: {

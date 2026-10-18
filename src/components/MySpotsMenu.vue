@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { Star, X } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
 
@@ -24,85 +24,32 @@ function handleDelete(spotId: string | number) {
   }
 }
 
-// Dra/flytte-funksjonalitet
-const modalRef = ref<HTMLElement | null>(null)
-const dragPosition = ref({ x: 0, y: 0 })
-const isDragging = ref(false)
-let dragStart = { x: 0, y: 0 }
-let initialPosition = { x: 0, y: 0 }
+const isClosing = ref(false)
 
-const modalStyle = computed(() => {
-  if (dragPosition.value.x === 0 && dragPosition.value.y === 0) {
-    return {}
-  }
-  return {
-    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`,
-  }
-})
-
-const startDrag = (e: PointerEvent) => {
-  if (e.button !== 0) return
-  const target = e.target as HTMLElement | null
-  if (target?.closest('button') || target?.closest('input') || target?.closest('a')) {
-    return
-  }
-
-  isDragging.value = true
-  dragStart = { x: e.clientX, y: e.clientY }
-  initialPosition = { ...dragPosition.value }
-
-  window.addEventListener('pointermove', onDragMove)
-  window.addEventListener('pointerup', onDragEnd)
-  window.addEventListener('pointercancel', onDragEnd)
+function requestClose() {
+  if (isClosing.value) return
+  isClosing.value = true
 }
 
-const onDragMove = (e: PointerEvent) => {
-  if (!isDragging.value) return
-
-  const deltaX = e.clientX - dragStart.x
-  const deltaY = e.clientY - dragStart.y
-
-  let newX = initialPosition.x + deltaX
-  let newY = initialPosition.y + deltaY
-
-  if (modalRef.value) {
-    const rect = modalRef.value.getBoundingClientRect()
-    const currentLeft = rect.left - initialPosition.x
-    const currentTop = rect.top - initialPosition.y
-
-    const minX = -currentLeft + 10
-    const maxX = window.innerWidth - (currentLeft + 80)
-    const minY = -currentTop + 10
-    const maxY = window.innerHeight - (currentTop + 40)
-
-    newX = Math.max(minX, Math.min(maxX, newX))
-    newY = Math.max(minY, Math.min(maxY, newY))
-  }
-
-  dragPosition.value = { x: newX, y: newY }
-}
-
-const onDragEnd = () => {
-  isDragging.value = false
-  window.removeEventListener('pointermove', onDragMove)
-  window.removeEventListener('pointerup', onDragEnd)
-  window.removeEventListener('pointercancel', onDragEnd)
-}
-
-const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && props.isOpen) {
-    emit('close')
-  }
+function handleAfterLeave() {
+  isClosing.value = false
+  emit('close')
 }
 
 watch(
   () => props.isOpen,
   (open) => {
     if (open) {
-      dragPosition.value = { x: 0, y: 0 }
+      isClosing.value = false
     }
-  }
+  },
 )
+
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && props.isOpen && !isClosing.value) {
+    requestClose()
+  }
+}
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
@@ -110,31 +57,29 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
-  window.removeEventListener('pointermove', onDragMove)
-  window.removeEventListener('pointerup', onDragEnd)
-  window.removeEventListener('pointercancel', onDragEnd)
 })
 </script>
 
 <template>
   <Teleport to="body">
-    <transition name="modal-fade">
-      <div v-if="isOpen" class="modal-overlay" @click.self="emit('close')">
+    <transition
+      name="modal-fade"
+      appear
+      @after-leave="handleAfterLeave"
+    >
+      <div
+        v-if="isOpen && !isClosing"
+        class="modal-overlay"
+        @click.self="requestClose"
+      >
         <div
-          ref="modalRef"
           class="modal-card glass-panel"
-          :class="{ 'is-dragging': isDragging }"
-          :style="modalStyle"
           role="dialog"
           aria-modal="true"
           aria-labelledby="my-spots-title"
         >
           <!-- Header -->
-          <div
-            class="modal-header"
-            @pointerdown="startDrag"
-            title="Klikk og dra for å flytte"
-          >
+          <div class="modal-header">
             <div class="modal-title-row">
               <div class="modal-icon-badge">
                 <Star :size="20" />
@@ -146,7 +91,7 @@ onUnmounted(() => {
                 </p>
               </div>
             </div>
-            <button class="btn-close" @click="emit('close')" aria-label="Lukk" title="Lukk (Esc)">
+            <button class="btn-close" @click="requestClose" aria-label="Lukk" title="Lukk (Esc)">
               <X :size="18" />
             </button>
           </div>
@@ -232,7 +177,7 @@ onUnmounted(() => {
             >
               📍 Legg til ny turpost
             </button>
-            <button class="btn-primary" @click="emit('close')">Lukk</button>
+            <button class="btn-primary" @click="requestClose">Lukk</button>
           </div>
         </div>
       </div>
@@ -244,51 +189,53 @@ onUnmounted(() => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(10, 15, 25, 0.75);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: flex-start;
   z-index: 10500;
-  padding: clamp(20px, 6vh, 48px) 16px 24px;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .modal-card {
-  background: rgba(24, 30, 42, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 20px;
-  width: 100%;
-  max-width: 550px;
-  max-height: calc(100vh - clamp(20px, 6vh, 48px) - 24px);
-  min-height: 380px;
+  background: rgba(15, 23, 42, 0.98);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  border-radius: 0 20px 20px 0;
+  width: 540px;
+  max-width: calc(100vw - 32px);
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: 16px 0 48px rgba(0, 0, 0, 0.7);
   color: #f8fafc;
-  transition: box-shadow 0.2s ease;
-  user-select: none;
 }
 
-.modal-card.is-dragging {
-  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.7);
+@media (max-width: 640px) {
+  .modal-card {
+    width: 100vw;
+    max-width: 100vw;
+    border-radius: 0;
+    border-right: none;
+  }
 }
 
 .modal-header {
-  padding: 16px 20px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 14px calc(20px + env(safe-area-inset-left, 0px));
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(15, 23, 42, 0.7);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  cursor: grab;
-}
-
-.modal-header:active {
-  cursor: grabbing;
 }
 
 .modal-title-row {
@@ -343,7 +290,7 @@ onUnmounted(() => {
 }
 
 .modal-body {
-  padding: 16px 20px;
+  padding: 16px 20px calc(24px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -353,14 +300,46 @@ onUnmounted(() => {
   scrollbar-gutter: stable;
 }
 
+@keyframes slideDrawerIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideDrawerOut {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
 .modal-fade-enter-active,
+.modal-fade-appear-active {
+  transition: opacity 0.32s ease;
+}
+
 .modal-fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s ease;
 }
 
 .modal-fade-enter-from,
+.modal-fade-appear-from,
 .modal-fade-leave-to {
   opacity: 0;
+}
+
+.modal-fade-enter-active .modal-card,
+.modal-fade-appear-active .modal-card {
+  animation: slideDrawerIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.modal-fade-leave-active .modal-card {
+  animation: slideDrawerOut 0.25s cubic-bezier(0.7, 0, 0.84, 0) forwards;
 }
 
 .loading-state,

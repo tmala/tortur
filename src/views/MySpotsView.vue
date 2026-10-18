@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import MySpotsModal from '@/components/MySpotsModal.vue'
+import MySpotsMenu from '@/components/MySpotsMenu.vue'
 import { useAuth } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import type { TurpostItem } from '@/composables/useTurposter'
@@ -62,7 +62,7 @@ const handleViewCheckins = (spot: TurpostItem) => {
 </script>
 
 <template>
-  <MySpotsModal
+  <MySpotsMenu
     :is-open="true"
     :spots="appState.mySpots"
     :is-loading="appState.isMySpotsLoading"

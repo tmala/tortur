@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import SavedTracksPanel from '@/components/SavedTracksPanel.vue'
+import SavedTracksMenu from '@/components/SavedTracksMenu.vue'
 import GpsTrackModal from '@/components/GpsTrackModal.vue'
 import { useGeolocation } from '@/composables/useGeolocation'
 import { useAuth } from '@/composables/useAuth'
@@ -45,8 +45,8 @@ const handleToggleTracking = () => {
 
 <template>
   <div>
-    <!-- Lagrede spor panel -->
-    <SavedTracksPanel
+    <!-- Lagrede spor meny -->
+    <SavedTracksMenu
       :is-open="!showLiveModal"
       :live-track-points="trackPoints"
       :is-tracking="isTracking"

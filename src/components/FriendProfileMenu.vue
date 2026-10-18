@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   X,
   Users,
@@ -47,54 +47,7 @@ const isLoading = ref(false)
 const expandedCheckinIds = ref<Set<string>>(new Set())
 const lightboxImage = ref<string | null>(null)
 
-// Dragging
-const modalRef = ref<HTMLElement | null>(null)
-const dragPosition = ref({ x: 0, y: 0 })
-const isDragging = ref(false)
-let dragStart = { x: 0, y: 0 }
-let initialPosition = { x: 0, y: 0 }
 
-const modalStyle = computed(() => {
-  if (dragPosition.value.x === 0 && dragPosition.value.y === 0) {
-    return {}
-  }
-  return {
-    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`,
-  }
-})
-
-const startDrag = (e: PointerEvent) => {
-  if (e.button !== 0) return
-  const target = e.target as HTMLElement | null
-  if (target?.closest('button') || target?.closest('input') || target?.closest('a')) {
-    return
-  }
-
-  isDragging.value = true
-  dragStart = { x: e.clientX, y: e.clientY }
-  initialPosition = { ...dragPosition.value }
-
-  window.addEventListener('pointermove', onDragMove)
-  window.addEventListener('pointerup', onDragEnd)
-  window.addEventListener('pointercancel', onDragEnd)
-}
-
-const onDragMove = (e: PointerEvent) => {
-  if (!isDragging.value) return
-  const dx = e.clientX - dragStart.x
-  const dy = e.clientY - dragStart.y
-  dragPosition.value = {
-    x: initialPosition.x + dx,
-    y: initialPosition.y + dy,
-  }
-}
-
-const onDragEnd = () => {
-  isDragging.value = false
-  window.removeEventListener('pointermove', onDragMove)
-  window.removeEventListener('pointerup', onDragEnd)
-  window.removeEventListener('pointercancel', onDragEnd)
-}
 
 async function loadCheckins() {
   if (!props.friend?.userId) {
@@ -211,7 +164,6 @@ watch(
   () => [props.isOpen, props.friend?.userId],
   ([newOpen, newFriendId]) => {
     if (newOpen && newFriendId) {
-      dragPosition.value = { x: 0, y: 0 }
       expandedCheckinIds.value.clear()
       expandedTrackIds.value.clear()
       loadCheckins()
@@ -287,25 +239,62 @@ function formatDate(isoString?: string): string {
   }
 }
 
+const isClosing = ref(false)
+
+function requestClose() {
+  if (isClosing.value) return
+  isClosing.value = true
+}
+
+function handleAfterLeave() {
+  isClosing.value = false
+  emit('close')
+}
+
+watch(
+  () => props.isOpen,
+  (open) => {
+    if (open) {
+      isClosing.value = false
+    }
+  },
+)
+
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && props.isOpen && !isClosing.value) {
+    if (lightboxImage.value) {
+      lightboxImage.value = null
+    } else {
+      requestClose()
+    }
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+})
+
 onUnmounted(() => {
-  window.removeEventListener('pointermove', onDragMove)
-  window.removeEventListener('pointerup', onDragEnd)
-  window.removeEventListener('pointercancel', onDragEnd)
+  window.removeEventListener('keydown', handleKeyDown)
 })
 </script>
 
 <template>
-  <transition name="modal-fade">
-    <div v-if="isOpen && friend" class="friend-profile-backdrop" @click="emit('close')">
+  <transition
+    name="modal-fade"
+    appear
+    @after-leave="handleAfterLeave"
+  >
       <div
-        ref="modalRef"
-        class="friend-profile-card glass-panel"
-        :class="{ 'is-dragging': isDragging }"
-        :style="modalStyle"
-        @click.stop
+        v-if="isOpen && friend && !isClosing"
+        class="friend-profile-backdrop"
+        @click.self="requestClose"
       >
-        <!-- Modal Header (Draggable) -->
-        <div class="card-header" @pointerdown="startDrag">
+        <div
+          class="friend-profile-card glass-panel"
+        >
+        <!-- Modal Header -->
+        <div class="card-header">
           <div class="user-info-row">
             <div class="avatar-wrap">
               <img
@@ -335,7 +324,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <button type="button" class="btn-close" title="Lukk" @click="emit('close')">
+          <button type="button" class="btn-close" title="Lukk" @click="requestClose">
             <X :size="18" />
           </button>
         </div>
@@ -682,39 +671,50 @@ onUnmounted(() => {
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: flex-start;
   z-index: 11000;
-  padding: 16px;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .friend-profile-card {
-  width: 100%;
-  max-width: 480px;
-  max-height: 85vh;
-  background: rgba(15, 23, 42, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 16px;
+  width: 540px;
+  max-width: calc(100vw - 32px);
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  background: rgba(15, 23, 42, 0.98);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  border-radius: 0 20px 20px 0;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.7);
+  box-shadow: 16px 0 48px rgba(0, 0, 0, 0.7);
   overflow: hidden;
-  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .friend-profile-card {
+    width: 100vw;
+    max-width: 100vw;
+    border-radius: 0;
+    border-right: none;
+  }
 }
 
 .card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.04);
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 14px calc(20px + env(safe-area-inset-left, 0px));
+  background: rgba(15, 23, 42, 0.7);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  cursor: grab;
-}
-
-.card-header:active {
-  cursor: grabbing;
 }
 
 .user-info-row {
@@ -1152,7 +1152,7 @@ onUnmounted(() => {
 .checkins-scroll-area {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 12px 20px calc(24px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1482,14 +1482,46 @@ onUnmounted(() => {
   }
 }
 
+@keyframes slideDrawerIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideDrawerOut {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
 .modal-fade-enter-active,
+.modal-fade-appear-active {
+  transition: opacity 0.32s ease;
+}
+
 .modal-fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s ease;
 }
 
 .modal-fade-enter-from,
+.modal-fade-appear-from,
 .modal-fade-leave-to {
   opacity: 0;
+}
+
+.modal-fade-enter-active .friend-profile-card,
+.modal-fade-appear-active .friend-profile-card {
+  animation: slideDrawerIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.modal-fade-leave-active .friend-profile-card {
+  animation: slideDrawerOut 0.25s cubic-bezier(0.7, 0, 0.84, 0) forwards;
 }
 
 .lightbox-fade-enter-active,

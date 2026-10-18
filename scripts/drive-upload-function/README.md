@@ -73,7 +73,7 @@ Disse 3 hemmelighetene må allerede eksistere i **Google Secret Manager**:
 
 1. Pass på at du er logget inn i `gcloud`:
    ```bash
-   gcloud config set project tortur-87147
+   gcloud config set project <FUNCTION_ID>
    ```
 2. Kjør deploy-skriptet:
    ```bash
@@ -102,7 +102,7 @@ Disse 3 hemmelighetene må allerede eksistere i **Google Secret Manager**:
 Når funksjonen er deployet, kan du åpne funksjonens URL direkte i nettleseren eller med curl:
 
 ```bash
-curl https://europe-west1-tortur-87147.cloudfunctions.net/<FUNCTION_NAME>
+curl https://europe-west1-<FUNCTION_ID>.cloudfunctions.net/<FUNCTION_NAME>
 ```
 
 Den vil svare med helsekontroll og diagnostikk:
@@ -132,8 +132,8 @@ Når funksjonen er deployet og helsesjekken viser `sheets_auth: "connected"`, op
 
 ```env
 # Google Cloud Function for både bildeopplasting og Sheets API:
-VITE_DRIVE_UPLOAD_URL=https://europe-west1-tortur-87147.cloudfunctions.net/<FUNCTION_NAME>
-VITE_API_URL=https://europe-west1-tortur-87147.cloudfunctions.net/<FUNCTION_NAME>
+VITE_DRIVE_UPLOAD_URL=https://europe-west1-<FUNCTION_ID>.cloudfunctions.net/<FUNCTION_NAME>
+VITE_API_URL=https://europe-west1-<FUNCTION_ID>.cloudfunctions.net/<FUNCTION_NAME>
 ```
 
 Webappen vil nå sende alle backend-forespørsler (både bildeopplasting og registrering i Google Sheets) direkte til Google Cloud Function!

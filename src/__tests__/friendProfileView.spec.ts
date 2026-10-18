@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import FriendProfileView from '../views/FriendProfileView.vue'
-import FriendProfileModal from '../components/FriendProfileModal.vue'
+import FriendProfileMenu from '../components/FriendProfileMenu.vue'
 import { useAppStateStore } from '../stores/appState'
 import type { SavedTrack } from '../stores/gpsTrack'
 import type { FirebaseCheckinItem } from '../composables/useAuth'
@@ -37,7 +37,7 @@ describe('FriendProfileView navigation', () => {
     const wrapper = mount(FriendProfileView, {
       global: {
         stubs: {
-          FriendProfileModal: {
+          FriendProfileMenu: {
             template: '<div class="stubbed-modal"></div>',
             emits: ['close', 'view-track-on-map', 'view-turpost-on-map']
           }
@@ -45,7 +45,7 @@ describe('FriendProfileView navigation', () => {
       }
     })
 
-    const modal = wrapper.findComponent(FriendProfileModal)
+    const modal = wrapper.findComponent(FriendProfileMenu)
     modal.vm.$emit('close')
 
     expect(pushMock).toHaveBeenCalledWith('/venner')
@@ -58,7 +58,7 @@ describe('FriendProfileView navigation', () => {
     const wrapper = mount(FriendProfileView, {
       global: {
         stubs: {
-          FriendProfileModal: {
+          FriendProfileMenu: {
             template: '<div class="stubbed-modal"></div>',
             emits: ['close', 'view-track-on-map', 'view-turpost-on-map']
           }
@@ -79,7 +79,7 @@ describe('FriendProfileView navigation', () => {
       visibility: 'friends'
     }
 
-    const modal = wrapper.findComponent(FriendProfileModal)
+    const modal = wrapper.findComponent(FriendProfileMenu)
     modal.vm.$emit('view-track-on-map', mockTrack)
 
     expect(requestViewTrackSpy).toHaveBeenCalledWith(mockTrack)
@@ -93,7 +93,7 @@ describe('FriendProfileView navigation', () => {
     const wrapper = mount(FriendProfileView, {
       global: {
         stubs: {
-          FriendProfileModal: {
+          FriendProfileMenu: {
             template: '<div class="stubbed-modal"></div>',
             emits: ['close', 'view-track-on-map', 'view-turpost-on-map']
           }
@@ -113,7 +113,7 @@ describe('FriendProfileView navigation', () => {
       timestamp: '2026-10-12T14:35:00Z'
     }
 
-    const modal = wrapper.findComponent(FriendProfileModal)
+    const modal = wrapper.findComponent(FriendProfileMenu)
     modal.vm.$emit('view-turpost-on-map', mockCheckin)
 
     expect(requestFlyToCheckinSpy).toHaveBeenCalledWith(mockCheckin)

@@ -1,17 +1,190 @@
+<script setup lang="ts">
+import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { useAuth } from '@/composables/useAuth'
+import {
+  usePrivateTurposter,
+  type SpotSuggestion,
+  type CsvPlacementResult
+} from '@/composables/usePrivateTurposter'
+import { useAppStateStore } from '@/stores/appState'
+
+const props = defineProps<{
+  isOpen: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'view-spot', spot: SpotSuggestion): void
+}>()
+
+const { user } = useAuth()
+const appState = useAppStateStore()
+const {
+  fetchSpotSuggestions,
+  denySpotSuggestion,
+  approveSpotSuggestion,
+  calculateCsvPlacement
+} = usePrivateTurposter()
+
+const suggestions = ref<SpotSuggestion[]>([])
+const isLoading = ref(false)
+const copiedId = ref<string | null>(null)
+const placementMap = ref<Record<string, CsvPlacementResult>>({})
+
+const isClosing = ref(false)
+
+function requestClose() {
+  if (isClosing.value) return
+  isClosing.value = true
+}
+
+function handleAfterLeave() {
+  isClosing.value = false
+  emit('close')
+}
+
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && props.isOpen && !isClosing.value) {
+    requestClose()
+  }
+}
+
+function getPlacement(spotId: string): CsvPlacementResult | undefined {
+  return placementMap.value[spotId]
+}
+
+async function loadSuggestions() {
+  isLoading.value = true
+  try {
+    const list = await fetchSpotSuggestions()
+    suggestions.value = list
+
+    // Beregn anbefalt plassering for hver av dem
+    for (const item of list) {
+      if (!placementMap.value[item.id]) {
+        calculateCsvPlacement(item.name).then((res) => {
+          placementMap.value[item.id] = res
+        })
+      }
+    }
+  } finally {
+    isLoading.value = false
+  }
+}
+
+watch(
+  () => props.isOpen,
+  (open) => {
+    if (open) {
+      isClosing.value = false
+      loadSuggestions()
+    }
+  }
+)
+
+onMounted(() => {
+  if (props.isOpen) {
+    loadSuggestions()
+  }
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+})
+
+async function copyCsv(spot: SpotSuggestion) {
+  try {
+    await navigator.clipboard.writeText(spot.csvLine)
+    copiedId.value = spot.id
+    setTimeout(() => {
+      if (copiedId.value === spot.id) copiedId.value = null
+    }, 2500)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = spot.csvLine
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    copiedId.value = spot.id
+    setTimeout(() => {
+      if (copiedId.value === spot.id) copiedId.value = null
+    }, 2500)
+  }
+}
+
+async function handleApprove(spot: SpotSuggestion) {
+  if (
+    !confirm(
+      `Vil du godkjenne og publisere forslaget «${spot.name}»?\n\nTurposten blir umiddelbart lagret i Firebase Realtime Database (approved_spots) og offentlig tilgjengelig for alle innloggede brukere!`
+    )
+  )
+    return
+  try {
+    await approveSpotSuggestion(
+      spot,
+      user.value?.userName || user.value?.email || 'Admin'
+    )
+    suggestions.value = suggestions.value.filter((s) => s.id !== spot.id)
+    appState.spotSuggestionsCount = suggestions.value.length
+    appState.requestClearSpotSuggestion()
+    alert(`«${spot.name}» er nå godkjent og publisert som offentlig turpost!`)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ukjent feil'
+    alert(`Kunne ikke godkjenne forslaget: ${msg}`)
+  }
+}
+
+async function handleDeny(spot: SpotSuggestion) {
+  if (!confirm(`Vil du avvise forslaget «${spot.name}»?\n\nTurposten vil få status «Avvist» hos brukeren, og kan ikke foreslås som offentlig på nytt.`)) return
+  try {
+    await denySpotSuggestion(spot.id)
+    suggestions.value = suggestions.value.filter((s) => s.id !== spot.id)
+    appState.spotSuggestionsCount = suggestions.value.length
+    appState.requestClearSpotSuggestion()
+  } catch {
+    alert('Kunne ikke avvise forslaget.')
+  }
+}
+
+function formatDate(isoStr?: string): string {
+  if (!isoStr) return ''
+  try {
+    const d = new Date(isoStr)
+    return new Intl.DateTimeFormat('no-NO', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(d)
+  } catch {
+    return isoStr
+  }
+}
+</script>
+
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="modal-overlay">
+    <transition
+      name="suggestions-modal-fade"
+      appear
+      @after-leave="handleAfterLeave"
+    >
       <div
-        ref="modalRef"
-        class="modal-card glass-panel"
-        :class="{ 'is-dragging': isDragging }"
-        :style="modalStyle"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="suggestions-title"
+        v-if="isOpen && !isClosing"
+        class="modal-overlay"
+        @click.self="requestClose"
       >
-        <!-- Header -->
-        <div class="modal-header" @pointerdown="startDrag" title="Klikk og dra for å flytte dialogen">
+        <div
+          class="modal-card glass-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="suggestions-title"
+        >
+          <!-- Header -->
+          <div class="modal-header">
           <div class="modal-title-row">
             <div class="modal-icon-badge">📋</div>
             <div>
@@ -21,7 +194,7 @@
               </p>
             </div>
           </div>
-          <button class="btn-close" @click="emit('close')" aria-label="Lukk">✕</button>
+          <button class="btn-close" @click="requestClose" aria-label="Lukk">✕</button>
         </div>
 
         <!-- Innhold -->
@@ -113,279 +286,65 @@
           <div class="footer-note">
             💡 Godkjente turposter lagres i Firebase Realtime Database. Kjør <code>npm run sync:spots</code> for å oppdatere <code>data/mountains.csv</code> før neste bygg og distribusjon.
           </div>
-          <button class="btn-primary" @click="emit('close')">Lukk</button>
+          <button class="btn-primary" @click="requestClose">Lukk</button>
         </div>
       </div>
     </div>
-  </Teleport>
+  </transition>
+</Teleport>
 </template>
-
-<script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useAuth } from '@/composables/useAuth'
-import {
-  usePrivateTurposter,
-  type SpotSuggestion,
-  type CsvPlacementResult
-} from '@/composables/usePrivateTurposter'
-import { useAppStateStore } from '@/stores/appState'
-
-const props = defineProps<{
-  isOpen: boolean
-}>()
-
-const emit = defineEmits<{
-  (e: 'close'): void
-  (e: 'view-spot', spot: SpotSuggestion): void
-}>()
-
-const { user } = useAuth()
-const appState = useAppStateStore()
-const {
-  fetchSpotSuggestions,
-  denySpotSuggestion,
-  approveSpotSuggestion,
-  calculateCsvPlacement
-} = usePrivateTurposter()
-
-const suggestions = ref<SpotSuggestion[]>([])
-const isLoading = ref(false)
-const copiedId = ref<string | null>(null)
-const placementMap = ref<Record<string, CsvPlacementResult>>({})
-
-// Dra/flytt-logikk for modalen
-const modalRef = ref<HTMLElement | null>(null)
-const isDragging = ref(false)
-const dragPos = ref({ x: 0, y: 0 })
-const dragStart = ref({ x: 0, y: 0, initialX: 0, initialY: 0 })
-
-const modalStyle = computed(() => {
-  if (dragPos.value.x === 0 && dragPos.value.y === 0) return {}
-  return {
-    transform: `translate3d(${dragPos.value.x}px, ${dragPos.value.y}px, 0)`
-  }
-})
-
-function startDrag(e: PointerEvent) {
-  const target = e.target as HTMLElement | null
-  if (target?.closest('button') || target?.closest('a') || target?.closest('code')) return
-  if (e.button !== 0) return
-  isDragging.value = true
-  dragStart.value = {
-    x: e.clientX,
-    y: e.clientY,
-    initialX: dragPos.value.x,
-    initialY: dragPos.value.y
-  }
-}
-
-function onDragMove(e: PointerEvent) {
-  if (!isDragging.value) return
-  const dx = e.clientX - dragStart.value.x
-  const dy = e.clientY - dragStart.value.y
-
-  let newX = dragStart.value.initialX + dx
-  let newY = dragStart.value.initialY + dy
-
-  if (modalRef.value) {
-    const rect = modalRef.value.getBoundingClientRect()
-    const currentLeft = rect.left - dragPos.value.x
-    const currentTop = rect.top - dragPos.value.y
-
-    const minX = -currentLeft + 10
-    const maxX = window.innerWidth - (currentLeft + 80)
-    const minY = -currentTop + 10
-    const maxY = window.innerHeight - (currentTop + 40)
-
-    newX = Math.max(minX, Math.min(maxX, newX))
-    newY = Math.max(minY, Math.min(maxY, newY))
-  }
-
-  dragPos.value = { x: newX, y: newY }
-}
-
-function onDragEnd() {
-  isDragging.value = false
-}
-
-const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && props.isOpen) {
-    emit('close')
-  }
-}
-
-function getPlacement(spotId: string): CsvPlacementResult | undefined {
-  return placementMap.value[spotId]
-}
-
-async function loadSuggestions() {
-  isLoading.value = true
-  try {
-    const list = await fetchSpotSuggestions()
-    suggestions.value = list
-
-    // Beregn anbefalt plassering for hver av dem
-    for (const item of list) {
-      if (!placementMap.value[item.id]) {
-        calculateCsvPlacement(item.name).then((res) => {
-          placementMap.value[item.id] = res
-        })
-      }
-    }
-  } finally {
-    isLoading.value = false
-  }
-}
-
-watch(
-  () => props.isOpen,
-  (open) => {
-    if (open) {
-      dragPos.value = { x: 0, y: 0 }
-      loadSuggestions()
-    }
-  }
-)
-
-onMounted(() => {
-  if (props.isOpen) {
-    loadSuggestions()
-  }
-  window.addEventListener('pointermove', onDragMove)
-  window.addEventListener('pointerup', onDragEnd)
-  window.addEventListener('pointercancel', onDragEnd)
-  window.addEventListener('keydown', handleKeyDown)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('pointermove', onDragMove)
-  window.removeEventListener('pointerup', onDragEnd)
-  window.removeEventListener('pointercancel', onDragEnd)
-  window.removeEventListener('keydown', handleKeyDown)
-})
-
-async function copyCsv(spot: SpotSuggestion) {
-  try {
-    await navigator.clipboard.writeText(spot.csvLine)
-    copiedId.value = spot.id
-    setTimeout(() => {
-      if (copiedId.value === spot.id) copiedId.value = null
-    }, 2500)
-  } catch {
-    const ta = document.createElement('textarea')
-    ta.value = spot.csvLine
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
-    copiedId.value = spot.id
-    setTimeout(() => {
-      if (copiedId.value === spot.id) copiedId.value = null
-    }, 2500)
-  }
-}
-
-async function handleApprove(spot: SpotSuggestion) {
-  if (
-    !confirm(
-      `Vil du godkjenne og publisere forslaget «${spot.name}»?\n\nTurposten blir umiddelbart lagret i Firebase Realtime Database (approved_spots) og offentlig tilgjengelig for alle innloggede brukere!`
-    )
-  )
-    return
-  try {
-    await approveSpotSuggestion(
-      spot,
-      user.value?.userName || user.value?.email || 'Admin'
-    )
-    suggestions.value = suggestions.value.filter((s) => s.id !== spot.id)
-    appState.spotSuggestionsCount = suggestions.value.length
-    appState.requestClearSpotSuggestion()
-    alert(`«${spot.name}» er nå godkjent og publisert som offentlig turpost!`)
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Ukjent feil'
-    alert(`Kunne ikke godkjenne forslaget: ${msg}`)
-  }
-}
-
-async function handleDeny(spot: SpotSuggestion) {
-  if (!confirm(`Vil du avvise forslaget «${spot.name}»?\n\nTurposten vil få status «Avvist» hos brukeren, og kan ikke foreslås som offentlig på nytt.`)) return
-  try {
-    await denySpotSuggestion(spot.id)
-    suggestions.value = suggestions.value.filter((s) => s.id !== spot.id)
-    appState.spotSuggestionsCount = suggestions.value.length
-    appState.requestClearSpotSuggestion()
-  } catch {
-    alert('Kunne ikke avvise forslaget.')
-  }
-}
-
-function formatDate(isoStr?: string): string {
-  if (!isoStr) return ''
-  try {
-    const d = new Date(isoStr)
-    return new Intl.DateTimeFormat('no-NO', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(d)
-  } catch {
-    return isoStr
-  }
-}
-</script>
 
 <style scoped>
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  padding: 16px;
-  pointer-events: none;
+  align-items: stretch;
+  justify-content: flex-start;
+  z-index: 10500;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .modal-card {
-  pointer-events: auto;
-  background: rgba(30, 41, 59, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  width: 100%;
-  max-width: 680px;
-  max-height: 88vh;
+  background: rgba(15, 23, 42, 0.98);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  border-radius: 0 20px 20px 0;
+  width: 540px;
+  max-width: calc(100vw - 32px);
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow: 16px 0 48px rgba(0, 0, 0, 0.7);
   color: #f8fafc;
-  transition: box-shadow 0.2s ease;
 }
 
-.modal-card.is-dragging {
-  user-select: none;
-  -webkit-user-select: none;
-  box-shadow: 0 35px 80px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.25);
+@media (max-width: 640px) {
+  .modal-card {
+    width: 100vw;
+    max-width: 100vw;
+    border-radius: 0;
+    border-right: none;
+  }
 }
 
 .modal-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 14px calc(20px + env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.7);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  cursor: grab;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: none;
-}
-
-.modal-header:active,
-.modal-card.is-dragging .modal-header {
-  cursor: grabbing;
 }
 
 .modal-title-row {
@@ -435,7 +394,7 @@ function formatDate(isoStr?: string): string {
 }
 
 .modal-body {
-  padding: 20px 24px;
+  padding: 16px 20px calc(24px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -687,5 +646,48 @@ function formatDate(isoStr?: string): string {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Transisjoner */
+@keyframes slideDrawerIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideDrawerOut {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+.suggestions-modal-fade-enter-active,
+.suggestions-modal-fade-appear-active {
+  transition: opacity 0.32s ease;
+}
+
+.suggestions-modal-fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.suggestions-modal-fade-enter-from,
+.suggestions-modal-fade-appear-from,
+.suggestions-modal-fade-leave-to {
+  opacity: 0;
+}
+
+.suggestions-modal-fade-enter-active .modal-card,
+.suggestions-modal-fade-appear-active .modal-card {
+  animation: slideDrawerIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.suggestions-modal-fade-leave-active .modal-card {
+  animation: slideDrawerOut 0.25s cubic-bezier(0.7, 0, 0.84, 0) forwards;
 }
 </style>

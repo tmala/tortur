@@ -49,71 +49,7 @@ const handleManualSync = async () => {
   await trackStore.syncTracksWithFirebase()
 }
 
-// Dra/flytte-funksjonalitet
-const panelRef = ref<HTMLElement | null>(null)
-const dragPosition = ref({ x: 0, y: 0 })
-const isDragging = ref(false)
-let dragStart = { x: 0, y: 0 }
-let initialPosition = { x: 0, y: 0 }
 
-const panelStyle = computed(() => {
-  if (dragPosition.value.x === 0 && dragPosition.value.y === 0) {
-    return {}
-  }
-  return {
-    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`
-  }
-})
-
-const startDrag = (e: PointerEvent) => {
-  if (e.button !== 0) return
-
-  const target = e.target as HTMLElement | null
-  if (target?.closest('button') || target?.closest('a') || target?.closest('input')) {
-    return
-  }
-
-  isDragging.value = true
-  dragStart = { x: e.clientX, y: e.clientY }
-  initialPosition = { ...dragPosition.value }
-
-  window.addEventListener('pointermove', onDragMove)
-  window.addEventListener('pointerup', onDragEnd)
-  window.addEventListener('pointercancel', onDragEnd)
-}
-
-const onDragMove = (e: PointerEvent) => {
-  if (!isDragging.value) return
-
-  const deltaX = e.clientX - dragStart.x
-  const deltaY = e.clientY - dragStart.y
-
-  let newX = initialPosition.x + deltaX
-  let newY = initialPosition.y + deltaY
-
-  if (panelRef.value) {
-    const rect = panelRef.value.getBoundingClientRect()
-    const currentLeft = rect.left - initialPosition.x
-    const currentTop = rect.top - initialPosition.y
-
-    const minX = -currentLeft + 10
-    const maxX = window.innerWidth - (currentLeft + 80)
-    const minY = -currentTop + 10
-    const maxY = window.innerHeight - (currentTop + 40)
-
-    newX = Math.max(minX, Math.min(maxX, newX))
-    newY = Math.max(minY, Math.min(maxY, newY))
-  }
-
-  dragPosition.value = { x: newX, y: newY }
-}
-
-const onDragEnd = () => {
-  isDragging.value = false
-  window.removeEventListener('pointermove', onDragMove)
-  window.removeEventListener('pointerup', onDragEnd)
-  window.removeEventListener('pointercancel', onDragEnd)
-}
 
 const activeHighlightId = ref<string | null>(null)
 let highlightTimer: ReturnType<typeof setTimeout> | null = null
@@ -154,11 +90,23 @@ const scrollToHighlightedTrack = () => {
   })
 }
 
+const isClosing = ref(false)
+
+function requestClose() {
+  if (isClosing.value) return
+  isClosing.value = true
+}
+
+function handleAfterLeave() {
+  isClosing.value = false
+  emit('close')
+}
+
 watch(
   () => props.isOpen,
   (open) => {
     if (open) {
-      dragPosition.value = { x: 0, y: 0 }
+      isClosing.value = false
       editingTrackId.value = null
       trackToDelete.value = null
       isSavingLiveTrack.value = false
@@ -182,8 +130,8 @@ watch(
 )
 
 const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && props.isOpen) {
-    emit('close')
+  if (e.key === 'Escape' && props.isOpen && !isClosing.value) {
+    requestClose()
   }
 }
 
@@ -199,9 +147,6 @@ onUnmounted(() => {
     clearTimeout(highlightTimer)
   }
   window.removeEventListener('keydown', handleKeyDown)
-  window.removeEventListener('pointermove', onDragMove)
-  window.removeEventListener('pointerup', onDragEnd)
-  window.removeEventListener('pointercancel', onDragEnd)
 })
 
 // Formatering
@@ -415,19 +360,24 @@ const handleConfirmSaveLiveTrack = () => {
 
 <template>
   <Teleport to="body">
-    <transition name="tracks-modal-fade">
-      <div v-if="isOpen" class="saved-tracks-backdrop" @click.self="emit('close')">
+    <transition
+      name="tracks-modal-fade"
+      appear
+      @after-leave="handleAfterLeave"
+    >
+      <div
+        v-if="isOpen && !isClosing"
+        class="saved-tracks-backdrop"
+        @click.self="requestClose"
+      >
         <div
-          ref="panelRef"
           class="saved-tracks-panel glass-panel"
-          :class="{ 'is-dragging': isDragging }"
-          :style="panelStyle"
           role="dialog"
           aria-modal="true"
           aria-label="Mine GPS-spor"
         >
-          <!-- Header (klikk og dra for å flytte) -->
-          <div class="panel-header" @pointerdown="startDrag" title="Klikk og dra for å flytte">
+          <!-- Header -->
+          <div class="panel-header">
         <div class="header-title">
           <div class="header-icon-wrap">
             <Route :size="18" class="header-icon" />
@@ -448,7 +398,7 @@ const handleConfirmSaveLiveTrack = () => {
             <Loader2 v-if="trackStore.isSyncing" class="spinner" :size="15" />
             <RefreshCw v-else :size="15" />
           </button>
-          <button class="btn-close" @click="emit('close')" title="Lukk (Esc)" aria-label="Lukk">
+          <button class="btn-close" @click="requestClose" title="Lukk (Esc)" aria-label="Lukk">
             <X :size="18" />
           </button>
         </div>
@@ -779,64 +729,59 @@ const handleConfirmSaveLiveTrack = () => {
 .saved-tracks-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(10, 15, 25, 0.75);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: flex-start;
   z-index: 10500;
-  padding: clamp(20px, 6vh, 48px) 16px 24px;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .saved-tracks-panel {
   position: relative;
   top: auto;
   right: auto;
-  width: 100%;
-  max-width: 550px;
-  max-height: calc(100vh - clamp(20px, 6vh, 48px) - 24px);
-  min-height: 380px;
+  width: 540px;
+  max-width: calc(100vw - 32px);
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
   z-index: 10501;
   overflow: hidden;
   padding: 0;
-  background: rgba(24, 30, 42, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 20px;
-  box-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.98);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  border-radius: 0 20px 20px 0;
+  box-shadow: 16px 0 48px rgba(0, 0, 0, 0.7);
   pointer-events: auto;
   color: #f8fafc;
-  transition: box-shadow 0.2s ease;
-  user-select: none;
 }
 
-.saved-tracks-panel.is-dragging {
-  user-select: none;
-  -webkit-user-select: none;
-  transition: none !important;
-  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.7);
+@media (max-width: 640px) {
+  .saved-tracks-panel {
+    width: 100vw;
+    max-width: 100vw;
+    border-radius: 0;
+    border-right: none;
+  }
 }
 
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 14px calc(20px + env(safe-area-inset-left, 0px));
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  cursor: grab;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: none;
-}
-
-.panel-header:active,
-.saved-tracks-panel.is-dragging .panel-header {
-  cursor: grabbing;
+  background: rgba(15, 23, 42, 0.7);
 }
 
 .header-title {
@@ -936,14 +881,46 @@ const handleConfirmSaveLiveTrack = () => {
   color: #ffffff;
 }
 
+@keyframes slideDrawerIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideDrawerOut {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
 .tracks-modal-fade-enter-active,
+.tracks-modal-fade-appear-active {
+  transition: opacity 0.32s ease;
+}
+
 .tracks-modal-fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s ease;
 }
 
 .tracks-modal-fade-enter-from,
+.tracks-modal-fade-appear-from,
 .tracks-modal-fade-leave-to {
   opacity: 0;
+}
+
+.tracks-modal-fade-enter-active .saved-tracks-panel,
+.tracks-modal-fade-appear-active .saved-tracks-panel {
+  animation: slideDrawerIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.tracks-modal-fade-leave-active .saved-tracks-panel {
+  animation: slideDrawerOut 0.25s cubic-bezier(0.7, 0, 0.84, 0) forwards;
 }
 
 /* Sammendragslinje */
@@ -1208,7 +1185,7 @@ const handleConfirmSaveLiveTrack = () => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px;
+  padding: 16px 20px calc(24px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
   display: flex;
   flex-direction: column;
   gap: 10px;

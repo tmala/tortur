@@ -177,77 +177,23 @@ const {
   getDate: (item) => item.timestamp,
 })
 
-// Dra/flytte-logikk for profilmodalen
-const modalRef = ref<HTMLElement | null>(null)
-const dragPosition = ref({ x: 0, y: 0 })
-const isDragging = ref(false)
-let dragStart = { x: 0, y: 0 }
-let initialPosition = { x: 0, y: 0 }
+const isClosing = ref(false)
 
-const modalStyle = computed(() => {
-  if (dragPosition.value.x === 0 && dragPosition.value.y === 0) {
-    return {}
-  }
-  return {
-    transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`,
-  }
-})
-
-const startDrag = (e: PointerEvent) => {
-  if (e.button !== 0) return
-
-  const target = e.target as HTMLElement | null
-  if (target?.closest('button') || target?.closest('a') || target?.closest('input')) {
-    return
-  }
-
-  isDragging.value = true
-  dragStart = { x: e.clientX, y: e.clientY }
-  initialPosition = { ...dragPosition.value }
-
-  window.addEventListener('pointermove', onDragMove)
-  window.addEventListener('pointerup', onDragEnd)
-  window.addEventListener('pointercancel', onDragEnd)
+function requestClose() {
+  if (isClosing.value) return
+  isClosing.value = true
 }
 
-const onDragMove = (e: PointerEvent) => {
-  if (!isDragging.value) return
-
-  const deltaX = e.clientX - dragStart.x
-  const deltaY = e.clientY - dragStart.y
-
-  let newX = initialPosition.x + deltaX
-  let newY = initialPosition.y + deltaY
-
-  if (modalRef.value) {
-    const rect = modalRef.value.getBoundingClientRect()
-    const currentLeft = rect.left - initialPosition.x
-    const currentTop = rect.top - initialPosition.y
-
-    const minX = -currentLeft + 10
-    const maxX = window.innerWidth - (currentLeft + 80)
-    const minY = 0
-    const maxY = window.innerHeight - (currentTop + 40)
-
-    newX = Math.max(minX, Math.min(maxX, newX))
-    newY = Math.max(minY, Math.min(maxY, newY))
-  }
-
-  dragPosition.value = { x: newX, y: newY }
-}
-
-const onDragEnd = () => {
-  isDragging.value = false
-  window.removeEventListener('pointermove', onDragMove)
-  window.removeEventListener('pointerup', onDragEnd)
-  window.removeEventListener('pointercancel', onDragEnd)
+function handleAfterLeave() {
+  isClosing.value = false
+  emit('close')
 }
 
 watch(
   () => props.isOpen,
   (open) => {
     if (open) {
-      dragPosition.value = { x: 0, y: 0 }
+      isClosing.value = false
       expandedCheckinIds.value.clear()
       resetToLatest()
     }
@@ -258,8 +204,8 @@ const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Escape') {
     if (lightboxImage.value) {
       lightboxImage.value = null
-    } else if (props.isOpen) {
-      emit('close')
+    } else if (props.isOpen && !isClosing.value) {
+      requestClose()
     }
   }
 }
@@ -270,30 +216,28 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
-  window.removeEventListener('pointermove', onDragMove)
-  window.removeEventListener('pointerup', onDragEnd)
-  window.removeEventListener('pointercancel', onDragEnd)
 })
 </script>
 
 <template>
   <Teleport to="body">
-    <transition name="profile-modal-fade">
-      <div v-if="isOpen" class="profile-modal-backdrop" @click.self="emit('close')">
+    <transition
+      name="profile-modal-fade"
+      appear
+      @after-leave="handleAfterLeave"
+    >
+      <div
+        v-if="isOpen && !isClosing"
+        class="profile-modal-backdrop"
+        @click.self="requestClose"
+      >
         <div
-          ref="modalRef"
           class="profile-modal-card glass-panel"
-          :class="{ 'is-dragging': isDragging }"
-          :style="modalStyle"
           role="dialog"
           aria-modal="true"
         >
           <!-- Header med brukerinfo og Lukk-knapp -->
-          <div
-            class="profile-modal-header"
-            @pointerdown="startDrag"
-            title="Klikk og dra for å flytte"
-          >
+          <div class="profile-modal-header">
             <!-- Øverste rad: Profilbilde, navn, e-post og Lukk-knapp -->
             <div class="profile-header-top">
               <div class="user-info-row">
@@ -338,7 +282,7 @@ onUnmounted(() => {
               <!-- Lukk-knapp oppe til høyre -->
               <button
                 class="btn-profile-close"
-                @click="emit('close')"
+                @click="requestClose"
                 title="Lukk (Esc)"
                 aria-label="Lukk"
               >
@@ -512,56 +456,52 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: calc(76px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+  margin: 0;
   box-sizing: border-box;
 }
 
 .profile-modal-card {
-  width: 100%;
-  max-width: 580px;
-  max-height: calc(100dvh - 76px - env(safe-area-inset-top, 0px) - 16px - env(safe-area-inset-bottom, 0px));
+  width: 540px;
+  max-width: calc(100vw - 32px);
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: rgba(26, 35, 50, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
-  box-shadow:
-    0 20px 45px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.05);
+  background: rgba(15, 23, 42, 0.98);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  border-radius: 0 20px 20px 0;
+  box-shadow: 16px 0 48px rgba(0, 0, 0, 0.7);
   overflow: hidden;
-  transition: box-shadow 0.2s ease;
 }
 
-.profile-modal-card.is-dragging {
-  user-select: none;
-  -webkit-user-select: none;
-  transition: none !important;
-  box-shadow:
-    0 35px 80px rgba(0, 0, 0, 0.8),
-    0 0 0 1px rgba(255, 255, 255, 0.2);
+@media (max-width: 640px) {
+  .profile-modal-card {
+    width: 100vw;
+    max-width: 100vw;
+    border-radius: 0;
+    border-right: none;
+  }
 }
 
 /* Header */
 .profile-modal-header {
   display: flex;
   flex-direction: column;
-  padding: 16px 18px 14px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 14px calc(20px + env(safe-area-inset-left, 0px));
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(15, 23, 42, 0.7);
   gap: 12px;
-  cursor: grab;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: none;
-}
-
-.profile-modal-header:active,
-.profile-modal-card.is-dragging .profile-modal-header {
-  cursor: grabbing;
 }
 
 .profile-header-top {
@@ -844,7 +784,7 @@ onUnmounted(() => {
 .checkins-scroll-area {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 20px 20px;
+  padding: 8px 20px calc(24px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1083,14 +1023,46 @@ onUnmounted(() => {
 }
 
 /* Animasjoner */
+@keyframes slideDrawerIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideDrawerOut {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
 .profile-modal-fade-enter-active,
+.profile-modal-fade-appear-active {
+  transition: opacity 0.32s ease;
+}
+
 .profile-modal-fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s ease;
 }
 
 .profile-modal-fade-enter-from,
+.profile-modal-fade-appear-from,
 .profile-modal-fade-leave-to {
   opacity: 0;
+}
+
+.profile-modal-fade-enter-active .profile-modal-card,
+.profile-modal-fade-appear-active .profile-modal-card {
+  animation: slideDrawerIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.profile-modal-fade-leave-active .profile-modal-card {
+  animation: slideDrawerOut 0.25s cubic-bezier(0.7, 0, 0.84, 0) forwards;
 }
 
 .lightbox-fade-enter-active,
