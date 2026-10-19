@@ -10,14 +10,27 @@ import piexif from 'piexifjs'
  * Komprimerer og eventuelt nedskalerer et bilde.
  * Returnerer en ny File uten EXIF (intern hjelpefunksjon).
  */
-export async function compressImage(file: File, maxDim = 1024, quality = 0.8): Promise<File> {
+export async function compressImage(
+  file: File,
+  maxDim = 1024,
+  quality = 0.8,
+  forceCanvas = false,
+): Promise<File> {
   // Rask forhåndssjekk: hvis filen allerede er en liten JPEG, sjekk dimensjoner raskt
   if (typeof createImageBitmap === 'function') {
     try {
-      const bitmap = await createImageBitmap(file)
+      let bitmap: ImageBitmap
+      try {
+        // 'from-image' instruerer nettleseren om å dekode bildet ferdig orientert
+        // i henhold til EXIF-orienteringstagg.
+        bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+      } catch {
+        bitmap = await createImageBitmap(file)
+      }
       let { width, height } = bitmap
 
       if (
+        !forceCanvas &&
         width <= maxDim &&
         height <= maxDim &&
         file.size <= 300 * 1024 &&
@@ -82,6 +95,7 @@ export async function compressImage(file: File, maxDim = 1024, quality = 0.8): P
       let height = img.height
 
       if (
+        !forceCanvas &&
         width <= maxDim &&
         height <= maxDim &&
         file.size <= 300 * 1024 &&
@@ -182,18 +196,31 @@ export async function compressImageWithExif(
   // Les EXIF fra originalfilen før komprimering (kun JPEG)
   const originalDataUrl = await readExifFromFile(file)
 
-  // Komprimer som vanlig
-  const compressed = await compressImage(file, maxDim, quality)
+  // Sjekk om originalbildet har en EXIF-orientering ulik 1 (f.eks. 6 for stående mobilbilde)
+  let originalOrientation = 1
+  let exifObj: ReturnType<typeof piexif.load> | null = null
+  if (originalDataUrl) {
+    try {
+      exifObj = piexif.load(originalDataUrl)
+      if (exifObj['0th'] && typeof exifObj['0th'][piexif.ImageIFD.Orientation] === 'number') {
+        originalOrientation = exifObj['0th'][piexif.ImageIFD.Orientation]
+      }
+    } catch {
+      exifObj = null
+    }
+  }
 
-  // Hvis vi ikke fikk EXIF, eller komprimert fil er identisk med original, returner direkte
-  if (!originalDataUrl || compressed === file) {
+  // Hvis bildet har orientering > 1, tvinger vi komprimering gjennom canvas
+  // slik at pikslene blir fysisk bakt inn rett vei.
+  const needsOrientationNormalization = originalOrientation > 1
+  const compressed = await compressImage(file, maxDim, quality, needsOrientationNormalization)
+
+  // Hvis vi ikke fikk EXIF, eller komprimert fil er identisk med original (og ikke trengte normalisering), returner direkte
+  if (!originalDataUrl || !exifObj || (compressed === file && !needsOrientationNormalization)) {
     return compressed
   }
 
-  // Les EXIF-objekt fra originalen
-  let exifObj: ReturnType<typeof piexif.load>
   try {
-    exifObj = piexif.load(originalDataUrl)
     // Fjern eventuell innebygd forhåndsvisning/thumbnail fra originalbildet
     // for å unngå at EXIF-seksjonen overskrider JPEGs 64KB APP1-grense
     if (exifObj.thumbnail) {
@@ -202,17 +229,28 @@ export async function compressImageWithExif(
     if (exifObj['1st']) {
       delete exifObj['1st']
     }
+
+    // Nullstill orientering til 1 (Normal / oppreist), ettersom compressImage()
+    // og canvas allerede har bakt rotasjonen direkte inn i pikslene.
+    // Hvis original Orientation (f.eks. 6 for stående mobilbilde) beholdes,
+    // vil nettlesere og bildevisere rotere bildet 90 grader en gang til!
+    if (!exifObj['0th']) {
+      exifObj['0th'] = {}
+    }
+    exifObj['0th'][piexif.ImageIFD.Orientation] = 1
   } catch {
     return compressed
   }
 
-  // Les komprimert fil som base64 og sett inn EXIF
+  const activeExifObj = exifObj
+
+  // Les komprimert fil som base64 og sett inn oppdatert EXIF
   return new Promise<File>((resolve) => {
     const reader = new FileReader()
     reader.onload = () => {
       try {
         const compressedDataUrl = reader.result as string
-        const exifBytes = piexif.dump(exifObj)
+        const exifBytes = piexif.dump(activeExifObj)
         const withExif = piexif.insert(exifBytes, compressedDataUrl)
 
         // Konverter tilbake fra base64 dataURL til Blob/File
