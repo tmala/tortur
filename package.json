@@ -28,7 +28,7 @@
     "lucide-vue-next": "^1.0.0",
     "maplibre-gl": "^6.11.2",
     "piexifjs": "^1.0.6",
-    "pinia": "^4.0.2",
+    "pinia": "^4.1.0",
     "vite-plugin-pwa": "^2.0.0",
     "vue": "^3.5.40",
     "vue-router": "^5.2.0"
