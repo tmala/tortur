@@ -1,4 +1,5 @@
 import L from 'leaflet'
+import type { GeoJsonObject, Feature, Geometry } from 'geojson'
 
 export interface MunicipalityCallbacks {
   getKommuneInfo?: (name: string) => { fylkeName: string; count: number } | null
@@ -8,7 +9,13 @@ export interface MunicipalityCallbacks {
   onDisableMunicipalities: () => void
 }
 
-let cachedGeoJsonData: any = null
+export interface KommuneFeatureProperties {
+  kommunenavn?: string
+  name?: string
+  [key: string]: unknown
+}
+
+let cachedGeoJsonData: GeoJsonObject | null = null
 
 export function useMapMunicipalitiesLayer(
   getMap: () => L.Map | null,
@@ -16,7 +23,7 @@ export function useMapMunicipalitiesLayer(
 ) {
   let geoJsonLayer: L.GeoJSON | null = null
 
-  const getKommuneStyle = (feature: any) => {
+  const getKommuneStyle = (feature?: Feature<Geometry, KommuneFeatureProperties>): L.PathOptions => {
     const name = feature?.properties?.kommunenavn || feature?.properties?.name || ''
     const selectedName = callbacks.getSelectedKommuneName()
     const isSelected = selectedName && name.toLowerCase() === selectedName.toLowerCase()
