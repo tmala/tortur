@@ -1,0 +1,1397 @@
+<script setup lang="ts">
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import {
+  Download,
+  Trash2,
+  Calendar,
+  Clock,
+  MapPin,
+  Eye,
+  EyeOff,
+  Edit2,
+  Check,
+  PlusCircle,
+  AlertTriangle,
+  FolderHeart,
+  RefreshCw,
+  Loader2,
+  ChevronDown,
+  Globe,
+  Users,
+  Lock,
+  X,
+} from 'lucide-vue-next'
+import { useGpsTrackStore, type SavedTrack, type TrackVisibility } from '@/stores/gpsTrack'
+import { formatDistance, type TrackPoint } from '@/composables/useGeolocation'
+import TrackPhotosSection from '@/components/TrackPhotosSection.vue'
+import TrackVisibilitySelector from '@/components/TrackVisibilitySelector.vue'
+import MonthGroupHeader from '../MonthGroupHeader.vue'
+
+const props = withDefaults(
+  defineProps<{
+    liveTrackPoints?: TrackPoint[]
+    isTracking?: boolean
+    isLoggedIn?: boolean
+    highlightedTrackId?: string | null
+  }>(),
+  {
+    liveTrackPoints: () => [],
+    isTracking: false,
+    isLoggedIn: false,
+    highlightedTrackId: null,
+  },
+)
+
+const emit = defineEmits<{
+  (e: 'view-track', track: SavedTrack | null): void
+  (e: 'open-live-track-modal'): void
+}>()
+
+const trackStore = useGpsTrackStore()
+
+const handleManualSync = async () => {
+  if (trackStore.isSyncing) return
+  await trackStore.syncTracksWithFirebase()
+}
+
+const activeHighlightId = ref<string | null>(null)
+let highlightTimer: ReturnType<typeof setTimeout> | null = null
+
+const scrollToHighlightedTrack = () => {
+  const targetId = props.highlightedTrackId || trackStore.activeTrackId
+  if (!targetId) return
+
+  activeHighlightId.value = targetId
+  if (highlightTimer) clearTimeout(highlightTimer)
+  highlightTimer = setTimeout(() => {
+    activeHighlightId.value = null
+  }, 2500)
+
+  const targetTrack = trackStore.savedTracks.find((t) => t.id === targetId)
+  if (targetTrack) {
+    const time = targetTrack.startTime || targetTrack.createdAt
+    const d = new Date(time)
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const nextMonths = new Set(expandedMonthKeys.value)
+    nextMonths.add(monthKey)
+    expandedMonthKeys.value = nextMonths
+  }
+
+  if (!expandedTrackIds.value.has(targetId)) {
+    const next = new Set(expandedTrackIds.value)
+    next.add(targetId)
+    expandedTrackIds.value = next
+  }
+
+  nextTick(() => {
+    const el = document.getElementById(`profile-track-card-${targetId}`)
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  })
+}
+
+watch(
+  () => props.highlightedTrackId,
+  (newId) => {
+    if (newId) {
+      scrollToHighlightedTrack()
+    }
+  },
+)
+
+onMounted(() => {
+  scrollToHighlightedTrack()
+})
+
+onUnmounted(() => {
+  if (highlightTimer) {
+    clearTimeout(highlightTimer)
+  }
+})
+
+const formatDate = (timestamp: number): string => {
+  return new Date(timestamp).toLocaleDateString('no-NO', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+const formatDuration = (ms: number): string => {
+  if (!ms || ms <= 0) return '< 1 min'
+  const totalMin = Math.round(ms / 60000)
+  if (totalMin < 60) return `${totalMin} min`
+  const hours = Math.floor(totalMin / 60)
+  const remMin = totalMin % 60
+  return remMin > 0 ? `${hours} t ${remMin} min` : `${hours} t`
+}
+
+const totalAllTracksDistanceMeters = computed(() => {
+  return trackStore.savedTracks.reduce((acc, t) => acc + (t.distanceMeters || 0), 0)
+})
+
+export interface MonthGroup {
+  key: string
+  label: string
+  tracks: SavedTrack[]
+  totalDistanceMeters: number
+}
+
+const expandedMonthKeys = ref<Set<string>>(new Set())
+const hasInitializedDefaultMonth = ref(false)
+
+const isMonthExpanded = (key: string): boolean => {
+  return expandedMonthKeys.value.has(key)
+}
+
+const toggleMonth = (key: string) => {
+  const next = new Set(expandedMonthKeys.value)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  expandedMonthKeys.value = next
+}
+
+const monthGroups = computed<MonthGroup[]>(() => {
+  const groupsMap = new Map<
+    string,
+    { label: string; tracks: SavedTrack[]; totalDistance: number }
+  >()
+
+  const sorted = [...trackStore.savedTracks].sort((a, b) => {
+    const timeA = a.startTime || a.createdAt
+    const timeB = b.startTime || b.createdAt
+    return timeB - timeA
+  })
+
+  for (const track of sorted) {
+    const time = track.startTime || track.createdAt
+    const d = new Date(time)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+
+    if (!groupsMap.has(key)) {
+      const monthName = d.toLocaleDateString('no-NO', { month: 'long', year: 'numeric' })
+      const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1)
+      groupsMap.set(key, {
+        label: capitalized,
+        tracks: [],
+        totalDistance: 0,
+      })
+    }
+
+    const group = groupsMap.get(key)!
+    group.tracks.push(track)
+    group.totalDistance += track.distanceMeters || 0
+  }
+
+  return Array.from(groupsMap.entries()).map(([key, data]) => ({
+    key,
+    label: data.label,
+    tracks: data.tracks,
+    totalDistanceMeters: data.totalDistance,
+  }))
+})
+
+watch(
+  monthGroups,
+  (groups) => {
+    if (groups.length > 0 && !hasInitializedDefaultMonth.value) {
+      hasInitializedDefaultMonth.value = true
+      expandedMonthKeys.value = new Set([groups[0]!.key])
+    }
+  },
+  { immediate: true },
+)
+
+const expandedTrackIds = ref<Set<string>>(new Set())
+
+const isExpanded = (id: string): boolean => {
+  return expandedTrackIds.value.has(id)
+}
+
+const toggleExpand = (id: string) => {
+  const next = new Set(expandedTrackIds.value)
+  if (next.has(id)) {
+    next.delete(id)
+  } else {
+    next.add(id)
+  }
+  expandedTrackIds.value = next
+}
+
+const onTrackHeaderClick = (track: SavedTrack) => {
+  if (editingTrackId.value === track.id) return
+  toggleExpand(track.id)
+}
+
+const editingTrackId = ref<string | null>(null)
+const editingName = ref('')
+
+const startEditing = (track: SavedTrack) => {
+  if (!expandedTrackIds.value.has(track.id)) {
+    const next = new Set(expandedTrackIds.value)
+    next.add(track.id)
+    expandedTrackIds.value = next
+  }
+  editingTrackId.value = track.id
+  editingName.value = track.name
+}
+
+const saveEditing = (track: SavedTrack) => {
+  if (editingName.value.trim()) {
+    trackStore.renameTrack(track.id, editingName.value)
+  }
+  editingTrackId.value = null
+}
+
+const cancelEditing = () => {
+  editingTrackId.value = null
+}
+
+const trackToDelete = ref<SavedTrack | null>(null)
+
+const confirmDelete = (track: SavedTrack) => {
+  trackToDelete.value = track
+}
+
+const executeDelete = () => {
+  if (trackToDelete.value) {
+    const wasActive = trackStore.activeTrackId === trackToDelete.value.id
+    const idToDelete = trackToDelete.value.id
+    trackStore.deleteTrack(idToDelete)
+    if (expandedTrackIds.value.has(idToDelete)) {
+      const next = new Set(expandedTrackIds.value)
+      next.delete(idToDelete)
+      expandedTrackIds.value = next
+    }
+    if (wasActive) {
+      emit('view-track', null)
+    }
+    trackToDelete.value = null
+  }
+}
+
+const handleToggleViewOnMap = (track: SavedTrack) => {
+  const isCurrentlyActive = trackStore.activeTrackId === track.id
+  trackStore.viewTrackOnMap(track.id)
+  if (isCurrentlyActive) {
+    emit('view-track', null)
+  } else {
+    emit('view-track', track)
+  }
+}
+
+const handleSetVisibility = (track: SavedTrack, visibility: TrackVisibility) => {
+  trackStore.setTrackVisibility(track.id, visibility)
+}
+
+const isSavingLiveTrack = ref(false)
+const newLiveTrackName = ref('')
+
+const handleStartSaveLiveTrack = () => {
+  isSavingLiveTrack.value = true
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
+  const timeStr = now.toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' })
+  newLiveTrackName.value = `Tur ${dateStr}, kl. ${timeStr}`
+}
+
+const handleConfirmSaveLiveTrack = () => {
+  if (!props.liveTrackPoints || props.liveTrackPoints.length === 0) return
+  const saved = trackStore.saveTrack(props.liveTrackPoints, newLiveTrackName.value)
+  isSavingLiveTrack.value = false
+  newLiveTrackName.value = ''
+  if (saved) {
+    handleToggleViewOnMap(saved)
+  }
+}
+</script>
+
+<template>
+  <div class="profile-tracks-tab">
+    <!-- Statistikk-sammendrag -->
+    <div v-if="trackStore.savedTracks.length > 0" class="summary-bar">
+      <div class="summary-item">
+        <span class="summary-label">Lagrede turer</span>
+        <span class="summary-val">{{ trackStore.savedTracks.length }}</span>
+      </div>
+      <div class="summary-divider" />
+      <div class="summary-item">
+        <span class="summary-label">Total distanse</span>
+        <span class="summary-val">{{ formatDistance(totalAllTracksDistanceMeters) }}</span>
+      </div>
+      <div v-if="isLoggedIn" class="summary-divider" />
+      <div
+        v-if="isLoggedIn"
+        class="summary-item"
+        :title="trackStore.syncError || 'Synkronisert med skyen'"
+      >
+        <div class="summary-header-row">
+          <span class="summary-label">Sky-status</span>
+          <button
+            type="button"
+            class="btn-sync-inline"
+            :class="{ 'is-syncing': trackStore.isSyncing }"
+            :disabled="trackStore.isSyncing"
+            @click="handleManualSync"
+            title="Synkroniser spor med skyen"
+            aria-label="Synkroniser spor med skyen"
+          >
+            <Loader2 v-if="trackStore.isSyncing" class="spinner" :size="12" />
+            <RefreshCw v-else :size="12" />
+          </button>
+        </div>
+        <span v-if="trackStore.isSyncing" class="summary-val status-syncing">Synker...</span>
+        <span v-else-if="trackStore.syncError" class="summary-val status-error">Kun lokal</span>
+        <span v-else class="summary-val status-synced">Sky</span>
+      </div>
+    </div>
+
+    <!-- Banner for aktiv live-sporing hvis det finnes data -->
+    <div
+      v-if="liveTrackPoints && liveTrackPoints.length > 0"
+      class="live-track-banner"
+    >
+      <div class="live-track-info">
+        <div class="live-pulse-dot" :class="{ 'is-tracking': isTracking }" />
+        <div class="live-texts">
+          <span class="live-title">
+            {{ isTracking ? 'Pågående opptak' : 'Aktiv sporlogg i minnet' }}
+          </span>
+          <span class="live-details">
+            {{ liveTrackPoints.length }} punkter registrert
+          </span>
+        </div>
+      </div>
+
+      <div v-if="!isSavingLiveTrack" class="live-actions">
+        <button
+          type="button"
+          class="btn-quick-save"
+          @click="handleStartSaveLiveTrack"
+          title="Lagre denne turen til Mine spor"
+          aria-label="Lagre tur"
+        >
+          <PlusCircle :size="14" />
+          <span>Lagre tur</span>
+        </button>
+        <button
+          type="button"
+          class="btn-view-live"
+          @click="emit('open-live-track-modal')"
+          title="Åpne full sporlogg-dialog"
+          aria-label="Åpne full sporlogg-dialog"
+        >
+          Detaljer
+        </button>
+      </div>
+
+      <!-- Inline lagringsskjema -->
+      <div v-else class="live-save-form">
+        <input
+          v-model="newLiveTrackName"
+          type="text"
+          class="input-track-name"
+          placeholder="Navn på turen..."
+          @keydown.enter="handleConfirmSaveLiveTrack"
+          @keydown.esc="isSavingLiveTrack = false"
+          autofocus
+        />
+        <div class="save-form-buttons">
+          <button
+            type="button"
+            class="btn-confirm-save"
+            @click="handleConfirmSaveLiveTrack"
+            aria-label="Bekreft lagring"
+          >
+            <Check :size="14" />
+            <span>Lagre</span>
+          </button>
+          <button
+            type="button"
+            class="btn-cancel-save"
+            @click="isSavingLiveTrack = false"
+            aria-label="Avbryt lagring"
+          >
+            Avbryt
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slettebekreftelse dialog -->
+    <transition name="fade">
+      <div v-if="trackToDelete" class="delete-confirm-overlay">
+        <div class="delete-card">
+          <div class="delete-card-header">
+            <AlertTriangle :size="20" class="warn-icon" />
+            <h4>Slette spor?</h4>
+          </div>
+          <p class="delete-card-text">
+            Er du sikker på at du vil slette <strong>«{{ trackToDelete.name }}»</strong>? Dette kan ikke angres.
+          </p>
+          <div class="delete-card-actions">
+            <button
+              type="button"
+              class="btn-delete-confirm"
+              @click="executeDelete"
+              aria-label="Bekreft sletting"
+            >
+              Ja, slett
+            </button>
+            <button
+              type="button"
+              class="btn-delete-cancel"
+              @click="trackToDelete = null"
+              aria-label="Avbryt sletting"
+            >
+              Avbryt
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Liste over spor -->
+    <div class="tracks-list-container">
+      <!-- Tom tilstand -->
+      <div v-if="trackStore.savedTracks.length === 0" class="empty-state">
+        <div class="empty-icon-wrap">
+          <FolderHeart :size="36" class="empty-icon" />
+        </div>
+        <h4>Ingen lagrede spor ennå</h4>
+        <p>
+          Bruk <strong>«Følg meg»</strong>-knappen i kartet for å spore turen din. Når du er ferdig,
+          kan du lagre sporet her for å hente det frem og se det på kartet når som helst!
+        </p>
+      </div>
+
+      <!-- Månedsgruppert liste over spor -->
+      <div
+        v-for="group in monthGroups"
+        :key="group.key"
+        class="month-group"
+      >
+        <MonthGroupHeader
+          :label="group.label"
+          :count="group.tracks.length"
+          count-unit-single="tur"
+          count-unit-plural="turer"
+          accent-color="#ea580c"
+          :is-expanded="isMonthExpanded(group.key)"
+          @toggle="toggleMonth(group.key)"
+        >
+          <template #right>
+            <span class="month-distance">{{ formatDistance(group.totalDistanceMeters) }}</span>
+          </template>
+        </MonthGroupHeader>
+
+        <!-- Spor i denne måneden -->
+        <div v-if="isMonthExpanded(group.key)" class="month-tracks-list">
+          <div
+            v-for="track in group.tracks"
+            :id="`profile-track-card-${track.id}`"
+            :key="track.id"
+            class="track-card"
+            :class="{
+              'is-active-on-map': trackStore.activeTrackId === track.id,
+              'is-highlighted': activeHighlightId === track.id,
+              'is-expanded': isExpanded(track.id),
+            }"
+          >
+            <!-- Topprad: Tittel og chevron -->
+            <div
+              class="track-card-header"
+              :class="{ 'is-clickable': editingTrackId !== track.id }"
+              @click="onTrackHeaderClick(track)"
+            >
+              <div v-if="editingTrackId !== track.id" class="track-title-wrap">
+                <span class="track-name" :title="track.name">{{ track.name }}</span>
+                <button
+                  v-if="isExpanded(track.id)"
+                  type="button"
+                  class="btn-icon-subtle"
+                  @click.stop="startEditing(track)"
+                  title="Endre navn"
+                  aria-label="Endre navn"
+                >
+                  <Edit2 :size="13" />
+                </button>
+              </div>
+
+              <!-- Inline redigering av navn -->
+              <div v-else class="track-rename-row" @click.stop>
+                <input
+                  v-model="editingName"
+                  type="text"
+                  class="input-inline-rename"
+                  @keydown.enter="saveEditing(track)"
+                  @keydown.esc="cancelEditing"
+                  autofocus
+                />
+                <button
+                  type="button"
+                  class="btn-icon-check"
+                  @click="saveEditing(track)"
+                  title="Lagre"
+                  aria-label="Lagre"
+                >
+                  <Check :size="14" />
+                </button>
+                <button
+                  type="button"
+                  class="btn-icon-cancel"
+                  @click="cancelEditing"
+                  title="Avbryt"
+                  aria-label="Avbryt"
+                >
+                  <X :size="14" />
+                </button>
+              </div>
+
+              <div class="track-header-right">
+                <!-- Synlighets-badge -->
+                <span
+                  class="badge-track-vis"
+                  :class="`vis-${track.visibility || 'private'}`"
+                  :title="
+                    track.visibility === 'all'
+                      ? 'Offentlig: Synlig for alle'
+                      : track.visibility === 'friends'
+                        ? 'Synlig for venner'
+                        : 'Privat: Kun synlig for deg'
+                  "
+                >
+                  <Globe v-if="track.visibility === 'all'" :size="10" />
+                  <Users v-else-if="track.visibility === 'friends'" :size="10" />
+                  <Lock v-else :size="10" />
+                  <span>
+                    {{
+                      track.visibility === 'all'
+                        ? 'Alle'
+                        : track.visibility === 'friends'
+                          ? 'Venner'
+                          : 'Privat'
+                    }}
+                  </span>
+                </span>
+
+                <!-- Aktiv status-indikator på kart -->
+                <span
+                  v-if="trackStore.activeTrackId === track.id"
+                  class="badge-active-map"
+                  title="Vises nå på kartet"
+                >
+                  Vises på kart
+                </span>
+
+                <!-- Ekspander / kollaps chevron -->
+                <button
+                  type="button"
+                  class="btn-icon-expand"
+                  :title="isExpanded(track.id) ? 'Kollaps spor' : 'Ekspander spor'"
+                  :aria-label="isExpanded(track.id) ? 'Kollaps spor' : 'Ekspander spor'"
+                  :aria-expanded="isExpanded(track.id)"
+                  @click.stop="toggleExpand(track.id)"
+                >
+                  <ChevronDown
+                    :size="16"
+                    class="chevron-icon"
+                    :class="{ rotated: isExpanded(track.id) }"
+                  />
+                </button>
+              </div>
+            </div>
+
+            <!-- Metadata-rad: Distanse, varighet, dato -->
+            <div
+              class="track-meta-row"
+              :class="{ 'is-clickable': !isExpanded(track.id) }"
+              @click="!isExpanded(track.id) && toggleExpand(track.id)"
+            >
+              <div class="meta-item">
+                <MapPin :size="13" class="meta-icon" />
+                <span>{{ formatDistance(track.distanceMeters) }}</span>
+              </div>
+              <div class="meta-item">
+                <Clock :size="13" class="meta-icon" />
+                <span>{{ formatDuration(track.durationMs) }}</span>
+              </div>
+              <div class="meta-item">
+                <Calendar :size="13" class="meta-icon" />
+                <span>{{ formatDate(track.startTime || track.createdAt) }}</span>
+              </div>
+            </div>
+
+            <!-- Ekspandert innhold: Handlingsknapper og turbilder -->
+            <div v-if="isExpanded(track.id)" class="track-expanded-body">
+              <div class="track-actions-row">
+                <button
+                  type="button"
+                  class="btn-track-action btn-view-map"
+                  :class="{ active: trackStore.activeTrackId === track.id }"
+                  @click="handleToggleViewOnMap(track)"
+                  :title="
+                    trackStore.activeTrackId === track.id
+                      ? 'Skjul fra kart'
+                      : 'Vis på kart og zoom til sporet'
+                  "
+                >
+                  <EyeOff v-if="trackStore.activeTrackId === track.id" :size="13" />
+                  <Eye v-else :size="13" />
+                  <span>{{
+                    trackStore.activeTrackId === track.id ? 'Skjul fra kart' : 'Vis på kart'
+                  }}</span>
+                </button>
+
+                <button
+                  type="button"
+                  class="btn-track-action btn-download-gpx"
+                  @click="trackStore.downloadGpx(track)"
+                  title="Last ned standard .gpx-fil"
+                  aria-label="Last ned GPX"
+                >
+                  <Download :size="14" />
+                  <span>GPX</span>
+                </button>
+
+                <button
+                  type="button"
+                  class="btn-track-action btn-delete-track"
+                  @click="confirmDelete(track)"
+                  title="Slett spor"
+                  aria-label="Slett spor"
+                >
+                  <Trash2 :size="14" />
+                </button>
+              </div>
+
+              <!-- Synlighetsvelger -->
+              <TrackVisibilitySelector
+                :model-value="track.visibility || 'private'"
+                label="Hvem kan se dette sporet?"
+                @update:model-value="(val) => handleSetVisibility(track, val)"
+              />
+
+              <!-- Turbilder for sporet -->
+              <TrackPhotosSection
+                v-if="isLoggedIn && track.userId === trackStore.currentUserId"
+                :track="track"
+                :user-id="trackStore.currentUserId"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.profile-tracks-tab {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Sammendragslinje */
+.summary-bar {
+  display: flex;
+  align-items: center;
+  background: #0b1120;
+  border-bottom: 1px solid #1e293b;
+  padding: 8px 16px;
+  flex-shrink: 0;
+}
+
+.summary-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-header-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.summary-label {
+  font-size: 10.5px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-val {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.summary-val.status-synced {
+  color: #38bdf8;
+}
+
+.summary-val.status-syncing {
+  color: #fbbf24;
+}
+
+.summary-val.status-error {
+  color: #f87171;
+}
+
+.summary-divider {
+  width: 1px;
+  height: 22px;
+  background: #334155;
+  margin: 0 10px;
+}
+
+.btn-sync-inline {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 2px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-sync-inline:hover:not(:disabled) {
+  color: #38bdf8;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Banner for aktiv live-sporing */
+.live-track-banner {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(15, 23, 42, 0.9));
+  border-bottom: 1px solid rgba(249, 115, 22, 0.3);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.live-track-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.live-pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #f97316;
+  box-shadow: 0 0 8px #f97316;
+}
+
+.live-pulse-dot.is-tracking {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+  animation: pulse-ring 1.5s infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+.live-texts {
+  display: flex;
+  flex-direction: column;
+}
+
+.live-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.live-details {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.live-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-quick-save {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #ea580c;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-quick-save:hover {
+  background: #c2410c;
+}
+
+.btn-view-live {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-view-live:hover {
+  background: #334155;
+  color: white;
+}
+
+.live-save-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input-track-name {
+  background: #0b1120;
+  border: 1px solid #ea580c;
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: white;
+  outline: none;
+}
+
+.save-form-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.btn-confirm-save {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #22c55e;
+  border: none;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-cancel-save {
+  background: transparent;
+  border: 1px solid #475569;
+  color: #94a3b8;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+/* Slettekort bekreftelse */
+.delete-confirm-overlay {
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid #ef4444;
+  padding: 12px 16px;
+  flex-shrink: 0;
+}
+
+.delete-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.delete-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #f87171;
+}
+
+.delete-card-header h4 {
+  font-size: 13.5px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.delete-card-text {
+  font-size: 12px;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.delete-card-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.btn-delete-confirm {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-delete-cancel {
+  background: #334155;
+  color: #cbd5e1;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Liste med spor */
+.tracks-list-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Tom tilstand */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 36px 16px;
+  color: #94a3b8;
+}
+
+.empty-icon-wrap {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(51, 65, 85, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.empty-icon {
+  color: #ea580c;
+}
+
+.empty-state h4 {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0 0 8px 0;
+}
+
+.empty-state p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #94a3b8;
+  margin: 0;
+  max-width: 290px;
+}
+
+/* Månedsgruppering */
+.month-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.month-distance {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.month-tracks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: expand-fade 0.2s ease-out;
+}
+
+/* Spor-kort */
+.track-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.track-card.is-expanded {
+  padding: 12px;
+  gap: 10px;
+}
+
+.track-card:hover {
+  border-color: #475569;
+  background: #243044;
+}
+
+.track-card.is-active-on-map {
+  border-color: #f97316;
+  background: rgba(249, 115, 22, 0.08);
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.15);
+}
+
+.track-card.is-highlighted {
+  animation: track-card-pulse 1.2s ease-in-out 2;
+}
+
+@keyframes track-card-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px rgba(249, 115, 22, 0.45),
+      0 0 20px rgba(249, 115, 22, 0.4);
+    border-color: #f97316;
+  }
+}
+
+.track-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.track-card-header.is-clickable {
+  cursor: pointer;
+}
+
+.track-card-header.is-clickable:hover .track-name {
+  color: #38bdf8;
+}
+
+.track-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.badge-track-vis {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.badge-track-vis.vis-all {
+  background: rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(14, 165, 233, 0.4);
+  color: #38bdf8;
+}
+
+.badge-track-vis.vis-friends {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.badge-track-vis.vis-private {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #94a3b8;
+}
+
+.btn-icon-expand {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 3px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-icon-expand:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+.chevron-icon {
+  color: #64748b;
+  transition:
+    transform 0.2s ease,
+    color 0.15s ease;
+}
+
+.chevron-icon.rotated {
+  transform: rotate(180deg);
+  color: #ea580c;
+}
+
+.track-meta-row.is-clickable {
+  cursor: pointer;
+}
+
+.track-expanded-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: expand-fade 0.2s ease-out;
+}
+
+@keyframes expand-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.track-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.track-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-icon-subtle {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.btn-icon-subtle:hover {
+  color: #cbd5e1;
+}
+
+.track-rename-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+}
+
+.input-inline-rename {
+  flex: 1;
+  background: #0f172a;
+  border: 1px solid #38bdf8;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12.5px;
+  color: white;
+  outline: none;
+}
+
+.btn-icon-check {
+  background: #22c55e;
+  border: none;
+  color: white;
+  padding: 4px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-icon-cancel {
+  background: #475569;
+  border: none;
+  color: white;
+  padding: 4px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.badge-active-map {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #ea580c;
+  background: rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  padding: 2px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+/* Metadata */
+.track-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.meta-icon {
+  color: #64748b;
+}
+
+/* Handlingsknapper */
+.track-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(51, 65, 85, 0.6);
+}
+
+.btn-track-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.btn-view-map {
+  background: rgba(249, 115, 22, 0.18);
+  border: 1px solid rgba(249, 115, 22, 0.4);
+  color: #fb923c;
+}
+
+.btn-view-map:hover {
+  background: rgba(249, 115, 22, 0.3);
+  color: #ffedd5;
+  border-color: rgba(249, 115, 22, 0.6);
+}
+
+.btn-view-map.active {
+  background: #ea580c;
+  border-color: #f97316;
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(234, 88, 12, 0.4);
+}
+
+.btn-download-gpx {
+  margin-left: auto;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #94a3b8;
+}
+
+.btn-download-gpx:hover {
+  background: #334155;
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.btn-delete-track {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 6px 10px;
+}
+
+.btn-delete-track:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: white;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

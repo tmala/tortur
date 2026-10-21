@@ -7,36 +7,67 @@ import {
   Trophy,
   ShieldCheck,
   RotateCw,
+  ClipboardList,
 } from 'lucide-vue-next'
 import type { GoogleUser, FirebaseCheckinItem } from '@/composables/useAuth'
+import type { TurpostItem } from '@/composables/useTurposter'
+import type { FriendUser } from '@/composables/useFriends'
+import type { SavedTrack } from '@/stores/gpsTrack'
+import type { TrackPoint } from '@/composables/useGeolocation'
+import type { ProfileTab } from '@/types/profile'
 import { useGpsTrackStore } from '@/stores/gpsTrack'
 import { useAppStateStore } from '@/stores/appState'
 import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
-import EditCheckinModal from './EditCheckinModal.vue'
-import UserCheckinCard from './profile/UserCheckinCard.vue'
-import UserProfileShortcuts from './profile/UserProfileShortcuts.vue'
-import MonthGroupHeader from './MonthGroupHeader.vue'
-import { useMonthGroups } from '@/composables/useMonthGroups'
+import ProfileTabBar from './profile/ProfileTabBar.vue'
+import ProfileCheckinsTab from './profile/ProfileCheckinsTab.vue'
+import ProfileTracksTab from './profile/ProfileTracksTab.vue'
+import ProfileSpotsTab from './profile/ProfileSpotsTab.vue'
+import ProfileFriendsTab from './profile/ProfileFriendsTab.vue'
 
-const props = defineProps<{
-  isOpen: boolean
-  user: GoogleUser | null
-  checkins: FirebaseCheckinItem[]
-  isLoading?: boolean
-  isAdmin?: boolean
-  isAdminModeActive?: boolean
-  savedTracksCount?: number
-  mySpotsCount?: number
-  spotSuggestionsCount?: number
-  friendsCount?: number
-  pendingFriendRequestsCount?: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    isOpen: boolean
+    activeTab?: ProfileTab
+    user: GoogleUser | null
+    checkins: FirebaseCheckinItem[]
+    isLoading?: boolean
+    isAdmin?: boolean
+    isAdminModeActive?: boolean
+    savedTracksCount?: number
+    mySpotsCount?: number
+    spotSuggestionsCount?: number
+    friendsCount?: number
+    pendingFriendRequestsCount?: number
+    spots?: TurpostItem[]
+    isMySpotsLoading?: boolean
+    liveTrackPoints?: TrackPoint[]
+    isTracking?: boolean
+    highlightedTrackId?: string | null
+  }>(),
+  {
+    activeTab: 'checkins',
+    isLoading: false,
+    isAdmin: false,
+    isAdminModeActive: false,
+    savedTracksCount: 0,
+    mySpotsCount: 0,
+    spotSuggestionsCount: 0,
+    friendsCount: 0,
+    pendingFriendRequestsCount: 0,
+    spots: () => [],
+    isMySpotsLoading: false,
+    liveTrackPoints: () => [],
+    isTracking: false,
+    highlightedTrackId: null,
+  },
+)
 
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'logout'): void
   (e: 'refresh'): void
   (e: 'toggle-admin-mode'): void
+  (e: 'tab-change', tab: ProfileTab): void
   (e: 'open-saved-tracks'): void
   (e: 'open-my-spots'): void
   (e: 'open-spot-suggestions'): void
@@ -44,16 +75,58 @@ const emit = defineEmits<{
   (e: 'checkin-deleted', checkinId: string): void
   (e: 'checkin-updated'): void
   (e: 'view-turpost-on-map', checkin: FirebaseCheckinItem): void
+  (e: 'view-track', track: SavedTrack | null): void
+  (e: 'open-live-track-modal'): void
+  (e: 'view-spot', spot: TurpostItem): void
+  (e: 'delete-spot', spotId: string): void
+  (e: 'add-spot-click'): void
+  (e: 'suggest-public', spot: TurpostItem): void
+  (e: 'view-checkins', spot: TurpostItem): void
+  (e: 'view-friend-profile', friend: FriendUser): void
 }>()
 
-const editingCheckin = ref<FirebaseCheckinItem | null>(null)
+const currentTab = ref<ProfileTab>(props.activeTab || 'checkins')
+
+watch(
+  () => props.activeTab,
+  (newTab) => {
+    if (newTab && newTab !== currentTab.value) {
+      currentTab.value = newTab
+    }
+  },
+)
+
+function handleTabChange(tab: ProfileTab) {
+  currentTab.value = tab
+  emit('tab-change', tab)
+  if (tab === 'tracks') emit('open-saved-tracks')
+  else if (tab === 'spots') emit('open-my-spots')
+  else if (tab === 'friends') emit('open-friends')
+}
+
+// Unike turposter for telleren i headeren
+const sortedCheckins = computed(() => {
+  const map = new Map<string, FirebaseCheckinItem>()
+  for (const c of props.checkins) {
+    const key = c.id || `${c.turpostId}_${c.timestamp}`
+    const existing = map.get(key)
+    if (!existing || (!existing.isPrivate && c.isPrivate)) {
+      map.set(key, c)
+    }
+  }
+  return Array.from(map.values())
+})
+
+const uniqueTurpostIds = computed(() => {
+  return new Set(sortedCheckins.value.map((c) => String(c.turpostId)))
+})
 
 function handleViewOnMap(item: FirebaseCheckinItem) {
   emit('view-turpost-on-map', item)
   emit('close')
 }
 
-async function handleViewTrack(item: FirebaseCheckinItem) {
+async function handleViewTrackFromCheckin(item: FirebaseCheckinItem) {
   if (!item.trackId) return
   const trackStore = useGpsTrackStore()
   const appState = useAppStateStore()
@@ -74,20 +147,6 @@ async function handleViewTrack(item: FirebaseCheckinItem) {
   emit('close')
 }
 
-function handleCheckinEdited() {
-  emit('checkin-updated')
-  editingCheckin.value = null
-}
-
-function handleSocialUpdated() {
-  emit('checkin-updated')
-}
-
-function handleCheckinDeleted(deletedId: string) {
-  emit('checkin-deleted', deletedId)
-  editingCheckin.value = null
-}
-
 const isRefreshing = ref(false)
 
 const handleForceRefresh = async () => {
@@ -95,7 +154,6 @@ const handleForceRefresh = async () => {
   isRefreshing.value = true
 
   try {
-    // 1. Tøm eventuell statisk app-cache (men spar på kart-tiles)
     if ('caches' in window) {
       const cacheNames = await caches.keys()
       await Promise.all(
@@ -103,7 +161,6 @@ const handleForceRefresh = async () => {
       )
     }
 
-    // 2. Be service worker sjekke etter oppdatering og aktiver eventuell ventende versjon
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations()
       for (const reg of registrations) {
@@ -116,66 +173,10 @@ const handleForceRefresh = async () => {
   } catch (err) {
     console.warn('Kunne ikke oppdatere cache fullstendig:', err)
   } finally {
-    // 3. Last appen på nytt fra appens rot
     const appBase = import.meta.env.BASE_URL || '/tortur/'
     window.location.href = appBase
   }
 }
-
-// Sporer hvilke innsjekkinger som er manuelt ekspandert i listen.
-// Som standard er alle innsjekkinger minimert (ikke ekspandert).
-const expandedCheckinIds = ref<Set<string>>(new Set())
-
-const isExpanded = (id: string | number): boolean => {
-  return expandedCheckinIds.value.has(String(id))
-}
-
-const toggleExpand = (id: string | number) => {
-  const key = String(id)
-  const next = new Set(expandedCheckinIds.value)
-  if (next.has(key)) {
-    next.delete(key)
-  } else {
-    next.add(key)
-  }
-  expandedCheckinIds.value = next
-}
-
-// Lightbox for bildevisning
-const lightboxImage = ref<string | null>(null)
-
-// Sortert kronologisk – nyeste innsjekking øverst, deduplisert
-const sortedCheckins = computed(() => {
-  const map = new Map<string, FirebaseCheckinItem>()
-  for (const c of props.checkins) {
-    const key = c.id || `${c.turpostId}_${c.timestamp}`
-    const existing = map.get(key)
-    // Hvis samme innsjekking finnes to ganger (f.eks. både offentlig synk og privat node), prioriter den private
-    if (!existing || (!existing.isPrivate && c.isPrivate)) {
-      map.set(key, c)
-    }
-  }
-  return Array.from(map.values()).sort((a, b) => {
-    const timeA = new Date(a.timestamp).getTime() || 0
-    const timeB = new Date(b.timestamp).getTime() || 0
-    return timeB - timeA
-  })
-})
-
-// Unike turposter
-const uniqueTurpostIds = computed(() => {
-  return new Set(sortedCheckins.value.map((c) => String(c.turpostId)))
-})
-
-// Gruppering av innsjekkinger per måned
-const {
-  monthGroups,
-  isMonthExpanded,
-  toggleMonth,
-  resetToLatest,
-} = useMonthGroups(sortedCheckins, {
-  getDate: (item) => item.timestamp,
-})
 
 const isClosing = ref(false)
 
@@ -194,19 +195,16 @@ watch(
   (open) => {
     if (open) {
       isClosing.value = false
-      expandedCheckinIds.value.clear()
-      resetToLatest()
+      if (props.activeTab) {
+        currentTab.value = props.activeTab
+      }
     }
   },
 )
 
 const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') {
-    if (lightboxImage.value) {
-      lightboxImage.value = null
-    } else if (props.isOpen && !isClosing.value) {
-      requestClose()
-    }
+  if (e.key === 'Escape' && props.isOpen && !isClosing.value) {
+    requestClose()
   }
 }
 
@@ -281,6 +279,7 @@ onUnmounted(() => {
 
               <!-- Lukk-knapp oppe til høyre -->
               <button
+                type="button"
                 class="btn-profile-close"
                 @click="requestClose"
                 title="Lukk (Esc)"
@@ -294,6 +293,7 @@ onUnmounted(() => {
             <div class="profile-header-actions">
               <!-- Oppdater appen / Tving refresh -->
               <button
+                type="button"
                 class="btn-profile-refresh"
                 :disabled="isRefreshing"
                 @click="handleForceRefresh"
@@ -304,9 +304,27 @@ onUnmounted(() => {
                 <span class="btn-text">{{ isRefreshing ? 'Laster...' : 'Oppdater' }}</span>
               </button>
 
+              <!-- Admin forslag-knapp (kun synlig når admin har forslag) -->
+              <button
+                v-if="props.isAdmin && (props.spotSuggestionsCount || 0) > 0"
+                type="button"
+                class="btn-admin-suggestions profile-suggestions-card"
+                @click="emit('open-spot-suggestions')"
+                title="Se innkommende forslag til turposter"
+                aria-label="Forslag til turposter"
+              >
+                <ClipboardList :size="14" />
+                <span class="btn-text">
+                  Forslag ({{ props.spotSuggestionsCount }}
+                  {{ props.spotSuggestionsCount === 1 ? 'nytt' : 'nye' }})
+                </span>
+                <span class="suggestions-badge">{{ props.spotSuggestionsCount }}</span>
+              </button>
+
               <!-- Admin-modus toggle (kun synlig for admin-brukere) -->
               <button
                 v-if="props.isAdmin"
+                type="button"
                 class="btn-admin-toggle"
                 :class="{ active: props.isAdminModeActive }"
                 @click="emit('toggle-admin-mode')"
@@ -319,6 +337,7 @@ onUnmounted(() => {
 
               <!-- Logg ut -->
               <button
+                type="button"
                 class="btn-profile-logout"
                 @click="emit('logout')"
                 title="Logg ut av TorTur"
@@ -330,122 +349,57 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Snarveier side om side: Mine spor, Private turposter, Venner og (for admin) Forslag -->
-          <UserProfileShortcuts
-            :is-admin="props.isAdmin"
-            :saved-tracks-count="savedTracksCount"
-            :my-spots-count="mySpotsCount"
-            :friends-count="friendsCount"
-            :pending-friend-requests-count="pendingFriendRequestsCount"
-            :spot-suggestions-count="spotSuggestionsCount"
-            @open-saved-tracks="emit('open-saved-tracks')"
-            @open-my-spots="emit('open-my-spots')"
-            @open-friends="emit('open-friends')"
-            @open-spot-suggestions="emit('open-spot-suggestions')"
+          <!-- LINJE 2: De fire fanene -->
+          <ProfileTabBar
+            v-model="currentTab"
+            :checkins-count="sortedCheckins.length"
+            :saved-tracks-count="props.savedTracksCount"
+            :my-spots-count="props.mySpotsCount"
+            :friends-count="props.friendsCount"
+            :pending-friend-requests-count="props.pendingFriendRequestsCount"
+            @update:model-value="handleTabChange"
           />
 
-          <!-- Seksjonstitel -->
-          <div class="section-divider">
-            <span class="section-title">Mine besøkte turposter (nyeste øverst)</span>
-            <span class="section-count">{{ sortedCheckins.length }} registrert</span>
-          </div>
-
-          <!-- Liste over innsjekkinger -->
-          <div class="checkins-scroll-area">
-            <!-- Laster -->
-            <div v-if="isLoading" class="loading-state">
-              <div class="spinner" />
-              <span>Henter dine innsjekkinger...</span>
-            </div>
-
-            <!-- Tom tilstand -->
-            <div v-else-if="sortedCheckins.length === 0" class="empty-state">
-              <div class="empty-icon-wrap">
-                <Mountain :size="32" />
-              </div>
-              <h4>Ingen innsjekkinger enda</h4>
-              <p>
-                Trykk på en turpost i kartet og velg «Sjekk inn her» for å registrere din første
-                tur!
-              </p>
-            </div>
-
-            <!-- Innsjekkingsliste (månedsgruppert) -->
-            <div v-else class="checkins-month-groups">
-              <div
-                v-for="group in monthGroups"
-                :key="group.key"
-                class="month-group"
-              >
-                <MonthGroupHeader
-                  :label="group.label"
-                  :count="group.items.length"
-                  :is-expanded="isMonthExpanded(group.key)"
-                  accent-color="#38bdf8"
-                  @toggle="toggleMonth(group.key)"
-                />
-
-                <div v-if="isMonthExpanded(group.key)" class="month-items-list checkin-cards-list">
-                  <UserCheckinCard
-                    v-for="(item, idx) in group.items"
-                    :key="item.id || `${group.key}-${idx}`"
-                    :item="item"
-                    :is-expanded="isExpanded(item.id || `${group.key}-${idx}`)"
-                    :current-user-id="user?.userId"
-                    @toggle-expand="toggleExpand(item.id || `${group.key}-${idx}`)"
-                    @view-on-map="handleViewOnMap"
-                    @view-track="handleViewTrack"
-                    @edit="editingCheckin = $event"
-                    @view-photo="lightboxImage = $event"
-                    @social-updated="handleSocialUpdated"
-                  />
-                </div>
-              </div>
-            </div>
+          <!-- FANE-INNHOLD -->
+          <div class="profile-tabs-content">
+            <KeepAlive>
+              <ProfileCheckinsTab
+                v-if="currentTab === 'checkins'"
+                :checkins="props.checkins"
+                :is-loading="props.isLoading"
+                :current-user-id="user?.userId"
+                @view-turpost-on-map="handleViewOnMap"
+                @view-track="handleViewTrackFromCheckin"
+                @checkin-updated="emit('checkin-updated')"
+                @checkin-deleted="emit('checkin-deleted', $event)"
+              />
+              <ProfileTracksTab
+                v-else-if="currentTab === 'tracks'"
+                :live-track-points="props.liveTrackPoints"
+                :is-tracking="props.isTracking"
+                :is-logged-in="!!user"
+                :highlighted-track-id="props.highlightedTrackId"
+                @view-track="emit('view-track', $event)"
+                @open-live-track-modal="emit('open-live-track-modal')"
+              />
+              <ProfileSpotsTab
+                v-else-if="currentTab === 'spots'"
+                :spots="props.spots"
+                :is-loading="props.isMySpotsLoading"
+                @view-spot="emit('view-spot', $event)"
+                @delete-spot="emit('delete-spot', $event)"
+                @add-spot-click="emit('add-spot-click')"
+                @suggest-public="emit('suggest-public', $event)"
+                @view-checkins="emit('view-checkins', $event)"
+              />
+              <ProfileFriendsTab
+                v-else-if="currentTab === 'friends'"
+                :current-user="user"
+                @view-friend-profile="emit('view-friend-profile', $event)"
+              />
+            </KeepAlive>
           </div>
         </div>
-
-        <!-- Redigeringsmodal for innsjekking -->
-        <EditCheckinModal
-          :is-open="!!editingCheckin"
-          :checkin="editingCheckin"
-          :turpost-name="editingCheckin?.turpostName"
-          :is-private="editingCheckin?.isPrivate"
-          @close="editingCheckin = null"
-          @saved="handleCheckinEdited"
-          @deleted="handleCheckinDeleted"
-        />
-
-        <!-- Lightbox for fullskjermvisning av turbilder -->
-        <transition name="lightbox-fade">
-          <div v-if="lightboxImage" class="lightbox-backdrop" @click="lightboxImage = null">
-            <button
-              class="btn-lightbox-close"
-              @click.stop="lightboxImage = null"
-              title="Lukk (Esc)"
-              aria-label="Lukk bildevisning"
-            >
-              <X :size="24" />
-            </button>
-            <div class="lightbox-content" @click="lightboxImage = null">
-              <img
-                :src="lightboxImage"
-                alt="Turbilde fullskjerm"
-                class="lightbox-img"
-                title="Trykk hvor som helst for å lukke"
-              />
-            </div>
-            <button
-              class="btn-lightbox-bottom-close"
-              @click.stop="lightboxImage = null"
-              title="Lukk bilde"
-              aria-label="Lukk bildevisning"
-            >
-              <X :size="16" />
-              <span>Lukk</span>
-            </button>
-          </div>
-        </transition>
       </div>
     </transition>
   </Teleport>
@@ -483,6 +437,7 @@ onUnmounted(() => {
   border-radius: 0 20px 20px 0;
   box-shadow: 16px 0 48px rgba(0, 0, 0, 0.7);
   overflow: hidden;
+  color: #f8fafc;
 }
 
 @media (max-width: 640px) {
@@ -496,42 +451,36 @@ onUnmounted(() => {
 
 /* Header */
 .profile-modal-header {
-  display: flex;
-  flex-direction: column;
-  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 14px calc(20px + env(safe-area-inset-left, 0px));
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 12px
+    calc(20px + env(safe-area-inset-left, 0px));
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(15, 23, 42, 0.7);
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .profile-header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
   gap: 12px;
-}
-
-.profile-header-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  width: 100%;
 }
 
 .user-info-row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
   flex: 1;
 }
 
 .user-avatar-wrap {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
   flex-shrink: 0;
 }
 
@@ -540,29 +489,30 @@ onUnmounted(() => {
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(56, 189, 248, 0.6);
+  border: 2px solid rgba(56, 189, 248, 0.5);
 }
 
 .user-avatar-fallback {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: #334155;
-  color: #94a3b8;
+  background: linear-gradient(135deg, #1e293b, #334155);
+  border: 2px solid rgba(255, 255, 255, 0.15);
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #94a3b8;
 }
 
 .user-online-badge {
   position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 13px;
-  height: 13px;
-  background: #10b981;
-  border: 2px solid #1e293b;
+  bottom: 1px;
+  right: 1px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
+  background: #22c55e;
+  border: 2px solid #0f172a;
 }
 
 .user-details {
@@ -573,7 +523,7 @@ onUnmounted(() => {
 
 .user-name {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #f8fafc;
   white-space: nowrap;
@@ -582,132 +532,14 @@ onUnmounted(() => {
 }
 
 .user-email {
-  font-size: 12px;
+  font-size: 11.5px;
   color: #94a3b8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.btn-admin-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(100, 116, 139, 0.15);
-  border: 1px solid rgba(100, 116, 139, 0.35);
-  color: #94a3b8;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-admin-toggle:hover {
-  background: rgba(247, 201, 72, 0.15);
-  border-color: rgba(247, 201, 72, 0.4);
-  color: #f7c948;
-}
-
-.btn-admin-toggle.active {
-  background: rgba(247, 201, 72, 0.18);
-  border: 1px solid rgba(247, 201, 72, 0.55);
-  color: #f7c948;
-}
-
-.btn-admin-toggle.active:hover {
-  background: rgba(247, 201, 72, 0.28);
-  border-color: rgba(247, 201, 72, 0.75);
-}
-
-.btn-profile-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: rgba(56, 189, 248, 0.15);
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  color: #38bdf8;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-profile-refresh:hover:not(:disabled) {
-  background: rgba(56, 189, 248, 0.25);
-  border-color: rgba(56, 189, 248, 0.6);
-  color: #ffffff;
-}
-
-.btn-profile-refresh:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
-
-.spin-refresh {
-  animation: spin-cw 1s linear infinite;
-}
-
-@keyframes spin-cw {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.btn-profile-logout {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  color: #fca5a5;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-profile-logout:hover {
-  background: rgba(239, 68, 68, 0.3);
-  color: #ffffff;
-  border-color: rgba(239, 68, 68, 0.6);
-}
-
-.btn-profile-close {
-  background: rgba(255, 255, 255, 0.08);
-  border: none;
-  color: #94a3b8;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-profile-close:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
-}
-
-/* Kompakte tellere i header */
+/* Tellere */
 .header-stats-badges {
   display: flex;
   align-items: center;
@@ -738,20 +570,10 @@ onUnmounted(() => {
   color: #fbbf24;
 }
 
-.header-stat-badge.trophy:hover {
-  background: rgba(245, 158, 11, 0.25);
-  border-color: #fbbf24;
-}
-
 .header-stat-badge.mountain {
   background: rgba(16, 185, 129, 0.16);
   border: 1px solid rgba(16, 185, 129, 0.35);
   color: #34d399;
-}
-
-.header-stat-badge.mountain:hover {
-  background: rgba(16, 185, 129, 0.25);
-  border-color: #34d399;
 }
 
 .header-stat-value {
@@ -760,80 +582,96 @@ onUnmounted(() => {
   line-height: 1;
 }
 
-
-/* Seksjonslinje */
-.section-divider {
+.btn-profile-close {
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 10px;
+  color: #9ca3af;
+  width: 34px;
+  height: 34px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px 6px;
-  font-size: 12px;
-}
-
-.section-title {
-  color: #cbd5e1;
-  font-weight: 600;
-}
-
-.section-count {
-  color: #64748b;
-  font-size: 11px;
-}
-
-/* Scroll-område */
-.checkins-scroll-area {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 20px calc(24px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.loading-state,
-.empty-state {
-  display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
-  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-profile-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+/* Handlinger */
+.profile-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-profile-refresh,
+.btn-admin-toggle,
+.btn-profile-logout,
+.btn-admin-suggestions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #cbd5e1;
+}
+
+.btn-profile-refresh:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+.btn-admin-suggestions {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+.btn-admin-suggestions:hover {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #f59e0b;
+  color: #ffffff;
+}
+
+.suggestions-badge {
+  background: #f59e0b;
+  color: #0f172a;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.btn-admin-toggle {
+  background: rgba(255, 255, 255, 0.05);
   color: #94a3b8;
 }
 
-.empty-icon-wrap {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.04);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #64748b;
-  margin-bottom: 12px;
+.btn-admin-toggle.active {
+  background: rgba(234, 88, 12, 0.2);
+  border-color: rgba(234, 88, 12, 0.4);
+  color: #fb923c;
 }
 
-.empty-state h4 {
-  margin: 0 0 6px;
-  font-size: 15px;
-  color: #e2e8f0;
+.btn-profile-logout:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #f87171;
 }
 
-.empty-state p {
-  margin: 0;
-  font-size: 12px;
-  max-width: 320px;
-  line-height: 1.5;
-}
-
-.spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #38bdf8;
-  border-radius: 50%;
+.spin-refresh {
   animation: spin 0.8s linear infinite;
-  margin-bottom: 12px;
 }
 
 @keyframes spin {
@@ -842,187 +680,16 @@ onUnmounted(() => {
   }
 }
 
-/* Innsjekkingskort og månedsgruppering */
-.checkins-month-groups {
+/* Fane-innhold beholder */
+.profile-tabs-content {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  overflow: hidden;
 }
 
-.month-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.month-items-list {
-  animation: expand-fade 0.2s ease-out;
-}
-
-@keyframes expand-fade {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.checkin-cards-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-@media (max-width: 480px) {
-  .profile-modal-header {
-    padding: 11px 14px 5px;
-    gap: 7px;
-  }
-
-  .profile-header-actions .btn-text {
-    display: none;
-  }
-
-  .btn-profile-refresh,
-  .btn-admin-toggle,
-  .btn-profile-logout {
-    padding: 5px 8px;
-    justify-content: center;
-  }
-
-  .section-divider {
-    padding: 10px 14px 3px;
-  }
-
-  .checkins-scroll-area {
-    padding: 4px 14px 14px;
-  }
-}
-
-
-/* Lightbox */
-.lightbox-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 10001;
-  background: rgba(0, 0, 0, 0.94);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding-top: calc(max(16px, env(safe-area-inset-top, 0px)) + 64px);
-  padding-bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 64px);
-  padding-left: calc(max(16px, env(safe-area-inset-left, 0px)));
-  padding-right: calc(max(16px, env(safe-area-inset-right, 0px)));
-  box-sizing: border-box;
-  touch-action: manipulation;
-  cursor: pointer;
-}
-
-.lightbox-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  max-width: 100%;
-  max-height: 100%;
-}
-
-.lightbox-img {
-  max-width: 95vw;
-  max-height: calc(
-    100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 150px
-  );
-  object-fit: contain;
-  border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.85);
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.btn-lightbox-close {
-  position: absolute;
-  top: calc(max(16px, env(safe-area-inset-top, 0px)) + 12px);
-  right: calc(max(16px, env(safe-area-inset-right, 0px)) + 12px);
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #ffffff;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 20;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
-  transition: all 0.2s ease;
-  touch-action: manipulation;
-}
-
-.btn-lightbox-close:hover {
-  background: rgba(30, 41, 59, 0.95);
-  border-color: rgba(255, 255, 255, 0.5);
-  transform: scale(1.05);
-}
-
-.btn-lightbox-close:active {
-  transform: scale(0.95);
-  background: rgba(56, 189, 248, 0.35);
-}
-
-.btn-lightbox-bottom-close {
-  position: absolute;
-  bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 14px);
-  left: 50%;
-  transform: translateX(-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 20px;
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 9999px;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  z-index: 20;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
-  transition: all 0.2s ease;
-  touch-action: manipulation;
-}
-
-.btn-lightbox-bottom-close:hover {
-  background: rgba(30, 41, 59, 0.95);
-  border-color: rgba(255, 255, 255, 0.5);
-}
-
-.btn-lightbox-bottom-close:active {
-  transform: translateX(-50%) scale(0.96);
-  background: rgba(56, 189, 248, 0.35);
-}
-
-@media (max-height: 600px) {
-  .lightbox-backdrop {
-    padding-top: calc(max(10px, env(safe-area-inset-top, 0px)) + 48px);
-    padding-bottom: calc(max(10px, env(safe-area-inset-bottom, 0px)) + 48px);
-  }
-  .lightbox-img {
-    max-height: calc(
-      100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 100px
-    );
-  }
-}
-
-/* Animasjoner */
+/* Drawer animasjoner */
 @keyframes slideDrawerIn {
   from {
     transform: translateX(-100%);
@@ -1065,13 +732,22 @@ onUnmounted(() => {
   animation: slideDrawerOut 0.25s cubic-bezier(0.7, 0, 0.84, 0) forwards;
 }
 
-.lightbox-fade-enter-active,
-.lightbox-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
+@media (max-width: 480px) {
+  .profile-modal-header {
+    padding: 10px 14px 8px;
+    gap: 7px;
+  }
 
-.lightbox-fade-enter-from,
-.lightbox-fade-leave-to {
-  opacity: 0;
+  .profile-header-actions .btn-text {
+    display: none;
+  }
+
+  .btn-profile-refresh,
+  .btn-admin-toggle,
+  .btn-profile-logout,
+  .btn-admin-suggestions {
+    padding: 5px 8px;
+    justify-content: center;
+  }
 }
 </style>
