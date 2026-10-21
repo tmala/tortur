@@ -422,8 +422,8 @@ onUnmounted(() => {
 }
 
 .profile-modal-card {
-  width: 540px;
-  max-width: calc(100vw - 32px);
+  width: 640px;
+  max-width: 100vw;
   height: 100%;
   height: 100dvh;
   max-height: 100dvh;

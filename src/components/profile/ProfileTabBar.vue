@@ -231,13 +231,13 @@ function selectTab(tab: ProfileTab) {
 
 /* Responsiv regel: Når skjermen/panelet er for smalt for full tekst,
    skjules teksten slik at kun ikonet og telleren vises */
-@container (max-width: 520px) {
+@container (max-width: 630px) {
   .tab-label {
     display: none;
   }
 }
 
-@media (max-width: 540px) {
+@media (max-width: 630px) {
   .tab-label {
     display: none;
   }
