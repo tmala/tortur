@@ -942,7 +942,7 @@ describe('UserProfileMenu', () => {
       }
     })
 
-    expect(document.body.textContent).toContain('Mine spor')
+    expect(document.body.textContent).toContain('Spor')
     expect(document.body.querySelector('.profile-suggestions-card')).toBeNull()
     wrapperNoSuggestions.unmount()
     document.body.innerHTML = ''

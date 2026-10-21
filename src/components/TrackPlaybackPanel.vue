@@ -826,7 +826,7 @@ defineExpose({
           aria-label="Spill av rute"
         >
           <Play :size="12" fill="currentColor" />
-          <span>Spill av</span>
+          <span class="btn-playback-text">Spill av</span>
         </button>
 
         <!-- Pause knapp -->
@@ -840,7 +840,7 @@ defineExpose({
           aria-label="Pause avspilling"
         >
           <Pause :size="12" fill="currentColor" />
-          <span>Pause</span>
+          <span class="btn-playback-text">Pause</span>
         </button>
 
         <!-- Stopp og nullstill knapp med firkantikon (⏹ stopp, ikke refresh) -->
@@ -924,6 +924,7 @@ defineExpose({
   width: 100%;
   max-width: 380px;
   box-sizing: border-box;
+  container-type: inline-size;
   font-family: inherit;
   gap: 8px;
   pointer-events: auto;
@@ -1629,6 +1630,31 @@ input:checked + .slider:before {
   50% {
     opacity: 1;
     transform: scale(1.3);
+  }
+}
+
+/* Responsiv tilpasning for smal skjerm / mobil: Skjul Spill av og Pause ledetekster */
+@container (max-width: 375px) {
+  .btn-playback-text {
+    display: none;
+  }
+
+  .btn-playback-play,
+  .btn-playback-pause {
+    padding: 4px 7px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .btn-playback-text {
+    display: none;
+  }
+
+  .btn-playback-play,
+  .btn-playback-pause {
+    padding: 4px 7px;
+    justify-content: center;
   }
 }
 </style>

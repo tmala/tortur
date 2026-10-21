@@ -16,27 +16,31 @@ const router = createRouter({
         {
           path: 'profil',
           name: 'profile',
-          component: () => import('../views/ProfileView.vue')
+          component: () => import('../views/ProfileView.vue'),
+          alias: ['profil/innsjekkinger']
         },
         {
-          path: 'venner',
-          name: 'friends',
-          component: () => import('../views/FriendsView.vue')
+          path: 'profil/spor',
+          name: 'profile-tracks',
+          component: () => import('../views/ProfileView.vue'),
+          alias: ['gps-spor']
+        },
+        {
+          path: 'profil/turposter',
+          name: 'profile-spots',
+          component: () => import('../views/ProfileView.vue'),
+          alias: ['mine-turposter']
+        },
+        {
+          path: 'profil/venner',
+          name: 'profile-friends',
+          component: () => import('../views/ProfileView.vue'),
+          alias: ['venner']
         },
         {
           path: 'venner/:userId',
           name: 'friend-profile',
           component: () => import('../views/FriendProfileView.vue')
-        },
-        {
-          path: 'mine-turposter',
-          name: 'my-spots',
-          component: () => import('../views/MySpotsView.vue')
-        },
-        {
-          path: 'gps-spor',
-          name: 'gps-tracks',
-          component: () => import('../views/GpsTracksView.vue')
         },
         {
           path: 'forslag',
