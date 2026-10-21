@@ -1,10 +1,12 @@
 import { ref, computed } from 'vue'
 
+export type AisShipCategory = 'passenger' | 'cargo' | 'tanker' | 'tug' | 'rescue' | 'fishing' | 'military' | 'other'
+
 export interface AisVessel {
   mmsi: number
   name: string
   shipType: string
-  shipCategory: 'passenger' | 'cargo' | 'tanker' | 'tug' | 'rescue' | 'fishing' | 'military' | 'other'
+  shipCategory: AisShipCategory
   lat: number
   lng: number
   sog: number // Speed over ground (knop)
@@ -13,6 +15,23 @@ export interface AisVessel {
   destination?: string | null
   navStatus?: string | null
   updatedAt: string
+}
+
+export interface RawAisVessel {
+  mmsi: number
+  name?: string | null
+  shipType?: number | null
+  shipTypeName?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  speedOverGround?: number | null
+  sog?: number | null
+  courseOverGround?: number | null
+  cog?: number | null
+  trueHeading?: number | null
+  msgtime?: string | number | null
+  navigationalStatus?: number | null
+  destination?: string | null
 }
 
 export interface AisMapBounds {
@@ -147,8 +166,8 @@ export function useAis() {
 
             const data = await res.json()
             return { ok: true, data }
-          } catch (err: any) {
-            lastError = err.message || 'Nettverksfeil mot token-server'
+          } catch (err) {
+            lastError = err instanceof Error ? err.message : 'Nettverksfeil mot token-server'
           }
         }
         return { ok: false, status: 0, detail: lastError }
@@ -172,15 +191,24 @@ export function useAis() {
       tokenExpiresAt = Date.now() + (result.data.expires_in || 3600) * 1000
       error.value = null
       return accessToken
-    } catch (err: any) {
-      error.value = err.message || 'Kunne ikke hente BarentsWatch-token'
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Kunne ikke hente BarentsWatch-token'
       return null
     }
   }
 
   // Generer realistiske kystfartøy for demonstrasjon når BarentsWatch credentials ikke er oppgitt eller ved tilkoblingsfeil
   const getSimulatedVessels = (bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }): AisVessel[] => {
-    const mockFleet = [
+    const mockFleet: Array<{
+      name: string
+      category: AisShipCategory
+      type: string
+      speed: number
+      course: number
+      dest: string
+      relLat: number
+      relLng: number
+    }> = [
       { name: 'MS Nordnorge', category: 'passenger', type: 'Passasjerskip / Kystruten', speed: 14.8, course: 345, dest: 'Trondheim', relLat: 0.52, relLng: 0.48 },
       { name: 'MF Fedjebjørn', category: 'passenger', type: 'Bilferge', speed: 11.2, course: 120, dest: 'Fedje - Sævrøy', relLat: 0.42, relLng: 0.51 },
       { name: 'Beffen', category: 'passenger', type: 'Passasjerbåt', speed: 4.5, course: 85, dest: 'Vågen', relLat: 0.49, relLng: 0.53 },
@@ -199,7 +227,7 @@ export function useAis() {
       mmsi: 257000000 + idx * 111,
       name: ship.name,
       shipType: ship.type,
-      shipCategory: ship.category as any,
+      shipCategory: ship.category,
       lat: bounds.minLat + latSpan * ship.relLat,
       lng: bounds.minLng + lngSpan * ship.relLng,
       sog: ship.speed,
@@ -341,7 +369,8 @@ export function useAis() {
                 }
 
                 // Klient-side sikkerhetsfilter mot det bufrede kartutsnittet
-                const rawList = (Array.isArray(data) ? data : []).filter((item: any) => {
+                const rawItems = (Array.isArray(data) ? data : []) as RawAisVessel[]
+                const rawList = rawItems.filter((item: RawAisVessel): item is RawAisVessel & { latitude: number; longitude: number } => {
                   const lat = item.latitude
                   const lng = item.longitude
                   if (typeof lat !== 'number' || typeof lng !== 'number') return false
@@ -353,10 +382,10 @@ export function useAis() {
                   )
                 })
 
-                vessels.value = rawList.map((item: any) => {
+                vessels.value = rawList.map((item) => {
                   const typeCode = item.shipType || 0
                   const rawName = item.name ? item.name.trim() : ''
-                  const { typeName, cat } = getShipTypeInfo(typeCode, item.shipTypeName, rawName)
+                  const { typeName, cat } = getShipTypeInfo(typeCode, item.shipTypeName ?? undefined, rawName)
 
                   const sog = item.speedOverGround ?? item.sog ?? 0
                   const cog = item.courseOverGround ?? item.cog ?? 0
@@ -373,7 +402,9 @@ export function useAis() {
                     }
                   }
 
-                  const statusText = item.navigationalStatus !== undefined ? navStatusMap[item.navigationalStatus] : null
+                  const statusText = (item.navigationalStatus !== undefined && item.navigationalStatus !== null)
+                    ? navStatusMap[item.navigationalStatus]
+                    : null
                   const rawDest = item.destination ? item.destination.trim() : null
                   const destination = (rawDest && rawDest !== '===') ? rawDest : null
 
@@ -406,7 +437,7 @@ export function useAis() {
       // Fallback / Live demo stream hvis credentials mangler eller ved feil
       vessels.value = getSimulatedVessels(bufferedBounds)
       cachedFetchBounds.value = bufferedBounds
-    } catch (err: any) {
+    } catch (err) {
       console.warn('AIS fetch warning, using demo fleet:', err)
       vessels.value = getSimulatedVessels(bufferedBounds)
       cachedFetchBounds.value = bufferedBounds
