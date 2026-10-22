@@ -8,6 +8,7 @@
           ".read": "auth != null",
           "$checkinId": {
             ".write": "auth != null",
+            ".validate": "!newData.hasChild('userId') || newData.child('userId').isString() || (data.child('userId').exists() && data.child('userId').val() == newData.child('userId').val())",
             "likes": {
               ".read": "auth != null",
               "$likeUserId": {
@@ -45,15 +46,24 @@
           },
           "friends_checkins": {
             ".read": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid || root.child($prefix).child('brukere').child($userId).child('friends').child(root.child($prefix).child('auth_uids').child(auth.uid).val()).exists())",
-            ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)"
+            ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)",
+            "$checkinId": {
+              ".validate": "!newData.hasChild('userId') || newData.child('userId').isString() || (data.child('userId').exists() && data.child('userId').val() == newData.child('userId').val())"
+            }
           },
           "private_checkins": {
             ".read": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)",
-            ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)"
+            ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)",
+            "$checkinId": {
+              ".validate": "!newData.hasChild('userId') || newData.child('userId').isString() || (data.child('userId').exists() && data.child('userId').val() == newData.child('userId').val())"
+            }
           },
           "checkins": {
             ".read": "auth != null",
-            ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)"
+            ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)",
+            "$checkinId": {
+              ".validate": "!newData.hasChild('userId') || newData.child('userId').isString() || (data.child('userId').exists() && data.child('userId').val() == newData.child('userId').val())"
+            }
           },
           "my_spots": {
             ".read": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)",
@@ -61,7 +71,12 @@
           },
           "my_spots_checkins": {
             ".read": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)",
-            ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)"
+            ".write": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)",
+            "$spotId": {
+              "$checkinId": {
+                ".validate": "!newData.hasChild('userId') || newData.child('userId').isString() || (data.child('userId').exists() && data.child('userId').val() == newData.child('userId').val())"
+              }
+            }
           },
           "settings": {
             ".read": "auth != null && (!root.child($prefix).child('brukere').child($userId).child('auth_uid').exists() || root.child($prefix).child('brukere').child($userId).child('auth_uid').val() == auth.uid)",

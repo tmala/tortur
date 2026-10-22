@@ -1595,7 +1595,7 @@
   {
     "name": "Vestland",
     "slug": "vestland",
-    "count": 6254,
+    "count": 6257,
     "kommuner": [
       {
         "name": "Alver",
@@ -1630,7 +1630,7 @@
       {
         "name": "Bergen",
         "slug": "bergen",
-        "count": 240
+        "count": 242
       },
       {
         "name": "Bjørnafjorden",
@@ -1800,7 +1800,7 @@
       {
         "name": "Voss",
         "slug": "voss",
-        "count": 485
+        "count": 486
       },
       {
         "name": "Øygarden",

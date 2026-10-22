@@ -1,5 +1,7 @@
 import { google } from 'googleapis'
 import { uploadImageToDrive, deleteImageFromDrive } from './driveService.js'
+import { isValidUserId, cellToString } from './userId.js'
+export { isValidUserId, cellToString }
 
 /**
  * Oppretter en Google Sheets v4 API-klient
@@ -130,14 +132,21 @@ export async function handleLogin({
 
   // Oppdater brukerraden (UserID, UserName, Email, AvatarUrl, LastLogin)
   const now = new Date().toISOString()
-  const sub = String(googleUser.sub || '')
-  const name = String(googleUser.name || '')
-  const picture = String(googleUser.picture || '')
+  const sub = String(googleUser.sub || '').trim()
+  const name = String(googleUser.name || '').trim()
+  const picture = String(googleUser.picture || '').trim()
+
+  if (!isValidUserId(sub)) {
+    return {
+      success: false,
+      error: 'Ugyldig bruker-ID i Google-token (forventet kun sifre).'
+    }
+  }
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `${sheetBrukere}!A${userRowIndex}:E${userRowIndex}`,
-    valueInputOption: 'USER_ENTERED',
+    valueInputOption: 'RAW',
     requestBody: {
       values: [[sub, name, googleUser.email, picture, now]]
     }
@@ -207,11 +216,11 @@ export async function handleCheckin({
   let userAvatar = ''
 
   for (let i = 1; i < userRows.length; i++) {
-    const rowUserId = String(userRows[i][0] || '').trim()
+    const rowUserId = cellToString(userRows[i][0])
     const rowEmail = String(userRows[i][2] || '').toLowerCase().trim()
     if ((userId && rowUserId === userId) || (email && rowEmail === email)) {
       isWhitelisted = true
-      if (!userId) userId = rowUserId || email
+      if (!userId && isValidUserId(rowUserId)) userId = rowUserId
       userName = String(userRows[i][1] || '').trim()
       userAvatar = String(userRows[i][3] || '').trim()
       break
@@ -222,6 +231,13 @@ export async function handleCheckin({
     return {
       success: false,
       error: 'Brukeren er ikke registrert i brukeroversikten for TorTur.'
+    }
+  }
+
+  if (!isValidUserId(userId)) {
+    return {
+      success: false,
+      error: 'Ugyldig eller manglende numerisk bruker-ID for innsjekking.'
     }
   }
 
@@ -260,7 +276,7 @@ export async function handleCheckin({
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `${sheetInnsjekk}!A1`,
-    valueInputOption: 'USER_ENTERED',
+    valueInputOption: 'RAW',
     requestBody: {
       values: [[userId, turpostId, timestamp, description, imageUrl, checkinId, trackId]]
     }
@@ -324,10 +340,10 @@ export async function handleDeleteCheckin({
     }
   }
 
-  if (!userId) {
+  if (!isValidUserId(userId)) {
     return {
       success: false,
-      error: 'Ugyldig eller manglende brukeridentifikator for sletting.'
+      error: 'Ugyldig eller manglende brukeridentifikator for sletting (forventet kun sifre).'
     }
   }
 
@@ -344,7 +360,7 @@ export async function handleDeleteCheckin({
   if (numericSheetId !== null && rows.length > 1) {
     // Søk fra bunnen
     for (let i = rows.length - 1; i >= 1; i--) {
-      const rowUserId = String(rows[i][0] || '').trim()
+      const rowUserId = cellToString(rows[i][0])
       const rowTurpostId = String(rows[i][1] || '').trim()
       const rowTimestamp = String(rows[i][2] || '').trim()
       const rowImageUrl = String(rows[i][4] || '').trim()
@@ -427,10 +443,10 @@ export async function handleUpdateCheckin({
     }
   }
 
-  if (!userId) {
+  if (!isValidUserId(userId)) {
     return {
       success: false,
-      error: 'Ugyldig eller manglende brukeridentifikator for oppdatering.'
+      error: 'Ugyldig eller manglende brukeridentifikator for oppdatering (forventet kun sifre).'
     }
   }
 
@@ -443,7 +459,7 @@ export async function handleUpdateCheckin({
   let oldImageUrl = ''
 
   for (let i = 1; i < rows.length; i++) {
-    const rowUserId = String(rows[i][0] || '').trim()
+    const rowUserId = cellToString(rows[i][0])
     const rowTurpostId = String(rows[i][1] || '').trim()
     const rowTimestamp = String(rows[i][2] || '').trim()
     const rowImageUrl = String(rows[i][4] || '').trim()
@@ -485,7 +501,7 @@ export async function handleUpdateCheckin({
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `${sheetInnsjekk}!D${foundRowIndex}`,
-      valueInputOption: 'USER_ENTERED',
+      valueInputOption: 'RAW',
       requestBody: { values: [[updatedDescription]] }
     })
   }
@@ -498,7 +514,7 @@ export async function handleUpdateCheckin({
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `${sheetInnsjekk}!E${foundRowIndex}`,
-      valueInputOption: 'USER_ENTERED',
+      valueInputOption: 'RAW',
       requestBody: { values: [[updatedImageUrl]] }
     })
   } else if (body.image && body.image.base64) {
@@ -525,7 +541,7 @@ export async function handleUpdateCheckin({
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `${sheetInnsjekk}!E${foundRowIndex}`,
-      valueInputOption: 'USER_ENTERED',
+      valueInputOption: 'RAW',
       requestBody: { values: [[updatedImageUrl]] }
     })
   } else if (body.removeImage) {
@@ -536,7 +552,7 @@ export async function handleUpdateCheckin({
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `${sheetInnsjekk}!E${foundRowIndex}`,
-      valueInputOption: 'USER_ENTERED',
+      valueInputOption: 'RAW',
       requestBody: { values: [['']] }
     })
   }
@@ -547,7 +563,7 @@ export async function handleUpdateCheckin({
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `${sheetInnsjekk}!G${foundRowIndex}`,
-      valueInputOption: 'USER_ENTERED',
+      valueInputOption: 'RAW',
       requestBody: { values: [[updatedTrackId]] }
     })
   }
@@ -584,10 +600,10 @@ export async function handleGetConfig({
     }
   }
 
-  if (!userId) {
+  if (!isValidUserId(userId)) {
     return {
       success: false,
-      error: 'Krever innlogging for å hente systemkonfigurasjon.'
+      error: 'Krever innlogging med gyldig numerisk bruker-ID for å hente systemkonfigurasjon.'
     }
   }
 

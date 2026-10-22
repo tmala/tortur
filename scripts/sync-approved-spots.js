@@ -106,10 +106,28 @@ async function run() {
   })
 
   // Filtrer ut de som allerede er eksportert
+  const alreadyExported = allApproved.filter(s => s.exportedToCsv || s.status === 'exported')
   const pendingExport = allApproved.filter(s => !s.exportedToCsv && s.status !== 'exported')
 
+  // Hvis --delete-exported er angitt, slett poster som allerede er merket som eksportert i Firebase
+  if (shouldDeleteExported && alreadyExported.length > 0) {
+    console.log(`🗑️  Sletter ${alreadyExported.length} tidligere eksporterte turposter fra Firebase approved_spots...`)
+    for (const spot of alreadyExported) {
+      const spotUrl = `${dbUrl}/${dbPrefix}/approved_spots/${encodeURIComponent(spot.id)}.json${tokenParam}`
+      try {
+        if (!isDryRun) {
+          const delRes = await fetch(spotUrl, { method: 'DELETE' })
+          if (!delRes.ok) throw new Error(`HTTP ${delRes.status}`)
+        }
+        console.log(`   - Slettet: ${spot.name} (${spot.id})`)
+      } catch (err) {
+        console.warn(`   ⚠️ Kunne ikke slette ${spot.id}:`, err.message)
+      }
+    }
+  }
+
   if (pendingExport.length === 0) {
-    console.log(`✅ Alle ${allApproved.length} godkjente turposter i databasen er allerede eksportert til mountains.csv!`)
+    console.log(`✅ Ingen nye ueksporterte turposter å flette inn i mountains.csv.`)
     return
   }
 
@@ -216,19 +234,23 @@ async function run() {
     }
   }
 
-  // Hvis det var poster som allerede fantes i CSV, merk også dem som eksportert i Firebase
+  // Hvis det var poster som allerede fantes i CSV, merk dem som eksportert (eller slett hvis flagget er satt)
   for (const s of skippedSpots) {
     const spotUrl = `${dbUrl}/${dbPrefix}/approved_spots/${encodeURIComponent(s.id)}.json${tokenParam}`
     try {
-      await fetch(spotUrl, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'exported',
-          exportedToCsv: true,
-          exportedAt: nowIso
+      if (shouldDeleteExported) {
+        await fetch(spotUrl, { method: 'DELETE' })
+      } else {
+        await fetch(spotUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'exported',
+            exportedToCsv: true,
+            exportedAt: nowIso
+          })
         })
-      })
+      }
     } catch {}
   }
 
