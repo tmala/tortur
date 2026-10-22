@@ -43,6 +43,120 @@ export async function verifyGoogleUser({ idToken, authVerifier, clientId }) {
   }
 }
 
+// In-memory cache for godkjente e-poster (kun positive treff)
+// Nøkkel: normalisert e-post, verdi: utløpstid i millisekunder
+const emailWhitelistCache = new Map()
+export const WHITELIST_CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutter
+
+export function _clearWhitelistCache() {
+  emailWhitelistCache.clear()
+}
+
+/**
+ * Sjekker om en gitt e-postadresse er registrert i 'Brukere'-fanen i Google Sheets.
+ * Benytter en tidsbegrenset in-memory cache for positive treff slik at Cloud Function
+ * ikke trenger å spørre Sheets API ved hver eneste bildeopplasting for samme bruker.
+ *
+ * @param {Object} params
+ * @param {import('googleapis').sheets_v4.Sheets} params.sheets
+ * @param {string} params.spreadsheetId
+ * @param {string} [params.sheetBrukere='Brukere']
+ * @param {string} params.email
+ * @returns {Promise<boolean>}
+ */
+export async function isEmailWhitelistedInSheet({
+  sheets,
+  spreadsheetId,
+  sheetBrukere = 'Brukere',
+  email
+}) {
+  if (!email || typeof email !== 'string') return false
+  const normalizedEmail = email.toLowerCase().trim()
+  if (!normalizedEmail) return false
+
+  // 1. Sjekk in-memory cache for positivt treff
+  const now = Date.now()
+  const cachedExpiry = emailWhitelistCache.get(normalizedEmail)
+  if (cachedExpiry && cachedExpiry > now) {
+    return true
+  }
+
+  if (!sheets || !spreadsheetId) {
+    console.warn('[sheetsService] isEmailWhitelistedInSheet mangler sheets eller spreadsheetId')
+    return false
+  }
+
+  // 2. Gjør oppslag i regnearket (kun kolonne C: e-postadresser)
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetBrukere}!C:C`
+    })
+
+    const rows = res.data?.values || []
+    // Rad 0 er overskrift ("Email" e.l.), sjekk fra rad 1
+    for (let i = 1; i < rows.length; i++) {
+      const rowEmail = String(rows[i]?.[0] || '').toLowerCase().trim()
+      if (rowEmail === normalizedEmail) {
+        // Cache positivt treff
+        emailWhitelistCache.set(normalizedEmail, now + WHITELIST_CACHE_TTL_MS)
+        return true
+      }
+    }
+  } catch (err) {
+    console.error(`[sheetsService] Feil ved oppslag av whitelist for ${normalizedEmail} i Sheets:`, err.message)
+    // Fail-closed ved feil
+    return false
+  }
+
+  return false
+}
+
+/**
+ * Sjekker om en e-postadresse er autorisert for bildeopplasting.
+ * 1. Rask vei: Sjekker mot ALLOWED_EMAILS (hvis satt).
+ * 2. Fallback: Sjekker mot 'Brukere'-fanen i Google Sheets (med in-memory cache).
+ *
+ * @param {Object} params
+ * @param {string} params.email - Brukerens e-postadresse
+ * @param {string} [params.allowedRaw] - Komma-, semikolon- eller mellomromseparert streng med e-poster
+ * @param {import('googleapis').sheets_v4.Sheets} [params.sheets] - Autentisert Sheets-klient
+ * @param {string} [params.spreadsheetId] - Google Spreadsheet ID
+ * @param {string} [params.sheetBrukere='Brukere'] - Navn på brukervennlig arkfane
+ * @returns {Promise<boolean>}
+ */
+export async function isUserAuthorizedForUpload({
+  email,
+  allowedRaw,
+  sheets,
+  spreadsheetId,
+  sheetBrukere = 'Brukere'
+}) {
+  if (!email || typeof email !== 'string') return false
+  const normalizedEmail = email.toLowerCase().trim()
+  if (!normalizedEmail) return false
+
+  // 1. Rask vei: Sjekk miljøvariabel (hvis definert og ikke tom)
+  if (typeof allowedRaw === 'string' && allowedRaw.trim()) {
+    const allowedList = allowedRaw
+      .split(/[,;\s]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean)
+    if (allowedList.includes(normalizedEmail)) {
+      return true
+    }
+  }
+
+  // 2. Fallback: Hvis e-posten ikke er i ALLOWED_EMAILS (eller listen er tom),
+  // sjekk Google Sheets Brukere-fanen
+  return isEmailWhitelistedInSheet({
+    sheets,
+    spreadsheetId,
+    sheetBrukere,
+    email: normalizedEmail
+  })
+}
+
 /**
  * Leser systemkonfigurasjon fra fanen SystemKonfigurasjon
  * @param {import('googleapis').sheets_v4.Sheets} sheets
