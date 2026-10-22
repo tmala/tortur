@@ -870,6 +870,7 @@ turpostId;turpostNavn;latitude;longitude;altitude;fylke;kommune
 5d35f6741ebc8cf81bea31ca;Bondhusvatnet;60.09223836635382;6.283353567123413;191;Vestland;Kvinnherad
 6345b342c5aa29cb19ddca2a;Bondo;59.616276;9.167195;243;Telemark;Notodden
 634a8a44720a95f2b0db7caa;Bonsnos;59.806301;8.650063;1304;Telemark;Hjartdal
+f6b1d69489099230c5ae971a;Bordalsgjelet;60.611236;6.424250;90;Vestland;Voss
 5e56e344ef2b2ebcf4f913fb;Borddalsnuten;59.84484719706009;6.508026123046875;1327;Vestland;Etne
 5e56e599ef2b2ebcf4f913ff;Bordfjellet;59.63662563413621;6.134233474731445;926;Vestland;Etne
 60df8a263849448474e5e674;Bordheia;59.65968;6.22443;1125;Rogaland;Sauda
@@ -8990,6 +8991,7 @@ c96a2982d04242f23ffd33bc;Kollbudalen;60.475161;5.269724;175;Vestland;Bergen
 663209a9f6f3f43033610008;Postvågen;60.837659;5.11094;1;Vestland;Gulen
 60abdac07dd098d62055a2bf;Potten;60.637049;6.570369;592;Vestland;Voss
 658aae82db69783a5e50b317;Prammafjellet;59.093621;6.224939;715;Rogaland;Hjelmeland
+d553fe891e347a76ce5d1776;Preben KAFFE OG VINBAR;60.400219;5.325174;30;Vestland;Bergen
 5c843c98e6987d719f11966b;Preikestolen;58.9865121;6.1882516;625;Rogaland;Strand
 61ae6e826912d30da97854fd;Preikestolen;60.619833;5.619233;419;Vestland;Osterøy
 658ff20bfa46ab6ef1a57aa8;Preikestolen;60.12206;6.756844;1257;Vestland;Ullensvang
@@ -11436,6 +11438,7 @@ c96a2982d04242f23ffd33bc;Kollbudalen;60.475161;5.269724;175;Vestland;Bergen
 665f5752128847e7d06d7f95;Stauren;61.348644;4.857788;157;Vestland;Askvoll
 613dff3959f423d56093e665;Staurevarden;60.626082;5.154397;164;Vestland;Alver
 6665c5d5903ad61df54b8367;Staurfjellet;63.535964;8.953398;216;Trøndelag;Hitra
+c54809de13142512f49b9a12;Staurhøyen;60.459676;5.345408;229;Vestland;Bergen
 602c4d2365997dd52d71de62;Staurinibba;61.893198;6.858339;1379;Vestland;Stryn
 6734fbd475a851c52303ac2d;Staurskarstølen;59.603469;5.964629;567;Vestland;Etne
 64cd405d5d54ea438f956f05;Staurustberget;61.86041209774272;8.53393077850342;374;Innlandet;Lom

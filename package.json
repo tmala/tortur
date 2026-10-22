@@ -7,6 +7,7 @@
     "dev": "vite",
     "build:data": "node scripts/build-data.js",
     "sync:spots": "node scripts/sync-approved-spots.js",
+    "sync:spots:clean": "node scripts/sync-approved-spots.js --delete-exported",
     "build:icons": "node scripts/generate-favicons.js",
     "build": "npm run build:data && run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
