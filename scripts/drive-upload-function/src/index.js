@@ -9,6 +9,7 @@ import {
   handleDeleteCheckin,
   handleUpdateCheckin,
   handleGetConfig,
+  isUserAuthorizedForUpload,
 } from './sheetsService.js'
 
 const authVerifier = new OAuth2Client()
@@ -221,16 +222,48 @@ export async function uploadCheckinImage(req, res) {
           return res.status(403).json({ success: false, error: 'Ugyldig token – mangler e-post.' })
         }
 
+        const isVerified = payload.email_verified === true || String(payload.email_verified) === 'true'
+        if (!isVerified) {
+          return res.status(403).json({ success: false, error: 'Google-kontoens e-post er ikke verifisert.' })
+        }
+
+        const userEmail = payload.email.toLowerCase().trim()
         const allowedRaw = process.env.ALLOWED_EMAILS || ''
+
+        // 1. Rask vei: Sjekk ALLOWED_EMAILS miljøvariabel først
+        let isAuthorized = false
         if (allowedRaw.trim()) {
-          const allowed = allowedRaw
+          const allowedList = allowedRaw
             .split(/[,;\s]+/)
             .map((e) => e.trim().toLowerCase())
             .filter(Boolean)
-          if (!allowed.includes(payload.email.toLowerCase())) {
-            console.warn(`[auth] Avvist e-post: ${payload.email}`)
-            return res.status(403).json({ success: false, error: 'Ikke autorisert.' })
+          if (allowedList.includes(userEmail)) {
+            isAuthorized = true
           }
+        }
+
+        // 2. Fallback: Hvis e-post ikke er i ALLOWED_EMAILS (eller variabelen er tom), sjekk regnearket
+        if (!isAuthorized) {
+          const spreadsheetId = process.env.SPREADSHEET_ID
+          const sheetBrukere = process.env.SHEET_BRUKERE || 'Brukere'
+          if (!spreadsheetId) {
+            console.error('[auth] SPREADSHEET_ID er ikke konfigurert for whitelist-fallback.')
+            return res.status(500).json({ success: false, error: 'Serverkonfigurasjon mangler SPREADSHEET_ID.' })
+          }
+
+          const sheetsAuth = await getSheetsAuthClient()
+          const sheets = getSheetsClient(sheetsAuth)
+          isAuthorized = await isUserAuthorizedForUpload({
+            email: userEmail,
+            sheets,
+            spreadsheetId,
+            sheetBrukere,
+          })
+        }
+
+        if (!isAuthorized) {
+          console.warn(`[auth] Avvist e-post (verken i ALLOWED_EMAILS eller Brukere-arket): ${payload.email}`)
+          return res.status(403).json({ success: false, error: 'Ikke autorisert.' })
         }
       } catch (authErr) {
         return res
@@ -363,51 +396,6 @@ export async function uploadCheckinImage(req, res) {
         return res.status(200).json(result)
       }
 
-      // Bakoverkompatibel opplasting av base64-bilde direkte i JSON
-      case 'upload_image': {
-        const turpostId = body.turpostId || 'ukjent'
-        const idToken = body.idToken || ''
-        const imageObj = body.image || {}
-        let base64Data = imageObj.base64 || ''
-        if (base64Data.includes(',')) {
-          base64Data = base64Data.split(',')[1]
-        }
-        if (!base64Data) {
-          return res
-            .status(400)
-            .json({ success: false, error: 'Mangler bildedata i base64-feltet.' })
-        }
-
-        if (!idToken) {
-          return res.status(401).json({ success: false, error: 'Mangler idToken.' })
-        }
-
-        const ticket = await authVerifier.verifyIdToken({
-          idToken,
-          audience: process.env.CLIENT_ID,
-        })
-        const payload = ticket.getPayload()
-        if (!payload?.email) {
-          return res.status(403).json({ success: false, error: 'Ugyldig token.' })
-        }
-
-        const authClient = await getDriveAuthClient()
-        const fileBuffer = Buffer.from(base64Data, 'base64')
-        const result = await uploadImageToDrive({
-          authClient,
-          turpostId,
-          fileBuffer,
-          mimeType: imageObj.mimeType || 'image/jpeg',
-          fileName: imageObj.fileName || '',
-        })
-
-        return res.status(200).json({
-          success: true,
-          imageUrl: result.imageUrl,
-          fileId: result.fileId,
-          turpostId,
-        })
-      }
 
       default: {
         return res.status(400).json({
