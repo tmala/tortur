@@ -7,6 +7,7 @@ import {
   getFirebaseAuth,
   isJwtExpired,
 } from '@/services/firebase'
+import { isValidUserId, normalizeUserId } from '@/utils/userId'
 
 export { fetchFirebase, getFirebaseIdToken }
 
@@ -107,7 +108,25 @@ let   gisLoaded      = false
 // Gjenopprett fra localStorage/sessionStorage ved første import
 try {
   const savedUser = localStorage.getItem(STORAGE_KEY_USER)
-  if (savedUser) user.value = JSON.parse(savedUser)
+  if (savedUser) {
+    try {
+      const parsedUser = JSON.parse(savedUser) as GoogleUser
+      if (parsedUser && typeof parsedUser === 'object') {
+        const cleanUid = normalizeUserId(parsedUser.userId)
+        if (cleanUid) {
+          parsedUser.userId = cleanUid
+          user.value = parsedUser
+        } else {
+          console.warn('[useAuth] Lagret bruker i localStorage har ugyldig userId, fjerner innlogging.')
+          localStorage.removeItem(STORAGE_KEY_USER)
+          user.value = null
+        }
+      }
+    } catch {
+      localStorage.removeItem(STORAGE_KEY_USER)
+      user.value = null
+    }
+  }
 
   const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG)
   if (savedConfig) systemConfig.value = JSON.parse(savedConfig)
@@ -192,7 +211,7 @@ function loadGIS(): Promise<void> {
 }
 
 // =============================================================================
-// Send id_token til Apps Script og valider whitelist
+// Send id_token til Cloud Function backend og valider whitelist
 // =============================================================================
 async function loginWithToken(idToken: string): Promise<void> {
   if (!API_URL) {
@@ -233,7 +252,15 @@ async function loginWithToken(idToken: string): Promise<void> {
       return
     }
 
-    user.value         = data.user as GoogleUser
+    const rawUser = data.user as GoogleUser | undefined
+    const cleanUserId = normalizeUserId(rawUser?.userId)
+    if (!rawUser || !cleanUserId) {
+      error.value = 'Mottok ugyldig bruker-ID fra serveren.'
+      return
+    }
+    rawUser.userId = cleanUserId
+
+    user.value         = rawUser
     systemConfig.value = (data.systemConfig || {}) as SystemConfig
     currentIdToken.value = idToken
 
@@ -251,7 +278,7 @@ async function loginWithToken(idToken: string): Promise<void> {
         }
       }
     } catch (fbAuthErr) {
-      console.warn('[useAuth] Firebase Auth innlogging feilet (fortsetter med Apps Script sesjon):', fbAuthErr)
+      console.warn('[useAuth] Firebase Auth innlogging feilet (fortsetter med Cloud Function sesjon):', fbAuthErr)
     }
   } catch (err) {
     error.value = 'Kunne ikke nå innloggingsserveren. Sjekk nettverkstilkoblingen.'
@@ -384,7 +411,7 @@ async function uploadImageToDrive(
 }
 
 // =============================================================================
-// Send innsjekk til backend (Google Apps Script / PHP API)
+// Send innsjekk til backend (Google Cloud Function)
 // =============================================================================
 async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
   if (!API_URL) {
@@ -479,16 +506,20 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
   }
 
   const checkinResult = data.checkin as CheckinResult
+  if (checkinResult?.userId) {
+    checkinResult.userId = normalizeUserId(checkinResult.userId) || checkinResult.userId
+  }
 
   // Synkroniser innsjekkingen direkte til Firebase Realtime Database fra webappen
   const fbConfig = await getFirebaseConfig()
-  if (fbConfig && checkinResult.id && user.value) {
+  if (fbConfig && checkinResult.id && user.value && isValidUserId(user.value.userId)) {
     try {
+      const cleanUserId = normalizeUserId(user.value.userId)
       const visibility = params.visibility || checkinResult.visibility || 'all'
       checkinResult.visibility = visibility
       const firebaseItem: FirebaseCheckinItem = {
         id: checkinResult.id,
-        userId: user.value.userId,
+        userId: cleanUserId,
         userName: user.value.userName,
         userAvatar: user.value.avatarUrl || '',
         turpostId: String(params.turpostId),
@@ -503,10 +534,10 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
       const promises: Promise<unknown>[] = []
 
       if (visibility === 'private') {
-        const privateUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/private_checkins/${encodeURIComponent(checkinResult.id)}.json`
+        const privateUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/private_checkins/${encodeURIComponent(checkinResult.id)}.json`
         promises.push(fetchFirebase(privateUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }))
       } else {
-        const friendsUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/friends_checkins/${encodeURIComponent(checkinResult.id)}.json`
+        const friendsUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/friends_checkins/${encodeURIComponent(checkinResult.id)}.json`
         promises.push(fetchFirebase(friendsUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }))
 
         if (visibility === 'all') {
@@ -528,16 +559,17 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
 }
 
 // =============================================================================
-// Slett offentlig innsjekk via Apps Script og direkte i Firebase
+// Slett offentlig innsjekk via Cloud Function og direkte i Firebase
 // =============================================================================
 async function deletePublicCheckin(params: {
   turpostId: string | number
   checkinId: string
   timestamp?: string
 }): Promise<void> {
-  if (!user.value) {
-    throw new Error('Du må være innlogget for å slette en innsjekking.')
+  if (!user.value || !isValidUserId(user.value.userId)) {
+    throw new Error('Du må være innlogget med en gyldig bruker-ID for å slette en innsjekking.')
   }
+  const cleanUserId = normalizeUserId(user.value.userId)
 
   const cleanCheckinId = (params.checkinId || '').trim()
   if (!cleanCheckinId || cleanCheckinId === 'undefined' || cleanCheckinId === 'null') {
@@ -549,7 +581,7 @@ async function deletePublicCheckin(params: {
     const payload = {
       action: 'delete_checkin',
       idToken: currentIdToken.value || undefined,
-      userId: user.value.userId,
+      userId: cleanUserId,
       turpostId: String(params.turpostId),
       checkinId: cleanCheckinId,
       timestamp: params.timestamp
@@ -579,10 +611,10 @@ async function deletePublicCheckin(params: {
   if (fbConfig && cleanCheckinId) {
     try {
       const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(cleanCheckinId)}.json`
-      const userFriendsUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/friends_checkins/${encodeURIComponent(cleanCheckinId)}.json`
-      const userPrivateUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/private_checkins/${encodeURIComponent(cleanCheckinId)}.json`
-      const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(cleanCheckinId)}.json`
-      const legacyUserUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/${encodeURIComponent(cleanCheckinId)}.json`
+      const userFriendsUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/friends_checkins/${encodeURIComponent(cleanCheckinId)}.json`
+      const userPrivateUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/private_checkins/${encodeURIComponent(cleanCheckinId)}.json`
+      const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/checkins/${encodeURIComponent(cleanCheckinId)}.json`
+      const legacyUserUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/${encodeURIComponent(cleanCheckinId)}.json`
       const visUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/checkins_visibility/${encodeURIComponent(cleanCheckinId)}.json`
       await Promise.all([
         fetchFirebase(turpostUrl, { method: 'DELETE' }),
@@ -611,9 +643,10 @@ async function updatePublicCheckin(params: {
   visibility?: 'all' | 'friends' | 'private'
   trackId?: string | null
 }): Promise<{ imageUrl?: string; description?: string; visibility?: 'all' | 'friends' | 'private'; trackId?: string }> {
-  if (!user.value) {
-    throw new Error('Du må være innlogget for å oppdatere en innsjekking.')
+  if (!user.value || !isValidUserId(user.value.userId)) {
+    throw new Error('Du må være innlogget med en gyldig bruker-ID for å oppdatere en innsjekking.')
   }
+  const cleanUserId = normalizeUserId(user.value.userId)
 
   const cleanCheckinId = (params.checkinId || '').trim()
   if (!cleanCheckinId || cleanCheckinId === 'undefined' || cleanCheckinId === 'null') {
@@ -657,7 +690,7 @@ async function updatePublicCheckin(params: {
     const payload = {
       action: 'update_checkin',
       idToken: currentIdToken.value || undefined,
-      userId: user.value.userId,
+      userId: cleanUserId,
       turpostId: String(params.turpostId),
       checkinId: cleanCheckinId,
       timestamp: params.timestamp,
@@ -733,9 +766,9 @@ async function updatePublicCheckin(params: {
       if (Object.keys(patchData).length > 0) {
         const patchBody = JSON.stringify(patchData)
         const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(cleanCheckinId)}.json`
-        const friendsUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/friends_checkins/${encodeURIComponent(cleanCheckinId)}.json`
-        const privateUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/private_checkins/${encodeURIComponent(cleanCheckinId)}.json`
-        const legacyCheckinsUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(user.value.userId)}/checkins/${encodeURIComponent(cleanCheckinId)}.json`
+        const friendsUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/friends_checkins/${encodeURIComponent(cleanCheckinId)}.json`
+        const privateUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/private_checkins/${encodeURIComponent(cleanCheckinId)}.json`
+        const legacyCheckinsUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/checkins/${encodeURIComponent(cleanCheckinId)}.json`
 
         const promises: Promise<unknown>[] = []
 
@@ -749,6 +782,7 @@ async function updatePublicCheckin(params: {
             if (r2.ok) itemToSave = (await r2.json()) as FirebaseCheckinItem | null
           }
           if (itemToSave) {
+            itemToSave.userId = cleanUserId
             Object.assign(itemToSave, patchData)
             promises.push(fetchFirebase(privateUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(itemToSave) }))
           } else {
@@ -767,6 +801,7 @@ async function updatePublicCheckin(params: {
             if (r2.ok) itemToSave = (await r2.json()) as FirebaseCheckinItem | null
           }
           if (itemToSave) {
+            itemToSave.userId = cleanUserId
             Object.assign(itemToSave, patchData)
             promises.push(fetchFirebase(friendsUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(itemToSave) }))
             promises.push(fetchFirebase(privateUrl, { method: 'DELETE' }).catch(() => {}))
@@ -789,6 +824,7 @@ async function updatePublicCheckin(params: {
             if (r3.ok) itemToSave = (await r3.json()) as FirebaseCheckinItem | null
           }
           if (itemToSave) {
+            itemToSave.userId = cleanUserId
             Object.assign(itemToSave, patchData)
             const jsonStr = JSON.stringify(itemToSave)
             promises.push(fetchFirebase(friendsUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: jsonStr }))
@@ -846,7 +882,7 @@ async function updatePublicCheckinImage(params: {
 }
 
 // =============================================================================
-// Hent fersk SystemKonfigurasjon fra Apps Script hvis den mangler eller er utdatert
+// Hent fersk SystemKonfigurasjon fra Cloud Function hvis den mangler eller er utdatert
 // =============================================================================
 async function refreshSystemConfig(): Promise<SystemConfig> {
   if (!API_URL || !user.value) return systemConfig.value
@@ -908,6 +944,13 @@ async function fetchTurpostCheckins(turpostId: string | number): Promise<Firebas
         console.warn(`[useAuth] Ignorerer korrupt/ufullstendig innsjekking for turpost ${turpostId} (nøkkel: ${key}):`, item)
         continue
       }
+
+      const cleanUid = normalizeUserId(item.userId)
+      if (!cleanUid) {
+        console.warn(`[useAuth] Ignorerer innsjekking med ugyldig/korrupt userId for turpost ${turpostId} (nøkkel: ${key}):`, item)
+        continue
+      }
+      item.userId = cleanUid
 
       if (!item.id || item.id === 'undefined') {
         item.id = key
@@ -1025,12 +1068,13 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
           const item = val as Record<string, unknown> | null
           if (!item || typeof item !== 'object' || item.turpostId == null) continue
           if (!item.id) item.id = key
-          if (!item.userId) item.userId = uId
+          item.userId = uId
           if (!item.userName) item.userName = user.value.userName
           const chkItem = item as unknown as FirebaseCheckinItem
 
           // Hvis det feilaktig lå en private-innsjekking her, flytt den automatisk:
           if (chkItem.visibility === 'private') {
+            chkItem.userId = uId
             fetchFirebase(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(uId)}/private_checkins/${encodeURIComponent(chkItem.id)}.json`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
@@ -1054,9 +1098,9 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
           const item = val as Record<string, unknown> | null
           if (!item || typeof item !== 'object' || item.turpostId == null) continue
           if (!item.id) item.id = key
-          if (!item.userId) item.userId = uId
+          item.userId = uId
           if (!item.userName) item.userName = user.value.userName
-          const chkItem = { ...(item as unknown as FirebaseCheckinItem), visibility: 'private' as const }
+          const chkItem = { ...(item as unknown as FirebaseCheckinItem), visibility: 'private' as const, userId: uId }
           checkinMap.set(chkItem.id, chkItem)
         }
       }
@@ -1072,7 +1116,7 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
           const item = val as Record<string, unknown> | null
           if (!item || typeof item !== 'object' || item.turpostId == null) continue
           if (!item.id) item.id = key
-          if (!item.userId) item.userId = uId
+          item.userId = uId
           if (!item.userName) item.userName = user.value.userName
 
           if (String(item.turpostId).startsWith('spot_')) {

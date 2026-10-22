@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "functions-framework --target=uploadCheckinImage --port=8080",
-    "dev": "functions-framework --target=uploadCheckinImage --port=8080"
+    "dev": "functions-framework --target=uploadCheckinImage --port=8080",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@google-cloud/functions-framework": "^3.4.2",

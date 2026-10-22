@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { getFirebaseConfig, fetchFirebase, type GoogleUser, type FirebaseCheckinItem } from './useAuth'
 import { getPublicTurpostIds } from './useTurposter'
+import { normalizeUserId } from '@/utils/userId'
 
 export type CheckinVisibility = 'all' | 'friends' | 'private'
 
@@ -103,8 +104,9 @@ export async function loadFriends(userId: string): Promise<FriendUser[]> {
       if (!val) continue
       if (typeof val === 'object') {
         const item = val as Record<string, unknown>
+        const cleanUid = normalizeUserId(item.userId) || normalizeUserId(fId) || fId
         list.push({
-          userId: (typeof item.userId === 'string' ? item.userId : '') || fId,
+          userId: cleanUid,
           userName: (typeof item.userName === 'string' ? item.userName : '') || 'Venn',
           email: (typeof item.email === 'string' ? item.email : '') || (typeof item.userEmail === 'string' ? item.userEmail : '') || '',
           avatarUrl: (typeof item.avatarUrl === 'string' ? item.avatarUrl : '') || '',
@@ -668,7 +670,7 @@ export async function fetchFriendCheckins(
     const items: FirebaseCheckinItem[] = []
     for (const item of checkinMap.values()) {
       if (item.turpostId != null) {
-        if (!item.userId) item.userId = friendUserId
+        item.userId = friendUserId
         items.push(item)
       }
     }

@@ -8,6 +8,7 @@ import {
   type CheckinComment
 } from './useAuth'
 import { useFriends } from './useFriends'
+import { normalizeUserId } from '@/utils/userId'
 
 export const REACTION_OPTIONS: { type: CheckinReactionType; emoji: string; label: string }[] = [
   { type: 'like', emoji: '👍', label: 'Tommel opp' },
@@ -82,19 +83,24 @@ export function useCheckinSocial() {
     if (!user.value) {
       throw new Error('Du må være innlogget for å reagere på en innsjekking.')
     }
-    if (user.value.userId === params.authorUserId) {
+    const cleanAuthorId = normalizeUserId(params.authorUserId)
+    const cleanUserId = normalizeUserId(user.value.userId)
+    if (!cleanAuthorId || !cleanUserId) {
+      throw new Error('Ugyldig bruker-ID.')
+    }
+    if (cleanUserId === cleanAuthorId) {
       throw new Error('Du kan ikke reagere på din egen innsjekking.')
     }
 
     const cfg = await getFirebaseConfig()
     if (!cfg) throw new Error('Kunne ikke hente Firebase-konfigurasjon.')
 
-    const existingReaction = getUserReaction(params.currentCheckin, user.value.userId)
+    const existingReaction = getUserReaction(params.currentCheckin, cleanUserId)
     const isSame = existingReaction && existingReaction.reaction === params.reactionType
 
     const option = REACTION_OPTIONS.find(o => o.type === params.reactionType) ?? REACTION_OPTIONS[0]!
     const reactionData: CheckinReaction = {
-      userId: user.value.userId,
+      userId: cleanUserId,
       userName: user.value.userName,
       userAvatar: user.value.avatarUrl || '',
       reaction: option.type,
@@ -102,7 +108,7 @@ export function useCheckinSocial() {
       timestamp: new Date().toISOString()
     }
 
-    const uidEncoded = encodeURIComponent(user.value.userId)
+    const uidEncoded = encodeURIComponent(cleanUserId)
     const chkIdEncoded = encodeURIComponent(params.checkinId)
     const urls: string[] = []
 
@@ -112,19 +118,19 @@ export function useCheckinSocial() {
       )
     } else if (params.spotId) {
       urls.push(
-        `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/my_spots_checkins/${encodeURIComponent(params.spotId)}/${chkIdEncoded}/likes/${uidEncoded}.json`
+        `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/my_spots_checkins/${encodeURIComponent(params.spotId)}/${chkIdEncoded}/likes/${uidEncoded}.json`
       )
     }
 
     // Speil alltid til forfatterens bruker-checkin (både friends_checkins, /checkins/ og rot for bakoverkompatibilitet)
     urls.push(
-      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/friends_checkins/${chkIdEncoded}/likes/${uidEncoded}.json`
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/friends_checkins/${chkIdEncoded}/likes/${uidEncoded}.json`
     )
     urls.push(
-      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/checkins/${chkIdEncoded}/likes/${uidEncoded}.json`
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/checkins/${chkIdEncoded}/likes/${uidEncoded}.json`
     )
     urls.push(
-      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/${chkIdEncoded}/likes/${uidEncoded}.json`
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/${chkIdEncoded}/likes/${uidEncoded}.json`
     )
 
     if (isSame) {
@@ -147,8 +153,8 @@ export function useCheckinSocial() {
   }
 
   /**
-   * Legg til en kommentar på en innsjekking.
-   */
+    * Legg til en kommentar på en innsjekking.
+    */
   const addComment = async (params: {
     turpostId: string | number
     checkinId: string
@@ -160,7 +166,12 @@ export function useCheckinSocial() {
     if (!user.value) {
       throw new Error('Du må være innlogget for å skrive en kommentar.')
     }
-    if (!canComment(params.authorUserId)) {
+    const cleanAuthorId = normalizeUserId(params.authorUserId)
+    const cleanUserId = normalizeUserId(user.value.userId)
+    if (!cleanAuthorId || !cleanUserId) {
+      throw new Error('Ugyldig bruker-ID.')
+    }
+    if (!canComment(cleanAuthorId)) {
       throw new Error('Kun venner av innsjekkingens eier kan kommentere.')
     }
 
@@ -175,7 +186,7 @@ export function useCheckinSocial() {
     const commentId = `comm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
     const commentData: CheckinComment = {
       id: commentId,
-      userId: user.value.userId,
+      userId: cleanUserId,
       userName: user.value.userName,
       userAvatar: user.value.avatarUrl || '',
       text: cleanText,
@@ -192,19 +203,19 @@ export function useCheckinSocial() {
       )
     } else if (params.spotId) {
       urls.push(
-        `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/my_spots_checkins/${encodeURIComponent(params.spotId)}/${chkIdEncoded}/comments/${commIdEncoded}.json`
+        `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/my_spots_checkins/${encodeURIComponent(params.spotId)}/${chkIdEncoded}/comments/${commIdEncoded}.json`
       )
     }
 
     // Speil til forfatterens bruker-checkin (både friends_checkins, /checkins/ og rot for bakoverkompatibilitet)
     urls.push(
-      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/friends_checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/friends_checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
     )
     urls.push(
-      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
     )
     urls.push(
-      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/${chkIdEncoded}/comments/${commIdEncoded}.json`
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/${chkIdEncoded}/comments/${commIdEncoded}.json`
     )
 
     await Promise.all(
@@ -221,9 +232,9 @@ export function useCheckinSocial() {
   }
 
   /**
-   * Slett en kommentar fra en innsjekking.
-   * Eieren av innsjekkingen kan slette enhver kommentar, og forfatteren kan slette sin egen.
-   */
+    * Slett en kommentar fra en innsjekking.
+    * Eieren av innsjekkingen kan slette enhver kommentar, og forfatteren kan slette sin egen.
+    */
   const deleteComment = async (params: {
     turpostId: string | number
     checkinId: string
@@ -236,7 +247,12 @@ export function useCheckinSocial() {
     if (!user.value) {
       throw new Error('Du må være innlogget for å slette en kommentar.')
     }
-    if (!canDeleteComment(params.authorUserId, params.commentUserId)) {
+    const cleanAuthorId = normalizeUserId(params.authorUserId)
+    const cleanUserId = normalizeUserId(user.value.userId)
+    if (!cleanAuthorId || !cleanUserId) {
+      throw new Error('Ugyldig bruker-ID.')
+    }
+    if (!canDeleteComment(cleanAuthorId, params.commentUserId)) {
       throw new Error('Du har ikke rettigheter til å slette denne kommentaren.')
     }
 
@@ -253,18 +269,18 @@ export function useCheckinSocial() {
       )
     } else if (params.spotId) {
       urls.push(
-        `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/my_spots_checkins/${encodeURIComponent(params.spotId)}/${chkIdEncoded}/comments/${commIdEncoded}.json`
+        `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/my_spots_checkins/${encodeURIComponent(params.spotId)}/${chkIdEncoded}/comments/${commIdEncoded}.json`
       )
     }
 
     urls.push(
-      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/friends_checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/friends_checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
     )
     urls.push(
-      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/checkins/${chkIdEncoded}/comments/${commIdEncoded}.json`
     )
     urls.push(
-      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(params.authorUserId)}/${chkIdEncoded}/comments/${commIdEncoded}.json`
+      `${cfg.dbUrl}/${cfg.prefix}/brukere/${encodeURIComponent(cleanAuthorId)}/${chkIdEncoded}/comments/${commIdEncoded}.json`
     )
 
     await Promise.all(urls.map(u => fetchFirebase(u, { method: 'DELETE' }).catch(() => {})))
