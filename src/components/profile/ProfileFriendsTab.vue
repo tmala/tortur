@@ -34,6 +34,7 @@ const {
   incomingRequests,
   outgoingRequests,
   defaultVisibility,
+  isLoading: isFriendsLoading,
   isFriend,
   loadFriends,
   loadFriendRequests,
@@ -301,6 +302,7 @@ async function handleSetVisibility(visibility: CheckinVisibility) {
       <FriendsListTab
         v-if="activeSubTab === 'friends'"
         :friends="friends"
+        :is-loading="isFriendsLoading"
         :action-loading-id="actionLoadingId"
         @view-profile="(friend) => emit('view-friend-profile', friend)"
         @remove-friend="handleRemoveFriend"

@@ -353,8 +353,10 @@ onUnmounted(() => {
           <ProfileTabBar
             v-model="currentTab"
             :checkins-count="sortedCheckins.length"
+            :is-checkins-loading="props.isLoading"
             :saved-tracks-count="props.savedTracksCount"
             :my-spots-count="props.mySpotsCount"
+            :is-spots-loading="props.isMySpotsLoading"
             :friends-count="props.friendsCount"
             :pending-friend-requests-count="props.pendingFriendRequestsCount"
             @update:model-value="handleTabChange"

@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { getFirebaseConfig, fetchFirebase, type GoogleUser, type FirebaseCheckinItem } from './useAuth'
 import { getPublicTurpostIds } from './useTurposter'
 import { normalizeUserId } from '@/utils/userId'
+import { cachedFetchJson, clearRtdbCache } from '@/services/rtdbCache'
 
 export type CheckinVisibility = 'all' | 'friends' | 'private'
 
@@ -84,16 +85,19 @@ export async function registerPublicUser(googleUser: GoogleUser): Promise<void> 
 export async function loadFriends(userId: string): Promise<FriendUser[]> {
   if (!userId || userId === 'guest') {
     friends.value = []
+    isLoading.value = false
     return []
   }
-  const config = await getFirebaseConfig()
-  if (!config) return []
 
+  isLoading.value = true
   try {
+    const config = await getFirebaseConfig()
+    if (!config) return []
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/friends.json`
-    const res = await fetchFirebase(url)
-    if (!res.ok) return []
-    const data = await res.json()
+    const { data } = await cachedFetchJson<Record<string, unknown>>(url, {
+      userId,
+      freshMs: 15_000,
+    })
     if (!data || typeof data !== 'object') {
       friends.value = []
       return []
@@ -124,6 +128,8 @@ export async function loadFriends(userId: string): Promise<FriendUser[]> {
   } catch (err) {
     console.warn('[useFriends] Feil ved henting av venner:', err)
     return []
+  } finally {
+    isLoading.value = false
   }
 }
 
@@ -144,9 +150,10 @@ export async function loadFriendRequests(userId: string): Promise<{
 
   try {
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/friend_requests.json`
-    const res = await fetchFirebase(url)
-    if (!res.ok) return { incoming: [], outgoing: [] }
-    const data = await res.json()
+    const { data } = await cachedFetchJson<{ incoming?: Record<string, unknown>; outgoing?: Record<string, unknown> }>(url, {
+      userId,
+      freshMs: 15_000,
+    })
     if (!data || typeof data !== 'object') {
       incomingRequests.value = []
       outgoingRequests.value = []
@@ -625,7 +632,7 @@ export async function getCheckinVisibility(checkinId: string): Promise<CheckinVi
  */
 export async function fetchFriendCheckins(
   friendUserId: string,
-  options?: { enrichTurposts?: boolean; targetTurpostId?: string | number }
+  options?: { enrichTurposts?: boolean; targetTurpostId?: string | number; forceRefresh?: boolean }
 ): Promise<FirebaseCheckinItem[]> {
   if (!friendUserId || friendUserId === 'guest') return []
   const config = await getFirebaseConfig()
@@ -636,15 +643,16 @@ export async function fetchFriendCheckins(
 
     // 1. Hent fra friends_checkins.json (delte turer)
     const friendsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}/friends_checkins.json`
-    const friendsRes = await fetchFirebase(friendsUrl)
-    if (friendsRes.ok) {
-      const data = (await friendsRes.json()) as Record<string, Record<string, unknown>> | null
-      if (data && typeof data === 'object') {
-        for (const [key, val] of Object.entries(data)) {
-          if (val && typeof val === 'object') {
-            const item = { ...val, id: (val.id as string) || key } as unknown as FirebaseCheckinItem
-            checkinMap.set(key, item)
-          }
+    const { data } = await cachedFetchJson<Record<string, Record<string, unknown>>>(friendsUrl, {
+      userId: friendUserId,
+      freshMs: 30_000,
+      forceRefresh: options?.forceRefresh,
+    })
+    if (data && typeof data === 'object') {
+      for (const [key, val] of Object.entries(data)) {
+        if (val && typeof val === 'object') {
+          const item = { ...val, id: (val.id as string) || key } as unknown as FirebaseCheckinItem
+          checkinMap.set(key, item)
         }
       }
     }
@@ -652,15 +660,16 @@ export async function fetchFriendCheckins(
     // 2. Hvis friends_checkins var tom, prøv fallback til legacy checkins.json
     if (checkinMap.size === 0) {
       const legacyUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(friendUserId)}/checkins.json`
-      const legacyRes = await fetchFirebase(legacyUrl)
-      if (legacyRes.ok) {
-        const rawData = (await legacyRes.json()) as Record<string, Record<string, unknown>> | null
-        if (rawData && typeof rawData === 'object') {
-          for (const [key, val] of Object.entries(rawData)) {
-            if (val && typeof val === 'object') {
-              const item = { ...val, id: (val.id as string) || key } as unknown as FirebaseCheckinItem
-              checkinMap.set(key, item)
-            }
+      const { data: rawData } = await cachedFetchJson<Record<string, Record<string, unknown>>>(legacyUrl, {
+        userId: friendUserId,
+        freshMs: 30_000,
+        forceRefresh: options?.forceRefresh,
+      })
+      if (rawData && typeof rawData === 'object') {
+        for (const [key, val] of Object.entries(rawData)) {
+          if (val && typeof val === 'object') {
+            const item = { ...val, id: (val.id as string) || key } as unknown as FirebaseCheckinItem
+            checkinMap.set(key, item)
           }
         }
       }
@@ -714,30 +723,24 @@ export async function fetchFriendCheckins(
             const visUrl = `${config.dbUrl}/${config.prefix}/checkins_visibility/${encodeURIComponent(item.id)}.json`
             const turpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(item.turpostId))}/${encodeURIComponent(item.id)}.json`
 
-            const [visRes, tpRes] = await Promise.all([
-              fetchFirebase(visUrl).catch(() => null),
-              fetchFirebase(turpostUrl).catch(() => null)
+            const [{ data: visVal }, { data: tpData }] = await Promise.all([
+              cachedFetchJson<string>(visUrl, { userId: friendUserId, freshMs: 30_000 }).catch(() => ({ data: null, fromCache: false, revalidated: true })),
+              cachedFetchJson<Partial<FirebaseCheckinItem>>(turpostUrl, { freshMs: 30_000 }).catch(() => ({ data: null, fromCache: false, revalidated: true })),
             ])
 
-            if (visRes && visRes.ok) {
-              const visVal = await visRes.json()
-              if (visVal && ['all', 'friends', 'private'].includes(visVal)) {
-                item.visibility = visVal as CheckinVisibility
-              }
+            if (visVal && ['all', 'friends', 'private'].includes(visVal)) {
+              item.visibility = visVal as CheckinVisibility
             }
 
-            if (tpRes && tpRes.ok) {
-              const tpData = await tpRes.json()
-              if (tpData && typeof tpData === 'object') {
-                if (tpData.likes) {
-                  item.likes = { ...(item.likes || {}), ...tpData.likes }
-                }
-                if (tpData.comments) {
-                  item.comments = { ...(item.comments || {}), ...tpData.comments }
-                }
-                if (!item.turpostName && tpData.turpostName) {
-                  item.turpostName = tpData.turpostName
-                }
+            if (tpData && typeof tpData === 'object') {
+              if (tpData.likes) {
+                item.likes = { ...(item.likes || {}), ...tpData.likes }
+              }
+              if (tpData.comments) {
+                item.comments = { ...(item.comments || {}), ...tpData.comments }
+              }
+              if (!item.turpostName && typeof tpData.turpostName === 'string') {
+                item.turpostName = tpData.turpostName
               }
             }
           } catch {
@@ -775,6 +778,7 @@ const FRIEND_CHECKINS_CACHE_TTL_MS = 2 * 60 * 1000 // 2 minutter
  */
 export function clearFriendsCheckinsCache(): void {
   friendCheckinsCache.clear()
+  clearRtdbCache().catch(() => {})
 }
 
 /**
@@ -790,7 +794,7 @@ export async function fetchCachedFriendCheckins(
   if (!forceRefresh && cached && now - cached.fetchedAt < FRIEND_CHECKINS_CACHE_TTL_MS) {
     return cached.checkins
   }
-  const checkins = await fetchFriendCheckins(friendUserId, { targetTurpostId })
+  const checkins = await fetchFriendCheckins(friendUserId, { targetTurpostId, forceRefresh })
   friendCheckinsCache.set(friendUserId, { checkins, fetchedAt: now })
   return checkins
 }

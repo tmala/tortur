@@ -15,6 +15,7 @@ describe('useFriends - Friends system and check-in visibility', () => {
     vi.clearAllMocks()
     localStorage.clear()
     sessionStorage.clear()
+    clearFriendsCheckinsCache()
     setCachedMountainsListForTest(null)
     setCachedApprovedSpotsForTest(null)
   })

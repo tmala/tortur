@@ -8,7 +8,6 @@ import {
   Calendar,
   ChevronDown,
   Maximize2,
-  Loader2,
   Map as MapIcon,
   Globe,
   Route,
@@ -25,6 +24,7 @@ import { formatDistance } from '@/composables/useGeolocation'
 import CheckinSocialSection from './CheckinSocialSection.vue'
 import MonthGroupHeader from './MonthGroupHeader.vue'
 import { useMonthGroups } from '@/composables/useMonthGroups'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -337,7 +337,7 @@ onUnmounted(() => {
                 <Trophy :size="20" />
               </div>
               <div class="stat-content">
-                <span class="stat-num">{{ checkins.length }}</span>
+                <span class="stat-num">{{ isLoading ? '…' : checkins.length }}</span>
                 <span class="stat-label">Innsjekkinger</span>
               </div>
             </div>
@@ -347,7 +347,7 @@ onUnmounted(() => {
                 <Mountain :size="20" />
               </div>
               <div class="stat-content">
-                <span class="stat-num">{{ uniqueTurpostIds.size }}</span>
+                <span class="stat-num">{{ isLoading ? '…' : uniqueTurpostIds.size }}</span>
                 <span class="stat-label">Unike turposter</span>
               </div>
             </div>
@@ -359,7 +359,7 @@ onUnmounted(() => {
                 <Route :size="20" />
               </div>
               <div class="stat-content">
-                <span class="stat-num">{{ friendTracks.length }}</span>
+                <span class="stat-num">{{ isLoadingTracks ? '…' : friendTracks.length }}</span>
                 <span class="stat-label">Delte turer</span>
               </div>
             </div>
@@ -369,7 +369,7 @@ onUnmounted(() => {
                 <MapPin :size="20" />
               </div>
               <div class="stat-content">
-                <span class="stat-num">{{ formatDistance(totalTracksDistanceMeters) }}</span>
+                <span class="stat-num">{{ isLoadingTracks ? '…' : formatDistance(totalTracksDistanceMeters) }}</span>
                 <span class="stat-label">Total distanse</span>
               </div>
             </div>
@@ -386,7 +386,7 @@ onUnmounted(() => {
           >
             <Trophy :size="13" />
             <span>Innsjekkinger</span>
-            <span class="tab-badge checkins">{{ checkins.length }}</span>
+            <span class="tab-badge checkins">{{ isLoading ? '…' : checkins.length }}</span>
           </button>
 
           <button
@@ -397,7 +397,7 @@ onUnmounted(() => {
           >
             <Route :size="13" />
             <span>GPS-spor</span>
-            <span class="tab-badge tracks">{{ friendTracks.length }}</span>
+            <span class="tab-badge tracks">{{ isLoadingTracks ? '…' : friendTracks.length }}</span>
           </button>
         </div>
 
@@ -405,10 +405,11 @@ onUnmounted(() => {
         <template v-if="activeTab === 'checkins'">
           <!-- Scroll-område for innsjekkinger -->
           <div class="checkins-scroll-area">
-            <div v-if="isLoading" class="loading-state">
-              <Loader2 :size="24" class="spin text-sky" />
-              <span>Laster {{ friend.userName }}s turer...</span>
-            </div>
+            <LoadingSpinner
+              v-if="isLoading"
+              :label="`Laster ${friend.userName}s turer...`"
+              color="#38bdf8"
+            />
 
             <div v-else-if="checkins.length === 0" class="empty-state">
               <p>{{ friend.userName }} har ingen delte innsjekkinger enda.</p>
@@ -547,10 +548,11 @@ onUnmounted(() => {
         <template v-else>
           <!-- Scroll-område for GPS-spor -->
           <div class="checkins-scroll-area">
-            <div v-if="isLoadingTracks" class="loading-state">
-              <Loader2 :size="24" class="spin text-orange" />
-              <span>Laster {{ friend.userName }}s GPS-spor...</span>
-            </div>
+            <LoadingSpinner
+              v-if="isLoadingTracks"
+              :label="`Laster ${friend.userName}s GPS-spor...`"
+              color="#ea580c"
+            />
 
             <div v-else-if="friendTracks.length === 0" class="empty-state">
               <p>{{ friend.userName }} har ingen delte GPS-spor enda.</p>

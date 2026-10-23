@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Star, PlusCircle } from 'lucide-vue-next'
 import type { TurpostItem } from '@/composables/useTurposter'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -52,10 +53,11 @@ function handleDelete(spotId: string | number) {
 
     <!-- Scroll-område for turposter -->
     <div class="spots-scroll-area">
-      <div v-if="isLoading" class="loading-state">
-        <div class="spinner" />
-        <span>Henter dine private turposter...</span>
-      </div>
+      <LoadingSpinner
+        v-if="isLoading"
+        label="Henter dine private turposter..."
+        color="#c084fc"
+      />
 
       <div v-else-if="props.spots.length === 0" class="empty-state">
         <div class="empty-icon-wrap">
@@ -268,22 +270,6 @@ function handleDelete(spotId: string | number) {
 
 .btn-add-spot-cta:hover {
   transform: translateY(-1px);
-}
-
-.spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #c084fc;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 12px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .spots-list {

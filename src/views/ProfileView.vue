@@ -37,15 +37,31 @@ const currentTab = computed<ProfileTab>(() => {
   return 'checkins'
 })
 
+const isCheckinsLoading = computed(() => {
+  if (!user.value) return false
+  return (
+    appState.isMyCheckinsLoading ||
+    (!appState.hasLoadedMyCheckins && appState.myCheckins.length === 0)
+  )
+})
+
 onMounted(() => {
   if (route.query.tab === 'live') {
     showLiveModal.value = true
   }
   if (user.value) {
+    if (!appState.hasLoadedMyCheckins && !appState.isMyCheckinsLoading) {
+      reloadCheckins()
+    }
     // Sørg for at private turposter og forslag er lastet
-    fetchMySpots(user.value.userId).then((spots) => {
-      appState.mySpots = spots
-    })
+    appState.isMySpotsLoading = true
+    fetchMySpots(user.value.userId)
+      .then((spots) => {
+        appState.mySpots = spots
+      })
+      .finally(() => {
+        appState.isMySpotsLoading = false
+      })
     if (isAdmin.value) {
       fetchSpotSuggestions().then((sugg) => {
         appState.spotSuggestionsCount = sugg.length
@@ -90,6 +106,7 @@ const handleToggleAdminMode = () => {
 
 const reloadCheckins = async () => {
   if (!user.value) return
+  appState.isMyCheckinsLoading = true
   try {
     const [publicCheckins, privateCheckins] = await Promise.all([
       fetchMyCheckins(),
@@ -100,8 +117,11 @@ const reloadCheckins = async () => {
       (c) => !privateCheckinIds.has(c.id) && !String(c.turpostId).startsWith('spot_'),
     )
     appState.myCheckins = [...filteredPublic, ...privateCheckins]
+    appState.hasLoadedMyCheckins = true
   } catch (err) {
     console.warn('[ProfileView] Kunne ikke laste innsjekkinger:', err)
+  } finally {
+    appState.isMyCheckinsLoading = false
   }
 }
 
@@ -182,6 +202,7 @@ const handleViewFriendProfile = (friend: FriendUser) => {
       :active-tab="currentTab"
       :user="user"
       :checkins="appState.myCheckins"
+      :is-loading="isCheckinsLoading"
       :is-admin="isAdmin"
       :is-admin-mode-active="appState.adminModeActive"
       :saved-tracks-count="trackStore.savedTracks.length"

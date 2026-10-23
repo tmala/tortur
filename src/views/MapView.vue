@@ -226,8 +226,11 @@ const visitedTurpostIds = computed(
 const loadMyCheckins = async () => {
   if (!isLoggedIn.value || !user.value) {
     appState.myCheckins = []
+    appState.isMyCheckinsLoading = false
+    appState.hasLoadedMyCheckins = false
     return
   }
+  appState.isMyCheckinsLoading = true
   try {
     const [publicCheckins, privateCheckins] = await Promise.all([
       fetchMyCheckins(),
@@ -238,8 +241,11 @@ const loadMyCheckins = async () => {
       (c) => !privateCheckinIds.has(c.id) && !String(c.turpostId).startsWith('spot_'),
     )
     appState.myCheckins = [...filteredPublic, ...privateCheckins]
+    appState.hasLoadedMyCheckins = true
   } catch (err) {
     console.warn('[MapView] Kunne ikke laste brukerens innsjekkinger:', err)
+  } finally {
+    appState.isMyCheckinsLoading = false
   }
 }
 
@@ -261,6 +267,8 @@ watch(
       }
     } else {
       appState.myCheckins = []
+      appState.isMyCheckinsLoading = false
+      appState.hasLoadedMyCheckins = false
       appState.mySpots = []
       appState.approvedSpots = []
       appState.spotSuggestionsCount = 0

@@ -1,5 +1,6 @@
 import { getFirebaseConfig, fetchFirebase } from './useAuth'
 import type { SavedTrack, TrackVisibility } from '@/stores/gpsTrack'
+import { cachedFetchJson } from '@/services/rtdbCache'
 
 /**
  * Konverterer et tidsstempel (i millisekunder) til en gyldig Firebase Realtime Database-nøkkel i ISO-format.
@@ -40,10 +41,10 @@ export function useFirebaseTracks() {
 
     try {
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/tracks.json`
-      const res = await fetchFirebase(url)
-      if (!res.ok) return []
-
-      const data = await res.json()
+      const { data } = await cachedFetchJson<Record<string, unknown>>(url, {
+        userId,
+        freshMs: 30_000,
+      })
       if (!data || typeof data !== 'object') return []
 
       const tracks: SavedTrack[] = []

@@ -26,6 +26,7 @@ import { formatDistance, type TrackPoint } from '@/composables/useGeolocation'
 import TrackPhotosSection from '@/components/TrackPhotosSection.vue'
 import TrackVisibilitySelector from '@/components/TrackVisibilitySelector.vue'
 import MonthGroupHeader from '../MonthGroupHeader.vue'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -457,8 +458,15 @@ const handleConfirmSaveLiveTrack = () => {
 
     <!-- Liste over spor -->
     <div class="tracks-list-container">
+      <!-- Laster initialt -->
+      <LoadingSpinner
+        v-if="trackStore.isSyncing && trackStore.savedTracks.length === 0"
+        label="Henter dine spor..."
+        color="#fb923c"
+      />
+
       <!-- Tom tilstand -->
-      <div v-if="trackStore.savedTracks.length === 0" class="empty-state">
+      <div v-else-if="trackStore.savedTracks.length === 0" class="empty-state">
         <div class="empty-icon-wrap">
           <FolderHeart :size="36" class="empty-icon" />
         </div>

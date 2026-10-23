@@ -10,7 +10,7 @@ import type { SavedTrack } from '@/stores/gpsTrack'
 const route = useRoute()
 const router = useRouter()
 const { user } = useAuth()
-const { friends, loadFriends } = useFriends()
+const { friends, loadFriends, isLoading: isFriendsLoading } = useFriends()
 const appState = useAppStateStore()
 
 const friendId = computed(() => String(route.params.userId || ''))
@@ -20,7 +20,7 @@ const friend = computed<FriendUser>(() => {
   if (match) return match
   return {
     userId: friendId.value,
-    userName: 'Venn'
+    userName: isFriendsLoading.value ? 'Laster profil...' : 'Venn'
   }
 })
 
