@@ -10,6 +10,7 @@ import {
 import { getCurrentFirebaseUser } from '@/services/firebase'
 import { getPublicTurpostIds, type TurpostItem } from './useTurposter'
 import { normalizeUserId, isValidUserId } from '@/utils/userId'
+import { cachedFetchJson } from '@/services/rtdbCache'
 
 export interface SpotSuggestion {
   id: string
@@ -78,10 +79,10 @@ export function usePrivateTurposter() {
     try {
       isLoading.value = true
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(cleanUserId)}/my_spots.json`
-      const res = await fetchFirebase(url)
-      if (!res.ok) return []
-
-      const data = await res.json()
+      const { data } = await cachedFetchJson<Record<string, unknown>>(url, {
+        userId: cleanUserId,
+        freshMs: 30_000,
+      })
       if (!data || typeof data !== 'object') return []
 
       const spots: TurpostItem[] = []
@@ -650,10 +651,10 @@ export function usePrivateTurposter() {
 
     try {
       const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(cleanUserId)}/my_spots_checkins.json`
-      const res = await fetchFirebase(url)
-      if (!res.ok) return []
-
-      const data = await res.json()
+      const { data } = await cachedFetchJson<Record<string, unknown>>(url, {
+        userId: cleanUserId,
+        freshMs: 30_000,
+      })
       if (!data || typeof data !== 'object') return []
 
       const publicIds = await getPublicTurpostIds()

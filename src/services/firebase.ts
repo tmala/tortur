@@ -220,18 +220,30 @@ export async function getFirebaseIdToken(): Promise<string | null> {
   return sessionStorage.getItem('tortur_firebase_token')
 }
 
+export type FirebaseMutationHook = (url: string) => void
+let onMutationHook: FirebaseMutationHook | null = null
+
+export function setFirebaseMutationHook(hook: FirebaseMutationHook | null): void {
+  onMutationHook = hook
+}
+
 /**
  * Utfører en fetch-forespørsel mot Firebase Realtime Database med automatisk
  * vedlagt autentiseringstoken (?auth=<token>) fra Firebase Auth.
  */
 export async function fetchFirebase(url: string, init?: RequestInit): Promise<Response> {
   const token = await getFirebaseIdToken()
-  if (token) {
-    const separator = url.includes('?') ? '&' : '?'
-    const authedUrl = `${url}${separator}auth=${encodeURIComponent(token)}`
-    return fetch(authedUrl, init)
+  const authedUrl = token
+    ? `${url}${url.includes('?') ? '&' : '?'}auth=${encodeURIComponent(token)}`
+    : url
+
+  const res = await fetch(authedUrl, init)
+  if (res.ok && init?.method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(init.method.toUpperCase())) {
+    try {
+      onMutationHook?.(url)
+    } catch {}
   }
-  return fetch(url, init)
+  return res
 }
 
 export { dbRef, set, get, update, remove, type DatabaseReference }

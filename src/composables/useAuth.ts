@@ -8,6 +8,7 @@ import {
   isJwtExpired,
 } from '@/services/firebase'
 import { isValidUserId, normalizeUserId } from '@/utils/userId'
+import { cachedFetchJson, clearRtdbCache } from '@/services/rtdbCache'
 
 export { fetchFirebase, getFirebaseIdToken }
 
@@ -340,6 +341,7 @@ function logout(): void {
   localStorage.removeItem(STORAGE_KEY_CONFIG)
   sessionStorage.removeItem(STORAGE_KEY_TOKEN)
   migratedUsersCache.clear()
+  clearRtdbCache().catch(() => {})
 
   try {
     const google = window.google
@@ -1060,49 +1062,49 @@ async function fetchMyCheckins(): Promise<FirebaseCheckinItem[]> {
 
     // 2. Hent friends_checkins (delte innsjekkinger for venner og alle)
     const friendsUrl = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(uId)}/friends_checkins.json`
-    const friendsRes = await fetchFirebase(friendsUrl)
-    if (friendsRes.ok) {
-      const friendsData = await friendsRes.json()
-      if (friendsData && typeof friendsData === 'object') {
-        for (const [key, val] of Object.entries(friendsData)) {
-          const item = val as Record<string, unknown> | null
-          if (!item || typeof item !== 'object' || item.turpostId == null) continue
-          if (!item.id) item.id = key
-          item.userId = uId
-          if (!item.userName) item.userName = user.value.userName
-          const chkItem = item as unknown as FirebaseCheckinItem
+    const { data: friendsData } = await cachedFetchJson<Record<string, unknown>>(friendsUrl, {
+      userId: uId,
+      freshMs: 30_000,
+    })
+    if (friendsData && typeof friendsData === 'object') {
+      for (const [key, val] of Object.entries(friendsData)) {
+        const item = val as Record<string, unknown> | null
+        if (!item || typeof item !== 'object' || item.turpostId == null) continue
+        if (!item.id) item.id = key
+        item.userId = uId
+        if (!item.userName) item.userName = user.value.userName
+        const chkItem = item as unknown as FirebaseCheckinItem
 
-          // Hvis det feilaktig lå en private-innsjekking her, flytt den automatisk:
-          if (chkItem.visibility === 'private') {
-            chkItem.userId = uId
-            fetchFirebase(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(uId)}/private_checkins/${encodeURIComponent(chkItem.id)}.json`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(chkItem)
-            }).catch(() => {})
-            fetchFirebase(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(uId)}/friends_checkins/${encodeURIComponent(chkItem.id)}.json`, { method: 'DELETE' }).catch(() => {})
-            fetchFirebase(`${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(chkItem.turpostId))}/${encodeURIComponent(chkItem.id)}.json`, { method: 'DELETE' }).catch(() => {})
-          }
-          checkinMap.set(chkItem.id, chkItem)
+        // Hvis det feilaktig lå en private-innsjekking her, flytt den automatisk:
+        if (chkItem.visibility === 'private') {
+          chkItem.userId = uId
+          fetchFirebase(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(uId)}/private_checkins/${encodeURIComponent(chkItem.id)}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(chkItem)
+          }).catch(() => {})
+          fetchFirebase(`${dbUrl}/${prefix}/brukere/${encodeURIComponent(uId)}/friends_checkins/${encodeURIComponent(chkItem.id)}.json`, { method: 'DELETE' }).catch(() => {})
+          fetchFirebase(`${dbUrl}/${prefix}/turposter/${encodeURIComponent(String(chkItem.turpostId))}/${encodeURIComponent(chkItem.id)}.json`, { method: 'DELETE' }).catch(() => {})
         }
+        checkinMap.set(chkItem.id, chkItem)
       }
     }
 
     // 3. Hent private_checkins (kun meg)
     const privUrl = `${dbUrl}/${prefix}/brukere/${encodeURIComponent(uId)}/private_checkins.json`
-    const privRes = await fetchFirebase(privUrl)
-    if (privRes.ok) {
-      const privData = await privRes.json()
-      if (privData && typeof privData === 'object') {
-        for (const [key, val] of Object.entries(privData)) {
-          const item = val as Record<string, unknown> | null
-          if (!item || typeof item !== 'object' || item.turpostId == null) continue
-          if (!item.id) item.id = key
-          item.userId = uId
-          if (!item.userName) item.userName = user.value.userName
-          const chkItem = { ...(item as unknown as FirebaseCheckinItem), visibility: 'private' as const, userId: uId }
-          checkinMap.set(chkItem.id, chkItem)
-        }
+    const { data: privData } = await cachedFetchJson<Record<string, unknown>>(privUrl, {
+      userId: uId,
+      freshMs: 30_000,
+    })
+    if (privData && typeof privData === 'object') {
+      for (const [key, val] of Object.entries(privData)) {
+        const item = val as Record<string, unknown> | null
+        if (!item || typeof item !== 'object' || item.turpostId == null) continue
+        if (!item.id) item.id = key
+        item.userId = uId
+        if (!item.userName) item.userName = user.value.userName
+        const chkItem = { ...(item as unknown as FirebaseCheckinItem), visibility: 'private' as const, userId: uId }
+        checkinMap.set(chkItem.id, chkItem)
       }
     }
 
