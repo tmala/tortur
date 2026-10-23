@@ -181,12 +181,7 @@ const emit = defineEmits<{
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.12);
   color: #94a3b8;
-}
-
-.btn-close-menu:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
-  color: #fca5a5;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-turposter {
@@ -202,9 +197,9 @@ const emit = defineEmits<{
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.btn-turposter:hover,
 .btn-turposter.active {
   background: linear-gradient(135deg, #0284c7, #2563eb);
   border-color: #38bdf8;
@@ -231,9 +226,9 @@ const emit = defineEmits<{
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.icon-btn:hover,
 .icon-btn.active {
   background: #0284c7;
   border-color: #38bdf8;
@@ -249,12 +244,7 @@ const emit = defineEmits<{
 
 .btn-local-turposter {
   color: #38bdf8;
-}
-
-.btn-local-turposter:hover:not(:disabled) {
-  background: rgba(56, 189, 248, 0.2);
-  border-color: #38bdf8;
-  color: #ffffff;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-local-turposter:disabled {
@@ -275,12 +265,7 @@ const emit = defineEmits<{
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-}
-
-.btn-ais:hover {
-  background: #0284c7;
-  border-color: #38bdf8;
-  color: #ffffff;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-ais.active {
@@ -294,6 +279,47 @@ const emit = defineEmits<{
   background: rgba(245, 158, 11, 0.2);
   border-color: #f59e0b;
   color: #fde68a;
+}
+
+/* Hover kun på enheter med peker (mus/trackpad) – unngår sticky hover på iOS */
+@media (hover: hover) and (pointer: fine) {
+  .btn-close-menu:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    color: #fca5a5;
+  }
+
+  .btn-turposter:hover:not(.active) {
+    background: #334155;
+    border-color: #475569;
+    color: #ffffff;
+  }
+
+  .icon-btn:hover:not(.active):not(.is-live-locating) {
+    background: #334155;
+    border-color: #475569;
+    color: #ffffff;
+  }
+
+  .btn-local-turposter:hover:not(:disabled) {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: #38bdf8;
+    color: #ffffff;
+  }
+
+  .btn-ais:hover:not(.active) {
+    background: #334155;
+    border-color: #475569;
+    color: #ffffff;
+  }
+}
+
+/* Taktil feedback ved trykk på touchskjermer */
+.btn-close-menu:active,
+.btn-turposter:active:not(:disabled),
+.icon-btn:active:not(:disabled),
+.btn-ais:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .update-banner {

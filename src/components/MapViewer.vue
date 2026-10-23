@@ -125,6 +125,25 @@ const switchLayer = (layerKey: string) => {
   }
 }
 
+let accumulatedHeadingRotation = 0
+let hasHeadingBaseline = false
+
+const calculateSmoothHeadingRotation = (newHeading: number): number => {
+  if (!hasHeadingBaseline) {
+    accumulatedHeadingRotation = newHeading
+    hasHeadingBaseline = true
+    return accumulatedHeadingRotation
+  }
+
+  // Beregn korteste rotasjonsvei (-180 til +180) for å forhindre 360-graders spinn ved 0/360-overgangen
+  let diff = (newHeading - (accumulatedHeadingRotation % 360)) % 360
+  if (diff > 180) diff -= 360
+  if (diff < -180) diff += 360
+
+  accumulatedHeadingRotation += diff
+  return accumulatedHeadingRotation
+}
+
 const updateUserMarker = (loc: GeoLocationState | null) => {
   if (!map) return
 
@@ -137,30 +156,41 @@ const updateUserMarker = (loc: GeoLocationState | null) => {
       map.removeLayer(accuracyCircle)
       accuracyCircle = null
     }
+    hasHeadingBaseline = false
     return
   }
 
+  const isLive = Boolean(props.isLiveLocating || props.isTracking)
   const latLng: L.LatLngExpression = [loc.lat, loc.lng]
 
   if (!userMarker) {
+    const initialSmoothHeading =
+      loc.heading !== null && loc.heading !== undefined && !isNaN(loc.heading)
+        ? calculateSmoothHeadingRotation(loc.heading)
+        : null
     userMarker = L.marker(latLng, {
-      icon: createUserIcon(loc.heading),
+      icon: createUserIcon(initialSmoothHeading, isLive),
       interactive: false,
       zIndexOffset: 400
     }).addTo(map)
   } else {
     userMarker.setLatLng(latLng)
     const markerEl = userMarker.getElement()
-    const headingEl = markerEl?.querySelector('.heading-indicator') as HTMLElement | null
-    if (headingEl) {
-      if (loc.heading !== null && loc.heading !== undefined && !isNaN(loc.heading)) {
-        headingEl.style.transform = `rotate(${loc.heading}deg)`
-        headingEl.style.display = 'block'
-      } else {
-        headingEl.style.display = 'none'
+    if (markerEl) {
+      const locMarker = markerEl.querySelector('.user-location-marker')
+      locMarker?.classList.toggle('is-live', isLive)
+      const headingEl = markerEl.querySelector('.heading-indicator') as HTMLElement | null
+      if (headingEl) {
+        if (isLive && loc.heading !== null && loc.heading !== undefined && !isNaN(loc.heading)) {
+          const smoothAngle = calculateSmoothHeadingRotation(loc.heading)
+          headingEl.style.transform = `rotate(${smoothAngle}deg)`
+          headingEl.style.display = 'block'
+        } else {
+          headingEl.style.display = 'none'
+        }
       }
     } else {
-      userMarker.setIcon(createUserIcon(loc.heading))
+      userMarker.setIcon(createUserIcon(loc.heading, isLive))
     }
   }
 
@@ -794,6 +824,11 @@ watch(
       if (props.userLocation && map) {
         map.panTo([props.userLocation.lat, props.userLocation.lng], { animate: true, duration: 0.5 })
       }
+    } else {
+      hasHeadingBaseline = false
+    }
+    if (props.userLocation) {
+      updateUserMarker(props.userLocation)
     }
   }
 )
