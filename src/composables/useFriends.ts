@@ -84,12 +84,14 @@ export async function registerPublicUser(googleUser: GoogleUser): Promise<void> 
 export async function loadFriends(userId: string): Promise<FriendUser[]> {
   if (!userId || userId === 'guest') {
     friends.value = []
+    isLoading.value = false
     return []
   }
-  const config = await getFirebaseConfig()
-  if (!config) return []
 
+  isLoading.value = true
   try {
+    const config = await getFirebaseConfig()
+    if (!config) return []
     const url = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(userId)}/friends.json`
     const res = await fetchFirebase(url)
     if (!res.ok) return []
@@ -124,6 +126,8 @@ export async function loadFriends(userId: string): Promise<FriendUser[]> {
   } catch (err) {
     console.warn('[useFriends] Feil ved henting av venner:', err)
     return []
+  } finally {
+    isLoading.value = false
   }
 }
 

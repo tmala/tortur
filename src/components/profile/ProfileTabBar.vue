@@ -10,6 +10,8 @@ defineProps<{
   mySpotsCount?: number
   friendsCount?: number
   pendingFriendRequestsCount?: number
+  isCheckinsLoading?: boolean
+  isSpotsLoading?: boolean
 }>()
 
 function selectTab(tab: ProfileTab) {
@@ -32,7 +34,10 @@ function selectTab(tab: ProfileTab) {
     >
       <Trophy :size="16" class="tab-icon checkins-icon" />
       <span class="tab-label">Innsjekkinger</span>
-      <span v-if="checkinsCount !== undefined" class="tab-badge checkins-badge">
+      <span v-if="isCheckinsLoading" class="tab-badge checkins-badge" title="Laster...">
+        …
+      </span>
+      <span v-else-if="checkinsCount !== undefined" class="tab-badge checkins-badge">
         {{ checkinsCount }}
       </span>
     </button>
@@ -68,7 +73,10 @@ function selectTab(tab: ProfileTab) {
     >
       <Star :size="16" class="tab-icon spots-icon" />
       <span class="tab-label">Private Turposter</span>
-      <span v-if="mySpotsCount !== undefined" class="tab-badge spots-badge">
+      <span v-if="isSpotsLoading" class="tab-badge spots-badge" title="Laster...">
+        …
+      </span>
+      <span v-else-if="mySpotsCount !== undefined" class="tab-badge spots-badge">
         {{ mySpotsCount }}
       </span>
     </button>

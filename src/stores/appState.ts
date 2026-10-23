@@ -12,6 +12,8 @@ export const useAppStateStore = defineStore('appState', () => {
   const viewCheckins = ref<{ post: TurpostItem; tab?: 'public' | 'private' } | null>(null)
 
   const myCheckins = ref<FirebaseCheckinItem[]>([])
+  const isMyCheckinsLoading = ref(false)
+  const hasLoadedMyCheckins = ref(false)
   const mySpots = ref<TurpostItem[]>([])
   const isMySpotsLoading = ref(false)
   const approvedSpots = ref<ApprovedSpot[]>([])
@@ -69,6 +71,8 @@ export const useAppStateStore = defineStore('appState', () => {
     viewTrack,
     viewCheckins,
     myCheckins,
+    isMyCheckinsLoading,
+    hasLoadedMyCheckins,
     mySpots,
     isMySpotsLoading,
     approvedSpots,

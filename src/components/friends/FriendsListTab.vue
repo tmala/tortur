@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { Users, UserPlus, User, UserMinus, Loader2 } from 'lucide-vue-next'
 import type { FriendUser } from '@/composables/useFriends'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 
-defineProps<{
-  friends: FriendUser[]
-  actionLoadingId: string | null
-}>()
+withDefaults(
+  defineProps<{
+    friends: FriendUser[]
+    actionLoadingId: string | null
+    isLoading?: boolean
+  }>(),
+  {
+    isLoading: false,
+  },
+)
 
 const emit = defineEmits<{
   (e: 'view-profile', friend: FriendUser): void
@@ -16,7 +23,13 @@ const emit = defineEmits<{
 
 <template>
   <div class="tab-pane">
-    <div v-if="friends.length === 0" class="empty-state">
+    <LoadingSpinner
+      v-if="isLoading && friends.length === 0"
+      label="Henter dine venner..."
+      color="#4ade80"
+    />
+
+    <div v-else-if="friends.length === 0" class="empty-state">
       <div class="empty-icon-wrap">
         <Users :size="32" />
       </div>

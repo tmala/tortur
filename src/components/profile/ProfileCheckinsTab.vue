@@ -6,6 +6,7 @@ import EditCheckinModal from '../EditCheckinModal.vue'
 import UserCheckinCard from './UserCheckinCard.vue'
 import MonthGroupHeader from '../MonthGroupHeader.vue'
 import { useMonthGroups } from '@/composables/useMonthGroups'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -104,10 +105,10 @@ function handleCheckinDeleted(deletedId: string) {
     <!-- Scroll-område for innsjekkinger -->
     <div class="checkins-scroll-area">
       <!-- Laster -->
-      <div v-if="isLoading" class="loading-state">
-        <div class="spinner" />
-        <span>Henter dine innsjekkinger...</span>
-      </div>
+      <LoadingSpinner
+        v-if="isLoading"
+        label="Henter dine innsjekkinger..."
+      />
 
       <!-- Tom tilstand -->
       <div v-else-if="sortedCheckins.length === 0" class="empty-state">
@@ -271,22 +272,6 @@ function handleCheckinDeleted(deletedId: string) {
   font-size: 12px;
   max-width: 320px;
   line-height: 1.5;
-}
-
-.spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #38bdf8;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 12px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .checkins-month-groups {
