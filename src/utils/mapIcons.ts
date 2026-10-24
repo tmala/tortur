@@ -1,23 +1,57 @@
 import L from 'leaflet'
 import type { AisVessel } from '@/composables/useAis'
 
-export const createUserIcon = (heading: number | null) => {
-  const headingStyle =
-    heading !== null && heading !== undefined && !isNaN(heading)
-      ? `transform: rotate(${heading}deg); display: block;`
-      : 'display: none;'
+export const createUserIcon = (heading: number | null, isLive: boolean = false) => {
+  const showHeading = isLive && heading !== null && heading !== undefined && !isNaN(heading)
+  const headingStyle = showHeading
+    ? `transform: rotate(${heading}deg); display: block;`
+    : 'display: none;'
 
   return L.divIcon({
     className: 'custom-user-pin',
     html: `
-      <div class="user-location-marker">
+      <div class="user-location-marker ${isLive ? 'is-live' : ''}">
         <div class="pulse-ring"></div>
+        <div class="heading-indicator" style="${headingStyle}">
+          <svg class="heading-indicator-svg" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true">
+            <defs>
+              <radialGradient id="user-compass-beam-grad" cx="24" cy="24" r="24" gradientUnits="userSpaceOnUse">
+                <stop offset="25%" stop-color="#0284c7" stop-opacity="0.38" />
+                <stop offset="65%" stop-color="#38bdf8" stop-opacity="0.18" />
+                <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
+              </radialGradient>
+            </defs>
+            <!-- Google Maps-inspirert synsfelt / lyskjegle -->
+            <path
+              d="M 24 24 L 12 3 A 24 24 0 0 1 36 3 Z"
+              fill="url(#user-compass-beam-grad)"
+            />
+            <!-- Tydelig fasettert kompassnål som peker i mobilens retning -->
+            <g class="compass-pointer">
+              <!-- Venstre side (lysere himmelblå) -->
+              <path
+                d="M 24 4 L 19 16 L 24 14.5 Z"
+                fill="#38bdf8"
+                stroke="#ffffff"
+                stroke-width="1.2"
+                stroke-linejoin="round"
+              />
+              <!-- Høyre side (dypere blå for 3D-effekt) -->
+              <path
+                d="M 24 4 L 29 16 L 24 14.5 Z"
+                fill="#0284c7"
+                stroke="#ffffff"
+                stroke-width="1.2"
+                stroke-linejoin="round"
+              />
+            </g>
+          </svg>
+        </div>
         <div class="marker-core"></div>
-        <div class="heading-indicator" style="${headingStyle}"></div>
       </div>
     `,
-    iconSize: [44, 44],
-    iconAnchor: [22, 22]
+    iconSize: [48, 48],
+    iconAnchor: [24, 24]
   })
 }
 

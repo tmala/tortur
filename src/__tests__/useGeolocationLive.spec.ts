@@ -129,4 +129,43 @@ describe('useGeolocation live location & heading', () => {
     expect(locateBtn.find('.pulse-slow').exists()).toBe(true)
     expect(locateBtn.attributes('title')).toContain('Hvor er jeg (på')
   })
+
+  it('viser inaktiv tilstand uten puls-effekt på Hvor er jeg-knappen når isLiveLocating er false', () => {
+    const wrapper = mount(HeaderActionsDropdown, {
+      props: {
+        isOpen: true,
+        isLiveLocating: false,
+        isLocating: false,
+      },
+    })
+
+    const locateBtn = wrapper.find('.btn-locate')
+    expect(locateBtn.exists()).toBe(true)
+    expect(locateBtn.classes()).not.toContain('active')
+    expect(locateBtn.classes()).not.toContain('is-live-locating')
+    expect(locateBtn.find('.pulse-slow').exists()).toBe(false)
+    expect(locateBtn.attributes('title')).toBe('Hvor er jeg?')
+  })
+
+  it('tilbakestiller heading på coords når stopLiveLocating kalles uten aktiv sporing', () => {
+    const { startLiveLocating, stopLiveLocating, coords } = useGeolocation()
+    startLiveLocating()
+    if (watchSuccessCallback) {
+      watchSuccessCallback({
+        coords: {
+          latitude: 60.39,
+          longitude: 5.32,
+          accuracy: 5,
+          heading: 120,
+          speed: 1,
+          altitude: 10,
+        },
+        timestamp: Date.now(),
+      } as GeolocationPosition)
+    }
+    expect(coords.value?.heading).toBe(120)
+
+    stopLiveLocating()
+    expect(coords.value?.heading).toBeNull()
+  })
 })

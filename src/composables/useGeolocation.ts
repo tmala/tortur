@@ -352,6 +352,12 @@ export function useGeolocation() {
 
   const stopLiveLocating = () => {
     isLiveLocating.value = false
+    if (!isTracking.value && coords.value) {
+      coords.value = {
+        ...coords.value,
+        heading: null,
+      }
+    }
     stopWatchingIfUnneeded()
   }
 
