@@ -1386,6 +1386,48 @@ describe('MapLayerButton', () => {
     expect(wrapper.emitted('change-layer')).toBeTruthy()
     expect(wrapper.emitted('change-layer')?.[0]).toEqual(['mapbox_outdoors'])
   })
+
+  it('does not show CARTO map layers when user is not admin or cartoApiKey is missing', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: true,
+        isAdmin: false,
+        cartoApiKey: 'test_carto_key',
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.text()).not.toContain('CARTO')
+
+    // Admin, men mangler api-nøkkel
+    await wrapper.setProps({ isAdmin: true, cartoApiKey: '' })
+    expect(wrapper.text()).not.toContain('CARTO')
+  })
+
+  it('shows CARTO map layers when user is admin and cartoApiKey is provided', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: true,
+        isAdmin: true,
+        cartoApiKey: 'test_carto_key_456',
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.text()).toContain('CARTO Voyager')
+    expect(wrapper.text()).toContain('CARTO Positron')
+    expect(wrapper.text()).toContain('CARTO Dark Matter')
+
+    const cartoItem = wrapper.findAll('.layer-item').find((el) => el.text().includes('CARTO Voyager'))
+    expect(cartoItem).toBeDefined()
+    await cartoItem!.trigger('click')
+
+    expect(wrapper.emitted('change-layer')).toBeTruthy()
+    expect(wrapper.emitted('change-layer')?.[0]).toEqual(['carto_voyager'])
+  })
 })
+
 
 

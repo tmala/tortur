@@ -90,11 +90,30 @@ export const tileLayers: Record<string, TileLayerConfig> = {
     maxZoom: 22,
     tileSize: 512,
     zoomOffset: -1
+  },
+  carto_voyager: {
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key={cartoKey}',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> bidragsytere &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+    maxZoom: 20,
+    subdomains: 'abcd'
+  },
+  carto_positron: {
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png?key={cartoKey}',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> bidragsytere &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+    maxZoom: 20,
+    subdomains: 'abcd'
+  },
+  carto_dark_matter: {
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png?key={cartoKey}',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> bidragsytere &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+    maxZoom: 20,
+    subdomains: 'abcd'
   }
 }
 
 export interface CreateTileLayersOptions {
   mapboxToken?: string
+  cartoApiKey?: string
 }
 
 export function createTileLayers(
@@ -108,12 +127,18 @@ export function createTileLayers(
   if (targetKey.startsWith('mapbox_') && !options?.mapboxToken) {
     targetKey = 'standard'
   }
+  if (targetKey.startsWith('carto_') && !options?.cartoApiKey) {
+    targetKey = 'standard'
+  }
 
   const config = tileLayers[targetKey] ?? tileLayers.standard!
 
   let url = config.url
   if (options?.mapboxToken) {
     url = url.replace('{accessToken}', encodeURIComponent(options.mapboxToken))
+  }
+  if (options?.cartoApiKey) {
+    url = url.replace('{cartoKey}', encodeURIComponent(options.cartoApiKey))
   }
 
   const layerOptions: L.TileLayerOptions = {

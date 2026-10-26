@@ -27,6 +27,7 @@ export interface SystemConfig {
   FIREBASE_DB_URL?: string
   FIREBASE_SECRET_PREFIX?: string
   MAPBOX_TOKEN?: string
+  CARTO_BASEMAP_API_KEY?: string
   [key: string]: string | undefined
 }
 
@@ -1214,6 +1215,12 @@ export function useAuth() {
     return systemConfig.value.MAPBOX_TOKEN || ''
   })
 
+  const localCartoKey   = (import.meta.env.CARTO_BASEMAP_API_KEY || import.meta.env.VITE_CARTO_BASEMAP_API_KEY || '') as string
+  const cartoApiKey     = computed(() => {
+    if (!user.value?.isAdmin) return ''
+    return localCartoKey || systemConfig.value.CARTO_BASEMAP_API_KEY || ''
+  })
+
   return {
     user,
     isLoggedIn,
@@ -1225,6 +1232,7 @@ export function useAuth() {
     aisClientSecret,
     firebaseDbUrl,
     mapboxToken,
+    cartoApiKey,
     login,
     logout,
     submitCheckin,

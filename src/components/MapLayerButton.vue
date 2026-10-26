@@ -9,11 +9,13 @@ withDefaults(
     isLoggedIn?: boolean
     isAdmin?: boolean
     mapboxToken?: string
+    cartoApiKey?: string
   }>(),
   {
     isLoggedIn: false,
     isAdmin: false,
     mapboxToken: '',
+    cartoApiKey: '',
   },
 )
 
@@ -71,6 +73,7 @@ onUnmounted(() => {
       :is-logged-in="isLoggedIn"
       :is-admin="isAdmin"
       :mapbox-token="mapboxToken"
+      :carto-api-key="cartoApiKey"
       @close="handleClose"
       @change-layer="handleLayerChange"
     />

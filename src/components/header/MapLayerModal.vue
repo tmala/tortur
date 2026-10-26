@@ -9,6 +9,7 @@ const props = defineProps<{
   isLoggedIn?: boolean
   isAdmin?: boolean
   mapboxToken?: string
+  cartoApiKey?: string
 }>()
 
 const emit = defineEmits<{
@@ -21,6 +22,7 @@ const availableLayers = computed(() => {
     if (layer.requiresAdmin && !props.isAdmin) return false
     if (layer.requiresAuth && !props.isLoggedIn) return false
     if (layer.requiresMapboxToken && !props.mapboxToken) return false
+    if (layer.requiresCartoKey && !props.cartoApiKey) return false
     return true
   })
     .slice()

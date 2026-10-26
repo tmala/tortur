@@ -66,7 +66,7 @@ const {
   clearError: clearAisError,
 } = useAis()
 
-const { user, isLoggedIn, isAdmin, aisClientId, aisClientSecret, mapboxToken, fetchMyCheckins } = useAuth()
+const { user, isLoggedIn, isAdmin, aisClientId, aisClientSecret, mapboxToken, cartoApiKey, fetchMyCheckins } = useAuth()
 const { registerPublicUser, loadFriends, loadFriendRequests, loadDefaultVisibility } = useFriends()
 const { needsUpdate, applyUpdate } = useAppUpdate()
 const activeLayer = ref<string>('norgeskart')
@@ -327,8 +327,8 @@ watch(
       setBwCredentials('', '')
       // Slå av AIS dersom bruker logger ut
       if (isAisToggled.value) toggleAis()
-      // Hvis aktivt kartlag er et Google- eller Mapbox-kartlag ved utlogging, bytt tilbake til standard (hvis i utlandet) eller norgeskart
-      if (activeLayer.value.startsWith('google_') || activeLayer.value.startsWith('mapbox_')) {
+      // Hvis aktivt kartlag er et Google-, Mapbox- eller Carto-kartlag ved utlogging, bytt tilbake til standard (hvis i utlandet) eller norgeskart
+      if (activeLayer.value.startsWith('google_') || activeLayer.value.startsWith('mapbox_') || activeLayer.value.startsWith('carto_')) {
         const abroad = coords.value ? isAbroad(coords.value.lat, coords.value.lng) : false
         Promise.resolve(abroad).then((isAbr) => {
           activeLayer.value = isAbr ? 'standard' : 'norgeskart'
@@ -339,9 +339,14 @@ watch(
   { immediate: true },
 )
 
-// Dersom bruker mister admin-status eller Mapbox-token forsvinner mens et Mapbox-lag er valgt
-watch([isAdmin, mapboxToken], ([admin, token]) => {
-  if (activeLayer.value.startsWith('mapbox_') && (!admin || !token)) {
+// Dersom bruker mister admin-status, eller Mapbox/Carto-nøkkel forsvinner mens et slikt lag er valgt
+watch([isAdmin, mapboxToken, cartoApiKey], ([admin, mapboxTok, cartoKey]) => {
+  if (activeLayer.value.startsWith('mapbox_') && (!admin || !mapboxTok)) {
+    const abroad = coords.value ? isAbroad(coords.value.lat, coords.value.lng) : false
+    Promise.resolve(abroad).then((isAbr) => {
+      activeLayer.value = isAbr ? 'standard' : 'norgeskart'
+    })
+  } else if (activeLayer.value.startsWith('carto_') && (!admin || !cartoKey)) {
     const abroad = coords.value ? isAbroad(coords.value.lat, coords.value.lng) : false
     Promise.resolve(abroad).then((isAbr) => {
       activeLayer.value = isAbr ? 'standard' : 'norgeskart'
@@ -1171,6 +1176,7 @@ onUnmounted(() => {
       :is-logged-in="isLoggedIn"
       :visited-turpost-ids="visitedTurpostIds"
       :mapbox-token="mapboxToken"
+      :carto-api-key="cartoApiKey"
       @map-dragged="handleMapDragged"
       @coordinates-change="handleCoordinatesChange"
       @bounds-change="handleBoundsChange"
@@ -1328,6 +1334,7 @@ onUnmounted(() => {
       :is-logged-in="isLoggedIn"
       :is-admin="isAdmin"
       :mapbox-token="mapboxToken"
+      :carto-api-key="cartoApiKey"
       @change-layer="handleChangeLayer"
     />
 

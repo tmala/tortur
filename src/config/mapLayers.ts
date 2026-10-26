@@ -6,6 +6,7 @@ export interface MapLayerConfig {
   requiresAuth?: boolean
   requiresAdmin?: boolean
   requiresMapboxToken?: boolean
+  requiresCartoKey?: boolean
 }
 
 // Konfigurasjon for kartlag med sorteringstall (sortnum) og tilgangsstyring.
@@ -90,6 +91,33 @@ export const MAP_LAYERS: MapLayerConfig[] = [
     requiresAuth: true,
     requiresAdmin: true,
     requiresMapboxToken: true,
+  },
+  {
+    id: 'carto_voyager',
+    name: 'CARTO Voyager',
+    desc: 'Fargerikt og detaljert kart (by og terreng)',
+    sortnum: 160,
+    requiresAuth: true,
+    requiresAdmin: true,
+    requiresCartoKey: true,
+  },
+  {
+    id: 'carto_positron',
+    name: 'CARTO Positron',
+    desc: 'Lyst og stilrent minimalistisk kart',
+    sortnum: 170,
+    requiresAuth: true,
+    requiresAdmin: true,
+    requiresCartoKey: true,
+  },
+  {
+    id: 'carto_dark_matter',
+    name: 'CARTO Dark Matter',
+    desc: 'Mørkt kart med høy kontrast for kveld/natt',
+    sortnum: 180,
+    requiresAuth: true,
+    requiresAdmin: true,
+    requiresCartoKey: true,
   },
   {
     id: 'kartverket_sjokart',
