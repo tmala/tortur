@@ -6,9 +6,11 @@ export interface TileLayerConfig {
   attribution: string
   maxZoom: number
   subdomains?: string
+  tileSize?: number
+  zoomOffset?: number
 }
 
-// Definisjoner av 100% gratis kartlag uten API-nøkkel
+// Definisjoner av 100% gratis kartlag uten API-nøkkel samt Mapbox/Google admin-lag
 export const tileLayers: Record<string, TileLayerConfig> = {
   standard: {
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -67,23 +69,70 @@ export const tileLayers: Record<string, TileLayerConfig> = {
     attribution: '&copy; <a href="https://maps.google.com" target="_blank">Google Maps</a>',
     maxZoom: 20,
     subdomains: '0123'
+  },
+  mapbox_outdoors: {
+    url: 'https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/512/{z}/{x}/{y}@2x?access_token={accessToken}',
+    attribution: '&copy; <a href="https://www.mapbox.com/about/maps/" target="_blank">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
+    maxZoom: 22,
+    tileSize: 512,
+    zoomOffset: -1
+  },
+  mapbox_satellite_streets: {
+    url: 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/512/{z}/{x}/{y}@2x?access_token={accessToken}',
+    attribution: '&copy; <a href="https://www.mapbox.com/about/maps/" target="_blank">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
+    maxZoom: 22,
+    tileSize: 512,
+    zoomOffset: -1
+  },
+  mapbox_streets: {
+    url: 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?access_token={accessToken}',
+    attribution: '&copy; <a href="https://www.mapbox.com/about/maps/" target="_blank">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
+    maxZoom: 22,
+    tileSize: 512,
+    zoomOffset: -1
   }
 }
 
-export function createTileLayers(layerKey: string): {
+export interface CreateTileLayersOptions {
+  mapboxToken?: string
+}
+
+export function createTileLayers(
+  layerKey: string,
+  options?: CreateTileLayersOptions
+): {
   baseLayer: L.TileLayer
   overlayLayer: L.TileLayer | null
 } {
-  const config = tileLayers[layerKey] ?? tileLayers.standard!
+  let targetKey = layerKey
+  if (targetKey.startsWith('mapbox_') && !options?.mapboxToken) {
+    targetKey = 'standard'
+  }
 
-  const baseLayer = L.tileLayer(config.url, {
+  const config = tileLayers[targetKey] ?? tileLayers.standard!
+
+  let url = config.url
+  if (options?.mapboxToken) {
+    url = url.replace('{accessToken}', encodeURIComponent(options.mapboxToken))
+  }
+
+  const layerOptions: L.TileLayerOptions = {
     attribution: config.attribution,
     maxZoom: config.maxZoom,
     subdomains: config.subdomains || 'abc',
     updateWhenIdle: true,
     updateWhenZooming: false,
     keepBuffer: 2
-  })
+  }
+
+  if (config.tileSize) {
+    layerOptions.tileSize = config.tileSize
+  }
+  if (config.zoomOffset !== undefined) {
+    layerOptions.zoomOffset = config.zoomOffset
+  }
+
+  const baseLayer = L.tileLayer(url, layerOptions)
 
   let overlayLayer: L.TileLayer | null = null
   if (config.overlayUrl) {
@@ -91,7 +140,9 @@ export function createTileLayers(layerKey: string): {
       maxZoom: config.maxZoom,
       updateWhenIdle: true,
       updateWhenZooming: false,
-      keepBuffer: 2
+      keepBuffer: 2,
+      ...(config.tileSize ? { tileSize: config.tileSize } : {}),
+      ...(config.zoomOffset !== undefined ? { zoomOffset: config.zoomOffset } : {})
     })
   }
 

@@ -8,6 +8,7 @@ const props = defineProps<{
   activeLayer: string
   isLoggedIn?: boolean
   isAdmin?: boolean
+  mapboxToken?: string
 }>()
 
 const emit = defineEmits<{
@@ -19,6 +20,7 @@ const availableLayers = computed(() => {
   return MAP_LAYERS.filter((layer) => {
     if (layer.requiresAdmin && !props.isAdmin) return false
     if (layer.requiresAuth && !props.isLoggedIn) return false
+    if (layer.requiresMapboxToken && !props.mapboxToken) return false
     return true
   })
     .slice()

@@ -47,6 +47,7 @@ const props = defineProps<{
   showKmMarkers?: boolean
   trackPhotos?: TrackPhoto[]
   suppressFitBounds?: boolean
+  mapboxToken?: string
 }>()
 
 const emit = defineEmits<{
@@ -118,7 +119,7 @@ const switchLayer = (layerKey: string) => {
     currentOverlayLayer = null
   }
 
-  const { baseLayer, overlayLayer } = createTileLayers(layerKey)
+  const { baseLayer, overlayLayer } = createTileLayers(layerKey, { mapboxToken: props.mapboxToken })
   currentTileLayer = baseLayer.addTo(map)
   if (overlayLayer) {
     currentOverlayLayer = overlayLayer.addTo(map)
@@ -837,6 +838,15 @@ watch(
   () => props.activeLayer,
   (newLayer) => {
     switchLayer(newLayer)
+  }
+)
+
+watch(
+  () => props.mapboxToken,
+  () => {
+    if (props.activeLayer.startsWith('mapbox_')) {
+      switchLayer(props.activeLayer)
+    }
   }
 )
 

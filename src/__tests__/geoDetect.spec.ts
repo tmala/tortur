@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { FeatureCollection } from 'geojson'
-import { useGeoDetect } from '../composables/useGeoDetect'
+import { useGeoDetect, _resetGeoDataCacheForTesting } from '../composables/useGeoDetect'
 
 describe('useGeoDetect', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    _resetGeoDataCacheForTesting()
   })
 
   it('identifies coordinates far outside Norway as abroad without needing network fetch', async () => {
@@ -88,7 +89,14 @@ describe('useGeoDetect', () => {
     const bergenAbroad = await isAbroad(60.39, 5.32)
     expect(bergenAbroad).toBe(false)
 
-    // Punkt i Stockholm, Sverige (innenfor lat 57-71.5, lng 4-31.5, men ikke i norsk kommune)
+    // Punkt i Byfjorden/sjø like utenfor Bergen-polygonet (ca. 5 km øst for polygonet på 5.5°Ø)
+    // Skal finne Bergen via nærmeste kommune fallback og IKKE markeres som utland
+    const fjordResult = await detectKommune(60.4, 5.5)
+    expect(fjordResult).toEqual({ fylke: 'Vestland', kommune: 'Bergen' })
+    const fjordAbroad = await isAbroad(60.4, 5.5)
+    expect(fjordAbroad).toBe(false)
+
+    // Punkt i Stockholm, Sverige (innenfor lat 57-71.5, lng 4-31.5, men > 25 km fra norsk kommune)
     const stockholmResult = await detectKommune(59.33, 18.06)
     expect(stockholmResult).toBeNull()
     const stockholmAbroad = await isAbroad(59.33, 18.06)

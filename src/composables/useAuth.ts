@@ -24,6 +24,9 @@ export interface GoogleUser {
 export interface SystemConfig {
   AIS_CLIENT_ID?: string
   AIS_CLIENT_SECRET?: string
+  FIREBASE_DB_URL?: string
+  FIREBASE_SECRET_PREFIX?: string
+  MAPBOX_TOKEN?: string
   [key: string]: string | undefined
 }
 
@@ -1206,6 +1209,10 @@ export function useAuth() {
   const aisClientId     = computed(() => systemConfig.value.AIS_CLIENT_ID     || '')
   const aisClientSecret = computed(() => systemConfig.value.AIS_CLIENT_SECRET || '')
   const firebaseDbUrl   = computed(() => systemConfig.value.FIREBASE_DB_URL   || '')
+  const mapboxToken     = computed(() => {
+    if (!user.value?.isAdmin) return ''
+    return systemConfig.value.MAPBOX_TOKEN || ''
+  })
 
   return {
     user,
@@ -1217,6 +1224,7 @@ export function useAuth() {
     aisClientId,
     aisClientSecret,
     firebaseDbUrl,
+    mapboxToken,
     login,
     logout,
     submitCheckin,

@@ -66,7 +66,7 @@ const {
   clearError: clearAisError,
 } = useAis()
 
-const { user, isLoggedIn, isAdmin, aisClientId, aisClientSecret, fetchMyCheckins } = useAuth()
+const { user, isLoggedIn, isAdmin, aisClientId, aisClientSecret, mapboxToken, fetchMyCheckins } = useAuth()
 const { registerPublicUser, loadFriends, loadFriendRequests, loadDefaultVisibility } = useFriends()
 const { needsUpdate, applyUpdate } = useAppUpdate()
 const activeLayer = ref<string>('norgeskart')
@@ -136,7 +136,7 @@ function handleCreateTurpostFromMenu(coords: { lat: number; lng: number }) {
 
 async function handleShowTurposterHereFromMenu(coords: { lat: number; lng: number }) {
   handleCloseContextMenu()
-  await loadTurposterForCoordinates(coords, true, 'none')
+  await loadTurposterForCoordinates(coords, true, 'none', 'map')
 }
 
 const loadMySpots = async () => {
@@ -327,8 +327,8 @@ watch(
       setBwCredentials('', '')
       // Slå av AIS dersom bruker logger ut
       if (isAisToggled.value) toggleAis()
-      // Hvis aktivt kartlag er et Google-kartlag ved utlogging, bytt tilbake til standard (hvis i utlandet) eller norgeskart
-      if (activeLayer.value.startsWith('google_')) {
+      // Hvis aktivt kartlag er et Google- eller Mapbox-kartlag ved utlogging, bytt tilbake til standard (hvis i utlandet) eller norgeskart
+      if (activeLayer.value.startsWith('google_') || activeLayer.value.startsWith('mapbox_')) {
         const abroad = coords.value ? isAbroad(coords.value.lat, coords.value.lng) : false
         Promise.resolve(abroad).then((isAbr) => {
           activeLayer.value = isAbr ? 'standard' : 'norgeskart'
@@ -338,6 +338,16 @@ watch(
   },
   { immediate: true },
 )
+
+// Dersom bruker mister admin-status eller Mapbox-token forsvinner mens et Mapbox-lag er valgt
+watch([isAdmin, mapboxToken], ([admin, token]) => {
+  if (activeLayer.value.startsWith('mapbox_') && (!admin || !token)) {
+    const abroad = coords.value ? isAbroad(coords.value.lat, coords.value.lng) : false
+    Promise.resolve(abroad).then((isAbr) => {
+      activeLayer.value = isAbr ? 'standard' : 'norgeskart'
+    })
+  }
+})
 
 const lastMapBounds = ref<{
   minLat: number
@@ -925,7 +935,8 @@ const isSuppressingFitBounds = ref(false)
 const loadTurposterForCoordinates = async (
   targetCoords: { lat: number; lng: number },
   showFeedback = false,
-  centerMode: 'user' | 'pan' | 'none' = 'user'
+  centerMode: 'user' | 'pan' | 'none' = 'user',
+  source: 'gps' | 'map' = centerMode === 'user' ? 'gps' : 'map'
 ) => {
   if (isLoadingLocalTurposter.value) return
   isLoadingLocalTurposter.value = true
@@ -943,17 +954,22 @@ const loadTurposterForCoordinates = async (
     await checkAndApplyAbroadLayer(targetCoords.lat, targetCoords.lng)
     const geoResult = await detectKommune(targetCoords.lat, targetCoords.lng)
     if (!geoResult || !geoResult.kommune) {
-      if (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart') {
-        activeLayer.value = 'standard'
-      }
-      const utlandResult = await selectKommuneByName('Utlandet')
-      if (utlandResult) {
-        isTurposterOpen.value = false
-        return
+      const abroad = await isAbroad(targetCoords.lat, targetCoords.lng)
+      if (abroad) {
+        if (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart') {
+          activeLayer.value = 'standard'
+        }
       }
       if (showFeedback) {
-        turError.value =
-          'Posisjonen ser ut til å være i utlandet (eller usikker via butikk-/hotell-WiFi). Velg kommune manuelt fra menyen.'
+        if (abroad) {
+          turError.value =
+            source === 'gps'
+              ? 'Posisjonen ser ut til å være i utlandet (eller usikker via butikk-/hotell-WiFi). Velg kommune manuelt fra menyen.'
+              : 'Punktet ligger i utlandet. Velg kommune eller område manuelt fra menyen.'
+        } else {
+          turError.value =
+            'Fant ingen registrert kommune i nærheten av dette punktet. Velg kommune manuelt fra menyen.'
+        }
       }
       return
     }
@@ -974,7 +990,7 @@ const loadTurposterForCoordinates = async (
 }
 
 const loadLocalTurposterForLocation = async (loc: GeoLocationState, showFeedback = false) => {
-  await loadTurposterForCoordinates(loc, showFeedback, 'user')
+  await loadTurposterForCoordinates(loc, showFeedback, 'user', 'gps')
 }
 
 const handleShowLocalTurposter = async () => {
@@ -1154,6 +1170,7 @@ onUnmounted(() => {
       :is-zoom-sufficient="isZoomSufficient"
       :is-logged-in="isLoggedIn"
       :visited-turpost-ids="visitedTurpostIds"
+      :mapbox-token="mapboxToken"
       @map-dragged="handleMapDragged"
       @coordinates-change="handleCoordinatesChange"
       @bounds-change="handleBoundsChange"
@@ -1310,6 +1327,7 @@ onUnmounted(() => {
       :active-layer="activeLayer"
       :is-logged-in="isLoggedIn"
       :is-admin="isAdmin"
+      :mapbox-token="mapboxToken"
       @change-layer="handleChangeLayer"
     />
 

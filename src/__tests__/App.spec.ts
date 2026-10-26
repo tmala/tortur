@@ -1345,6 +1345,47 @@ describe('MapLayerButton', () => {
     expect(wrapper.emitted('change-layer')).toBeTruthy()
     expect(wrapper.emitted('change-layer')?.[0]).toEqual(['norgeskart'])
   })
+
+  it('does not show Mapbox map layers when user is not admin or mapboxToken is missing', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: true,
+        isAdmin: false,
+        mapboxToken: 'pk.mocktoken',
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.text()).not.toContain('Mapbox')
+
+    // Admin, men mangler token
+    await wrapper.setProps({ isAdmin: true, mapboxToken: '' })
+    expect(wrapper.text()).not.toContain('Mapbox')
+  })
+
+  it('shows Mapbox map layers when user is admin and mapboxToken is provided', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: true,
+        isAdmin: true,
+        mapboxToken: 'pk.mocktoken123',
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.text()).toContain('Mapbox Friluft (Outdoors)')
+    expect(wrapper.text()).toContain('Mapbox Satellitt (Hybrid)')
+    expect(wrapper.text()).toContain('Mapbox Veikart')
+
+    const mapboxItem = wrapper.findAll('.layer-item').find((el) => el.text().includes('Mapbox Friluft'))
+    expect(mapboxItem).toBeDefined()
+    await mapboxItem!.trigger('click')
+
+    expect(wrapper.emitted('change-layer')).toBeTruthy()
+    expect(wrapper.emitted('change-layer')?.[0]).toEqual(['mapbox_outdoors'])
+  })
 })
 
 

@@ -8,10 +8,12 @@ withDefaults(
     activeLayer: string
     isLoggedIn?: boolean
     isAdmin?: boolean
+    mapboxToken?: string
   }>(),
   {
     isLoggedIn: false,
     isAdmin: false,
+    mapboxToken: '',
   },
 )
 
@@ -68,6 +70,7 @@ onUnmounted(() => {
       :active-layer="activeLayer"
       :is-logged-in="isLoggedIn"
       :is-admin="isAdmin"
+      :mapbox-token="mapboxToken"
       @close="handleClose"
       @change-layer="handleLayerChange"
     />

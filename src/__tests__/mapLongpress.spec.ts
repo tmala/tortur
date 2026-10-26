@@ -16,6 +16,7 @@ import MapViewer from '../components/MapViewer.vue'
 import MapView from '../views/MapView.vue'
 import { useAuth } from '../composables/useAuth'
 import { useAppStateStore } from '../stores/appState'
+import { _resetGeoDataCacheForTesting } from '../composables/useGeoDetect'
 import type { TurpostItem } from '../composables/useTurposter'
 
 describe('useMapLongpress', () => {
@@ -351,6 +352,7 @@ describe('MapView Longpress Context Menu Integration', () => {
     pinia = createPinia()
     setActivePinia(pinia)
     vi.restoreAllMocks()
+    _resetGeoDataCacheForTesting()
 
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
       const urlStr = String(url)
@@ -395,7 +397,7 @@ describe('MapView Longpress Context Menu Integration', () => {
           ]
         } as unknown as Response
       }
-      if (urlStr.includes('bergen.json')) {
+      if (urlStr.includes('bergen.json') || urlStr.includes('kvam.json')) {
         return {
           ok: true,
           headers: { get: () => 'application/json' },
@@ -554,6 +556,95 @@ describe('MapView Longpress Context Menu Integration', () => {
 
     await flushPromises()
     expect(mapViewer.props('suppressFitBounds')).toBe(false)
+  })
+
+  it('shows map-specific abroad error message when show-turposter-here is triggered abroad', async () => {
+    const { user } = useAuth()
+    user.value = {
+      userId: 'test-user-1',
+      userName: 'Ola Nordmann',
+      email: 'ola@example.com',
+      avatarUrl: '',
+      lastLogin: new Date().toISOString()
+    }
+
+    const wrapper = mount(MapView, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          MapViewer: true,
+          AppHeader: true,
+          RouterView: true,
+          TrackPlaybackPanel: true,
+          LocationControls: true,
+          TurposterPanel: true,
+          CheckinModal: true,
+          TurpostCheckinsModal: true,
+          UserProfileMenu: true,
+          AddTurpostModal: true
+        }
+      }
+    })
+
+    const mapViewer = wrapper.findComponent({ name: 'MapViewer' })
+    // Punkt i Spania (langt utenfor Norge)
+    mapViewer.vm.$emit('map-longpress', { lat: 38.09, lng: -0.65 }, { x: 200, y: 300 })
+    await wrapper.vm.$nextTick()
+
+    const contextMenu = wrapper.findComponent(MapContextMenu)
+    contextMenu.vm.$emit('show-turposter-here', { lat: 38.09, lng: -0.65 })
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // Feilmeldingen skal være spesifikk for kartklikk ("Punktet ligger i utlandet..."), IKKE "butikk-/hotell-WiFi"
+    const locationControls = wrapper.findComponent({ name: 'LocationControls' })
+    expect(locationControls.exists()).toBe(true)
+    expect(locationControls.props('error')).toBe(
+      'Punktet ligger i utlandet. Velg kommune eller område manuelt fra menyen.'
+    )
+  })
+
+  it('detects nearest municipality without error when clicking in water/fjord near land', async () => {
+    const { user } = useAuth()
+    user.value = {
+      userId: 'test-user-1',
+      userName: 'Ola Nordmann',
+      email: 'ola@example.com',
+      avatarUrl: '',
+      lastLogin: new Date().toISOString()
+    }
+
+    const wrapper = mount(MapView, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          MapViewer: true,
+          AppHeader: true,
+          RouterView: true,
+          TrackPlaybackPanel: true,
+          LocationControls: true,
+          TurposterPanel: true,
+          CheckinModal: true,
+          TurpostCheckinsModal: true,
+          UserProfileMenu: true,
+          AddTurpostModal: true
+        }
+      }
+    })
+
+    const mapViewer = wrapper.findComponent({ name: 'MapViewer' })
+    // Punkt i fjorden rett utenfor Kvam (Kvam er 6.0..6.3, 60.1..60.4 - punkt er 60.2, 5.95, ca. 2.7 km unna)
+    mapViewer.vm.$emit('map-longpress', { lat: 60.2, lng: 5.95 }, { x: 200, y: 300 })
+    await wrapper.vm.$nextTick()
+
+    const contextMenu = wrapper.findComponent(MapContextMenu)
+    contextMenu.vm.$emit('show-turposter-here', { lat: 60.2, lng: 5.95 })
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // Skal IKKE ha satt feilmelding om utland/WiFi
+    const locationControls = wrapper.findComponent({ name: 'LocationControls' })
+    expect(locationControls.props('error')).toBeNull()
   })
 })
 
