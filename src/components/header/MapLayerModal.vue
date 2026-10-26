@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Check } from 'lucide-vue-next'
+import { Check, ExternalLink } from 'lucide-vue-next'
 import { MAP_LAYERS } from '@/config/mapLayers'
 
 const props = defineProps<{
@@ -17,6 +17,7 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'change-layer', layerId: string): void
   (e: 'toggle-hiking-trails'): void
+  (e: 'open-3d'): void
 }>()
 
 const availableLayers = computed(() => {
@@ -33,6 +34,11 @@ const availableLayers = computed(() => {
 
 const selectLayer = (layerId: string) => {
   emit('change-layer', layerId)
+  emit('close')
+}
+
+const handleOpen3D = () => {
+  emit('open-3d')
   emit('close')
 }
 </script>
@@ -74,6 +80,22 @@ const selectLayer = (layerId: string) => {
             <span class="layer-desc">Røde T-ruter og merkede vandrestier</span>
           </div>
           <Check v-if="showHikingTrails" :size="18" class="check-icon" />
+        </button>
+      </div>
+
+      <!-- 3D Visning (Kun admin med Mapbox-token) -->
+      <div v-if="isAdmin && mapboxToken" class="layer-overlay-section">
+        <div class="layer-section-title">3D-visning</div>
+        <button
+          type="button"
+          class="layer-item action-3d"
+          @click="handleOpen3D"
+        >
+          <div class="layer-info">
+            <span class="layer-name">🏔️ Åpne 3D-terrengvisning</span>
+            <span class="layer-desc">Ekte 3D med Mapbox terreng og rotasjon</span>
+          </div>
+          <ExternalLink :size="16" class="check-icon" />
         </button>
       </div>
     </div>

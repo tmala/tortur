@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import MapViewer from '@/components/MapViewer.vue'
 import AppHeader from '@/components/AppHeader.vue'
@@ -11,6 +11,8 @@ import TurpostCheckinsModal from '@/components/TurpostCheckinsModal.vue'
 import AddTurpostModal from '@/components/AddTurpostModal.vue'
 import MapContextMenu from '@/components/MapContextMenu.vue'
 import MapLayerButton from '@/components/MapLayerButton.vue'
+
+const Map3DModal = defineAsyncComponent(() => import('@/components/map3d/Map3DModal.vue'))
 import {
   useGeolocation,
   calculateDistanceMeters,
@@ -74,6 +76,7 @@ const STORAGE_KEY_SHOW_HIKING_TRAILS = 'tortur_show_hiking_trails'
 const showHikingTrails = ref<boolean>(
   typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY_SHOW_HIKING_TRAILS) === 'true'
 )
+const is3DModalOpen = ref(false)
 
 const handleToggleHikingTrails = () => {
   showHikingTrails.value = !showHikingTrails.value
@@ -1352,6 +1355,7 @@ onUnmounted(() => {
       :show-hiking-trails="showHikingTrails"
       @change-layer="handleChangeLayer"
       @toggle-hiking-trails="handleToggleHikingTrails"
+      @open-3d="is3DModalOpen = true"
     />
 
     <LocationControls
@@ -1452,6 +1456,19 @@ onUnmounted(() => {
       :user-email="user?.email"
       @close="directAddTurpostCoords = null"
       @spot-saved="handleSpotSavedFromMenu"
+    />
+
+    <!-- 3D Terrengvisning (Mapbox) - Lazy loaded for optimal bundle-ytelse -->
+    <Map3DModal
+      v-if="is3DModalOpen"
+      :is-open="is3DModalOpen"
+      :center="centerCoords || (coords ? { lat: coords.lat, lng: coords.lng, zoom: 14 } : null)"
+      :turposter="displayTurposter"
+      :private-turposter="appState.mySpots"
+      :visited-turpost-ids="visitedTurpostIds"
+      :my-checkins="appState.myCheckins"
+      :mapbox-token="mapboxToken"
+      @close="is3DModalOpen = false"
     />
 
     <!-- Undersider rendres som overlay her -->
