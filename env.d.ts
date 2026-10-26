@@ -3,6 +3,15 @@
 declare const __APP_VERSION__: string
 declare const __APP_NAME__: string
 
+interface ImportMetaEnv {
+  readonly CARTO_BASEMAP_API_KEY?: string
+  readonly VITE_CARTO_BASEMAP_API_KEY?: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
+
 // Vue module shim: tells TypeScript that .vue files are valid modules.
 // Volar provides richer types when available; this fallback ensures compatibility.
 declare module '*.vue' {

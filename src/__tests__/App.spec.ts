@@ -1281,6 +1281,7 @@ describe('MapLayerButton', () => {
     expect(wrapper.text()).not.toContain('Google Satellitt')
     expect(wrapper.text()).not.toContain('Google Terreng')
     expect(wrapper.text()).toContain('Standard OpenStreetMap')
+    expect(wrapper.text()).toContain('Kartverket Gråtone')
     expect(wrapper.text()).toContain('Kartverket Sjøkart')
     expect(wrapper.text()).toContain('OpenSeaMap Sjøkart')
   })
@@ -1323,8 +1324,9 @@ describe('MapLayerButton', () => {
     const layerNames = layerItems.map((item) => item.text())
 
     expect(layerNames[0]).toBe('Kartverket Norgeskart')
-    expect(layerNames[1]).toBe('Topografisk (OpenTopoMap)')
-    expect(layerNames[2]).toBe('Standard OpenStreetMap')
+    expect(layerNames[1]).toBe('Kartverket Gråtone')
+    expect(layerNames[2]).toBe('Topografisk (OpenTopoMap)')
+    expect(layerNames[3]).toBe('Standard OpenStreetMap')
   })
 
   it('emits change-layer when selecting a layer', async () => {
@@ -1345,6 +1347,113 @@ describe('MapLayerButton', () => {
     expect(wrapper.emitted('change-layer')).toBeTruthy()
     expect(wrapper.emitted('change-layer')?.[0]).toEqual(['norgeskart'])
   })
+
+  it('does not show Mapbox map layers when user is not admin or mapboxToken is missing', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: true,
+        isAdmin: false,
+        mapboxToken: 'pk.mocktoken',
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.text()).not.toContain('Mapbox')
+
+    // Admin, men mangler token
+    await wrapper.setProps({ isAdmin: true, mapboxToken: '' })
+    expect(wrapper.text()).not.toContain('Mapbox')
+  })
+
+  it('shows Mapbox map layers when user is admin and mapboxToken is provided', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: true,
+        isAdmin: true,
+        mapboxToken: 'pk.mocktoken123',
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.text()).toContain('Mapbox Friluft (Outdoors)')
+    expect(wrapper.text()).toContain('Mapbox Satellitt (Hybrid)')
+    expect(wrapper.text()).toContain('Mapbox Veikart')
+
+    const mapboxItem = wrapper.findAll('.layer-item').find((el) => el.text().includes('Mapbox Friluft'))
+    expect(mapboxItem).toBeDefined()
+    await mapboxItem!.trigger('click')
+
+    expect(wrapper.emitted('change-layer')).toBeTruthy()
+    expect(wrapper.emitted('change-layer')?.[0]).toEqual(['mapbox_outdoors'])
+  })
+
+  it('does not show CARTO map layers when user is not admin or cartoApiKey is missing', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: true,
+        isAdmin: false,
+        cartoApiKey: 'test_carto_key',
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.text()).not.toContain('CARTO')
+
+    // Admin, men mangler api-nøkkel
+    await wrapper.setProps({ isAdmin: true, cartoApiKey: '' })
+    expect(wrapper.text()).not.toContain('CARTO')
+  })
+
+  it('shows CARTO map layers when user is admin and cartoApiKey is provided', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isLoggedIn: true,
+        isAdmin: true,
+        cartoApiKey: 'test_carto_key_456',
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.text()).toContain('CARTO Voyager')
+    expect(wrapper.text()).toContain('CARTO Positron')
+    expect(wrapper.text()).toContain('CARTO Dark Matter')
+
+    const cartoItem = wrapper.findAll('.layer-item').find((el) => el.text().includes('CARTO Voyager'))
+    expect(cartoItem).toBeDefined()
+    await cartoItem!.trigger('click')
+
+    expect(wrapper.emitted('change-layer')).toBeTruthy()
+    expect(wrapper.emitted('change-layer')?.[0]).toEqual(['carto_voyager'])
+  })
+
+  it('displays Kartoverlegg section with Waymarked Trails toggle and emits toggle-hiking-trails', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        showHikingTrails: false,
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.text()).toContain('Kartoverlegg')
+    expect(wrapper.text()).toContain('Merkede turstier (Waymarked)')
+
+    const overlayBtn = wrapper.find('.overlay-toggle')
+    expect(overlayBtn.exists()).toBe(true)
+    expect(overlayBtn.classes()).not.toContain('selected')
+
+    await overlayBtn.trigger('click')
+    expect(wrapper.emitted('toggle-hiking-trails')).toBeTruthy()
+
+    // Test with showHikingTrails: true
+    await wrapper.setProps({ showHikingTrails: true })
+    expect(wrapper.find('.overlay-toggle').classes()).toContain('selected')
+  })
 })
+
 
 

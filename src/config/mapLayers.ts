@@ -5,6 +5,8 @@ export interface MapLayerConfig {
   sortnum: number
   requiresAuth?: boolean
   requiresAdmin?: boolean
+  requiresMapboxToken?: boolean
+  requiresCartoKey?: boolean
 }
 
 // Konfigurasjon for kartlag med sorteringstall (sortnum) og tilgangsstyring.
@@ -14,6 +16,12 @@ export const MAP_LAYERS: MapLayerConfig[] = [
     name: 'Kartverket Norgeskart',
     desc: 'Offisielt detaljert norgeskart (Kartverket - kun Norge)',
     sortnum: 10,
+  },
+  {
+    id: 'kartverket_graatone',
+    name: 'Kartverket Gråtone',
+    desc: 'Dempede gråtoner (Kartverket - kun Norge)',
+    sortnum: 15,
   },
   {
     id: 'topo',
@@ -62,6 +70,60 @@ export const MAP_LAYERS: MapLayerConfig[] = [
     sortnum: 120,
     requiresAuth: true,
     requiresAdmin: true,
+  },
+  {
+    id: 'mapbox_outdoors',
+    name: 'Mapbox Friluft (Outdoors)',
+    desc: 'Mapbox tur- og terrengkart med stier og høyder',
+    sortnum: 130,
+    requiresAuth: true,
+    requiresAdmin: true,
+    requiresMapboxToken: true,
+  },
+  {
+    id: 'mapbox_satellite_streets',
+    name: 'Mapbox Satellitt (Hybrid)',
+    desc: 'Mapbox satellittfoto med veier og stedsnavn',
+    sortnum: 140,
+    requiresAuth: true,
+    requiresAdmin: true,
+    requiresMapboxToken: true,
+  },
+  {
+    id: 'mapbox_streets',
+    name: 'Mapbox Veikart',
+    desc: 'Mapbox detaljert verdenskart og veinett',
+    sortnum: 150,
+    requiresAuth: true,
+    requiresAdmin: true,
+    requiresMapboxToken: true,
+  },
+  {
+    id: 'carto_voyager',
+    name: 'CARTO Voyager',
+    desc: 'Fargerikt og detaljert kart (by og terreng)',
+    sortnum: 160,
+    requiresAuth: true,
+    requiresAdmin: true,
+    requiresCartoKey: true,
+  },
+  {
+    id: 'carto_positron',
+    name: 'CARTO Positron',
+    desc: 'Lyst og stilrent minimalistisk kart',
+    sortnum: 170,
+    requiresAuth: true,
+    requiresAdmin: true,
+    requiresCartoKey: true,
+  },
+  {
+    id: 'carto_dark_matter',
+    name: 'CARTO Dark Matter',
+    desc: 'Mørkt kart med høy kontrast for kveld/natt',
+    sortnum: 180,
+    requiresAuth: true,
+    requiresAdmin: true,
+    requiresCartoKey: true,
   },
   {
     id: 'kartverket_sjokart',

@@ -66,16 +66,29 @@ const {
   clearError: clearAisError,
 } = useAis()
 
-const { user, isLoggedIn, isAdmin, aisClientId, aisClientSecret, fetchMyCheckins } = useAuth()
+const { user, isLoggedIn, isAdmin, aisClientId, aisClientSecret, mapboxToken, cartoApiKey, fetchMyCheckins } = useAuth()
 const { registerPublicUser, loadFriends, loadFriendRequests, loadDefaultVisibility } = useFriends()
 const { needsUpdate, applyUpdate } = useAppUpdate()
 const activeLayer = ref<string>('norgeskart')
+const STORAGE_KEY_SHOW_HIKING_TRAILS = 'tortur_show_hiking_trails'
+const showHikingTrails = ref<boolean>(
+  typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY_SHOW_HIKING_TRAILS) === 'true'
+)
+
+const handleToggleHikingTrails = () => {
+  showHikingTrails.value = !showHikingTrails.value
+  try {
+    localStorage.setItem(STORAGE_KEY_SHOW_HIKING_TRAILS, String(showHikingTrails.value))
+  } catch {
+    // Ignore localStorage errors
+  }
+}
 const activeCheckinPost = ref<TurpostItem | null>(null)
 const activeViewCheckinsPost = ref<TurpostItem | null>(null)
 
 // Sjekk om posisjon er i utlandet, og bytt til OpenStreetMap dersom Norgeskart er valgt
 const checkAndApplyAbroadLayer = async (lat: number, lng: number) => {
-  if (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart') {
+  if (activeLayer.value === 'norgeskart' || activeLayer.value.startsWith('kartverket_')) {
     const abroad = await isAbroad(lat, lng)
     if (abroad) {
       activeLayer.value = 'standard'
@@ -136,7 +149,7 @@ function handleCreateTurpostFromMenu(coords: { lat: number; lng: number }) {
 
 async function handleShowTurposterHereFromMenu(coords: { lat: number; lng: number }) {
   handleCloseContextMenu()
-  await loadTurposterForCoordinates(coords, true, 'none')
+  await loadTurposterForCoordinates(coords, true, 'none', 'map')
 }
 
 const loadMySpots = async () => {
@@ -327,8 +340,8 @@ watch(
       setBwCredentials('', '')
       // Slå av AIS dersom bruker logger ut
       if (isAisToggled.value) toggleAis()
-      // Hvis aktivt kartlag er et Google-kartlag ved utlogging, bytt tilbake til standard (hvis i utlandet) eller norgeskart
-      if (activeLayer.value.startsWith('google_')) {
+      // Hvis aktivt kartlag er et Google-, Mapbox- eller Carto-kartlag ved utlogging, bytt tilbake til standard (hvis i utlandet) eller norgeskart
+      if (activeLayer.value.startsWith('google_') || activeLayer.value.startsWith('mapbox_') || activeLayer.value.startsWith('carto_')) {
         const abroad = coords.value ? isAbroad(coords.value.lat, coords.value.lng) : false
         Promise.resolve(abroad).then((isAbr) => {
           activeLayer.value = isAbr ? 'standard' : 'norgeskart'
@@ -338,6 +351,21 @@ watch(
   },
   { immediate: true },
 )
+
+// Dersom bruker mister admin-status, eller Mapbox/Carto-nøkkel forsvinner mens et slikt lag er valgt
+watch([isAdmin, mapboxToken, cartoApiKey], ([admin, mapboxTok, cartoKey]) => {
+  if (activeLayer.value.startsWith('mapbox_') && (!admin || !mapboxTok)) {
+    const abroad = coords.value ? isAbroad(coords.value.lat, coords.value.lng) : false
+    Promise.resolve(abroad).then((isAbr) => {
+      activeLayer.value = isAbr ? 'standard' : 'norgeskart'
+    })
+  } else if (activeLayer.value.startsWith('carto_') && (!admin || !cartoKey)) {
+    const abroad = coords.value ? isAbroad(coords.value.lat, coords.value.lng) : false
+    Promise.resolve(abroad).then((isAbr) => {
+      activeLayer.value = isAbr ? 'standard' : 'norgeskart'
+    })
+  }
+})
 
 const lastMapBounds = ref<{
   minLat: number
@@ -519,7 +547,7 @@ const handleTrackClick = () => {
 // Sjekk om et GPS-spor befinner seg i utlandet, og bytt til OpenStreetMap hvis Norgeskart er valgt
 const checkAndApplyAbroadLayerForTrack = async (points: TrackPoint[]) => {
   if (!points || points.length === 0) return
-  if (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart') {
+  if (activeLayer.value === 'norgeskart' || activeLayer.value.startsWith('kartverket_')) {
     // Rask sjekk: Utenfor Norges koordinatavgrensning (57.0° - 71.5° N, 4.0° - 31.5° Ø)?
     const outsidePoint = points.find(
       (p) => p.lat < 57.0 || p.lat > 71.5 || p.lng < 4.0 || p.lng > 31.5
@@ -769,7 +797,7 @@ const handleSelectFylke = (fylke: FylkeInfo | null) => {
   selectFylke(fylke)
   if (
     fylke?.slug === 'utlandet' &&
-    (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')
+    (activeLayer.value === 'norgeskart' || activeLayer.value.startsWith('kartverket_'))
   ) {
     activeLayer.value = 'standard'
   }
@@ -782,7 +810,7 @@ const handleSelectKommune = (kommune: KommuneInfo | null) => {
   selectKommune(kommune)
   if (
     selectedFylke.value?.slug === 'utlandet' &&
-    (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')
+    (activeLayer.value === 'norgeskart' || activeLayer.value.startsWith('kartverket_'))
   ) {
     activeLayer.value = 'standard'
   }
@@ -798,7 +826,7 @@ const handleSelectKommuneByName = async (kommuneName: string) => {
     isTurposterOpen.value = true
     if (
       result.fylke?.slug === 'utlandet' &&
-      (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')
+      (activeLayer.value === 'norgeskart' || activeLayer.value.startsWith('kartverket_'))
     ) {
       activeLayer.value = 'standard'
     }
@@ -817,7 +845,7 @@ const getKommuneInfo = (name: string) => {
 const handleFocusPost = (post: TurpostItem) => {
   if (
     selectedFylke.value?.slug === 'utlandet' &&
-    (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart')
+    (activeLayer.value === 'norgeskart' || activeLayer.value.startsWith('kartverket_'))
   ) {
     activeLayer.value = 'standard'
   }
@@ -925,7 +953,8 @@ const isSuppressingFitBounds = ref(false)
 const loadTurposterForCoordinates = async (
   targetCoords: { lat: number; lng: number },
   showFeedback = false,
-  centerMode: 'user' | 'pan' | 'none' = 'user'
+  centerMode: 'user' | 'pan' | 'none' = 'user',
+  source: 'gps' | 'map' = centerMode === 'user' ? 'gps' : 'map'
 ) => {
   if (isLoadingLocalTurposter.value) return
   isLoadingLocalTurposter.value = true
@@ -943,17 +972,22 @@ const loadTurposterForCoordinates = async (
     await checkAndApplyAbroadLayer(targetCoords.lat, targetCoords.lng)
     const geoResult = await detectKommune(targetCoords.lat, targetCoords.lng)
     if (!geoResult || !geoResult.kommune) {
-      if (activeLayer.value === 'norgeskart' || activeLayer.value === 'kartverket_sjokart') {
-        activeLayer.value = 'standard'
-      }
-      const utlandResult = await selectKommuneByName('Utlandet')
-      if (utlandResult) {
-        isTurposterOpen.value = false
-        return
+      const abroad = await isAbroad(targetCoords.lat, targetCoords.lng)
+      if (abroad) {
+        if (activeLayer.value === 'norgeskart' || activeLayer.value.startsWith('kartverket_')) {
+          activeLayer.value = 'standard'
+        }
       }
       if (showFeedback) {
-        turError.value =
-          'Posisjonen ser ut til å være i utlandet (eller usikker via butikk-/hotell-WiFi). Velg kommune manuelt fra menyen.'
+        if (abroad) {
+          turError.value =
+            source === 'gps'
+              ? 'Posisjonen ser ut til å være i utlandet (eller usikker via butikk-/hotell-WiFi). Velg kommune manuelt fra menyen.'
+              : 'Punktet ligger i utlandet. Velg kommune eller område manuelt fra menyen.'
+        } else {
+          turError.value =
+            'Fant ingen registrert kommune i nærheten av dette punktet. Velg kommune manuelt fra menyen.'
+        }
       }
       return
     }
@@ -974,7 +1008,7 @@ const loadTurposterForCoordinates = async (
 }
 
 const loadLocalTurposterForLocation = async (loc: GeoLocationState, showFeedback = false) => {
-  await loadTurposterForCoordinates(loc, showFeedback, 'user')
+  await loadTurposterForCoordinates(loc, showFeedback, 'user', 'gps')
 }
 
 const handleShowLocalTurposter = async () => {
@@ -1154,6 +1188,9 @@ onUnmounted(() => {
       :is-zoom-sufficient="isZoomSufficient"
       :is-logged-in="isLoggedIn"
       :visited-turpost-ids="visitedTurpostIds"
+      :mapbox-token="mapboxToken"
+      :carto-api-key="cartoApiKey"
+      :show-hiking-trails="showHikingTrails"
       @map-dragged="handleMapDragged"
       @coordinates-change="handleCoordinatesChange"
       @bounds-change="handleBoundsChange"
@@ -1310,7 +1347,11 @@ onUnmounted(() => {
       :active-layer="activeLayer"
       :is-logged-in="isLoggedIn"
       :is-admin="isAdmin"
+      :mapbox-token="mapboxToken"
+      :carto-api-key="cartoApiKey"
+      :show-hiking-trails="showHikingTrails"
       @change-layer="handleChangeLayer"
+      @toggle-hiking-trails="handleToggleHikingTrails"
     />
 
     <LocationControls

@@ -144,6 +144,7 @@ function barentsWatchAisDevPlugin(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   base: '/tortur/',
+  envPrefix: ['VITE_', 'CARTO_'],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __APP_NAME__: JSON.stringify(pkg.name),

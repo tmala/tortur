@@ -8,15 +8,22 @@ withDefaults(
     activeLayer: string
     isLoggedIn?: boolean
     isAdmin?: boolean
+    mapboxToken?: string
+    cartoApiKey?: string
+    showHikingTrails?: boolean
   }>(),
   {
     isLoggedIn: false,
     isAdmin: false,
+    mapboxToken: '',
+    cartoApiKey: '',
+    showHikingTrails: false,
   },
 )
 
 const emit = defineEmits<{
   (e: 'change-layer', layerId: string): void
+  (e: 'toggle-hiking-trails'): void
 }>()
 
 const isOpen = ref(false)
@@ -68,8 +75,12 @@ onUnmounted(() => {
       :active-layer="activeLayer"
       :is-logged-in="isLoggedIn"
       :is-admin="isAdmin"
+      :mapbox-token="mapboxToken"
+      :carto-api-key="cartoApiKey"
+      :show-hiking-trails="showHikingTrails"
       @close="handleClose"
       @change-layer="handleLayerChange"
+      @toggle-hiking-trails="emit('toggle-hiking-trails')"
     />
 
     <!-- Frittstående kartvelger-knapp -->

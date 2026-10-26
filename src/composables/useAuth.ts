@@ -24,6 +24,10 @@ export interface GoogleUser {
 export interface SystemConfig {
   AIS_CLIENT_ID?: string
   AIS_CLIENT_SECRET?: string
+  FIREBASE_DB_URL?: string
+  FIREBASE_SECRET_PREFIX?: string
+  MAPBOX_TOKEN?: string
+  CARTO_BASEMAP_API_KEY?: string
   [key: string]: string | undefined
 }
 
@@ -1206,6 +1210,16 @@ export function useAuth() {
   const aisClientId     = computed(() => systemConfig.value.AIS_CLIENT_ID     || '')
   const aisClientSecret = computed(() => systemConfig.value.AIS_CLIENT_SECRET || '')
   const firebaseDbUrl   = computed(() => systemConfig.value.FIREBASE_DB_URL   || '')
+  const mapboxToken     = computed(() => {
+    if (!user.value?.isAdmin) return ''
+    return systemConfig.value.MAPBOX_TOKEN || ''
+  })
+
+  const localCartoKey   = (import.meta.env.CARTO_BASEMAP_API_KEY || import.meta.env.VITE_CARTO_BASEMAP_API_KEY || '') as string
+  const cartoApiKey     = computed(() => {
+    if (!user.value?.isAdmin) return ''
+    return localCartoKey || systemConfig.value.CARTO_BASEMAP_API_KEY || ''
+  })
 
   return {
     user,
@@ -1217,6 +1231,8 @@ export function useAuth() {
     aisClientId,
     aisClientSecret,
     firebaseDbUrl,
+    mapboxToken,
+    cartoApiKey,
     login,
     logout,
     submitCheckin,
