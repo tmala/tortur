@@ -49,6 +49,7 @@ const props = defineProps<{
   suppressFitBounds?: boolean
   mapboxToken?: string
   cartoApiKey?: string
+  showHikingTrails?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -127,6 +128,35 @@ const switchLayer = (layerKey: string) => {
   currentTileLayer = baseLayer.addTo(map)
   if (overlayLayer) {
     currentOverlayLayer = overlayLayer.addTo(map)
+  }
+}
+
+let hikingTrailsLayer: L.TileLayer | null = null
+
+const updateHikingTrailsOverlay = () => {
+  if (!map) return
+
+  if (props.showHikingTrails) {
+    if (!hikingTrailsLayer) {
+      if (!map.getPane('hikingTrailsPane')) {
+        const pane = map.createPane('hikingTrailsPane')
+        pane.style.zIndex = '250'
+      }
+      hikingTrailsLayer = L.tileLayer('https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png', {
+        pane: 'hikingTrailsPane',
+        maxZoom: 18,
+        opacity: 0.9,
+        attribution: '&copy; <a href="https://hiking.waymarkedtrails.org" target="_blank">Waymarked Trails</a>',
+        updateWhenIdle: true,
+        updateWhenZooming: false,
+        keepBuffer: 2,
+      }).addTo(map)
+    }
+  } else {
+    if (hikingTrailsLayer) {
+      map.removeLayer(hikingTrailsLayer)
+      hikingTrailsLayer = null
+    }
   }
 }
 
@@ -863,6 +893,13 @@ watch(
   }
 )
 
+watch(
+  () => props.showHikingTrails,
+  () => {
+    updateHikingTrailsOverlay()
+  }
+)
+
 let lastTurpostSignature = ''
 
 watch(
@@ -935,6 +972,7 @@ onMounted(() => {
   })
 
   switchLayer(props.activeLayer || 'norgeskart')
+  updateHikingTrailsOverlay()
 
   turpostsLayerGroup = L.layerGroup().addTo(map)
   privateTurpostsLayerGroup = L.layerGroup().addTo(map)
@@ -1022,6 +1060,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (hikingTrailsLayer && map) {
+    map.removeLayer(hikingTrailsLayer)
+    hikingTrailsLayer = null
+  }
   longpress.cleanup()
   trackLayer.cleanup()
   aisLayer.cleanup()

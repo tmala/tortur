@@ -18,6 +18,12 @@ export const MAP_LAYERS: MapLayerConfig[] = [
     sortnum: 10,
   },
   {
+    id: 'kartverket_graatone',
+    name: 'Kartverket Gråtone',
+    desc: 'Dempede gråtoner (Kartverket - kun Norge)',
+    sortnum: 15,
+  },
+  {
     id: 'topo',
     name: 'Topografisk (OpenTopoMap)',
     desc: 'Høydekurver og terrengformasjoner',

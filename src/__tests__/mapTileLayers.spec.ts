@@ -5,6 +5,7 @@ describe('mapTileLayers', () => {
   it('har definisjoner for standard, Google og Mapbox kartlag', () => {
     expect(tileLayers.standard).toBeDefined()
     expect(tileLayers.norgeskart).toBeDefined()
+    expect(tileLayers.kartverket_graatone).toBeDefined()
     expect(tileLayers.google_streets).toBeDefined()
     expect(tileLayers.mapbox_outdoors).toBeDefined()
     expect(tileLayers.mapbox_satellite_streets).toBeDefined()
@@ -12,6 +13,14 @@ describe('mapTileLayers', () => {
     expect(tileLayers.carto_voyager).toBeDefined()
     expect(tileLayers.carto_positron).toBeDefined()
     expect(tileLayers.carto_dark_matter).toBeDefined()
+  })
+
+  it('oppretter Kartverket Gråtone-lag korrekt', () => {
+    const { baseLayer, overlayLayer } = createTileLayers('kartverket_graatone')
+    expect(baseLayer).toBeDefined()
+    expect(overlayLayer).toBeNull()
+    // @ts-expect-error Leaflet internt felt for testvalidering
+    expect(baseLayer._url).toContain('cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/')
   })
 
   it('oppretter standard OpenStreetMap-lag korrekt', () => {

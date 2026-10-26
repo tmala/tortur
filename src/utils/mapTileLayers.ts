@@ -23,6 +23,11 @@ export const tileLayers: Record<string, TileLayerConfig> = {
     attribution: '&copy; <a href="https://www.kartverket.no" target="_blank">Kartverket</a>',
     maxZoom: 18
   },
+  kartverket_graatone: {
+    url: 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png',
+    attribution: '&copy; <a href="https://www.kartverket.no" target="_blank">Kartverket</a>',
+    maxZoom: 18
+  },
   kartverket_sjokart: {
     url: 'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png',
     attribution: '&copy; <a href="https://www.kartverket.no" target="_blank">Kartverket Sjødivisjonen</a>',

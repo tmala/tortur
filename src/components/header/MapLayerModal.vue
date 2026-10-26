@@ -10,11 +10,13 @@ const props = defineProps<{
   isAdmin?: boolean
   mapboxToken?: string
   cartoApiKey?: string
+  showHikingTrails?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'change-layer', layerId: string): void
+  (e: 'toggle-hiking-trails'): void
 }>()
 
 const availableLayers = computed(() => {
@@ -55,6 +57,23 @@ const selectLayer = (layerId: string) => {
             <span class="layer-desc">{{ layer.desc }}</span>
           </div>
           <Check v-if="activeLayer === layer.id" :size="18" class="check-icon" />
+        </button>
+      </div>
+
+      <!-- Kartoverlegg (Overlays) -->
+      <div class="layer-overlay-section">
+        <div class="layer-section-title">Kartoverlegg</div>
+        <button
+          type="button"
+          class="layer-item overlay-toggle"
+          :class="{ selected: showHikingTrails }"
+          @click="emit('toggle-hiking-trails')"
+        >
+          <div class="layer-info">
+            <span class="layer-name">Merkede turstier (Waymarked)</span>
+            <span class="layer-desc">Røde T-ruter og merkede vandrestier</span>
+          </div>
+          <Check v-if="showHikingTrails" :size="18" class="check-icon" />
         </button>
       </div>
     </div>
@@ -166,6 +185,25 @@ const selectLayer = (layerId: string) => {
   color: #38bdf8;
   flex-shrink: 0;
   margin-left: 8px;
+}
+
+.layer-overlay-section {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.layer-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+  padding-left: 2px;
 }
 
 @media (max-width: 640px) {
