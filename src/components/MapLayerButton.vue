@@ -24,6 +24,7 @@ withDefaults(
 const emit = defineEmits<{
   (e: 'change-layer', layerId: string): void
   (e: 'toggle-hiking-trails'): void
+  (e: 'open-3d'): void
 }>()
 
 const isOpen = ref(false)
@@ -81,6 +82,7 @@ onUnmounted(() => {
       @close="handleClose"
       @change-layer="handleLayerChange"
       @toggle-hiking-trails="emit('toggle-hiking-trails')"
+      @open-3d="emit('open-3d')"
     />
 
     <!-- Frittstående kartvelger-knapp -->

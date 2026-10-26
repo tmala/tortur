@@ -1453,6 +1453,41 @@ describe('MapLayerButton', () => {
     await wrapper.setProps({ showHikingTrails: true })
     expect(wrapper.find('.overlay-toggle').classes()).toContain('selected')
   })
+
+  it('does not show 3D-visning option when user is not admin or mapboxToken is missing', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isAdmin: false,
+        mapboxToken: 'pk.mock123',
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.text()).not.toContain('Åpne 3D-terrengvisning')
+
+    await wrapper.setProps({ isAdmin: true, mapboxToken: '' })
+    expect(wrapper.text()).not.toContain('Åpne 3D-terrengvisning')
+  })
+
+  it('shows 3D-visning option when user is admin with mapboxToken and emits open-3d on click', async () => {
+    const wrapper = mount(MapLayerButton, {
+      props: {
+        activeLayer: 'standard',
+        isAdmin: true,
+        mapboxToken: 'pk.valid123',
+      },
+    })
+
+    await wrapper.find('button[title="Bytt kartlag"]').trigger('click')
+    expect(wrapper.text()).toContain('Åpne 3D-terrengvisning')
+
+    const btn3D = wrapper.find('.action-3d')
+    expect(btn3D.exists()).toBe(true)
+
+    await btn3D.trigger('click')
+    expect(wrapper.emitted('open-3d')).toBeTruthy()
+  })
 })
 
 
