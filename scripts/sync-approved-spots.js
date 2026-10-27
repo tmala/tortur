@@ -147,6 +147,44 @@ async function run() {
     }
   }
 
+  const FYLKE_NUMMER_MAP = {
+    '03': 'Oslo',
+    '11': 'Rogaland',
+    '15': 'Møre og Romsdal',
+    '18': 'Nordland',
+    '31': 'Østfold',
+    '32': 'Akershus',
+    '33': 'Buskerud',
+    '34': 'Innlandet',
+    '39': 'Vestfold',
+    '40': 'Telemark',
+    '42': 'Agder',
+    '46': 'Vestland',
+    '50': 'Trøndelag',
+    '55': 'Troms',
+    '56': 'Finnmark'
+  }
+
+  const geojsonPath = path.join(rootDir, 'public', 'data', 'kommuner.geojson')
+  const kommuneToFylkeGeoJson = {}
+  try {
+    if (fs.existsSync(geojsonPath)) {
+      const geoRaw = JSON.parse(fs.readFileSync(geojsonPath, 'utf-8'))
+      for (const feat of geoRaw.features || []) {
+        const kName = feat.properties?.name || feat.properties?.kommunenavn
+        const knr = feat.properties?.kommunenummer || feat.properties?.id
+        if (kName && knr && String(knr).length >= 2) {
+          const fName = FYLKE_NUMMER_MAP[String(knr).slice(0, 2)]
+          if (fName) {
+            kommuneToFylkeGeoJson[kName.toLowerCase().trim()] = fName
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Kunne ikke bygge kommune-til-fylke-oppslag fra geojson:', err.message)
+  }
+
   const addedSpots = []
   const skippedSpots = []
 
@@ -157,9 +195,21 @@ async function run() {
       continue
     }
 
-    const cleanLine = spot.csvLine && spot.csvLine.includes(';')
+    let resolvedFylke = (spot.fylke || '').trim()
+    if (!resolvedFylke && spot.kommune) {
+      resolvedFylke = kommuneToFylkeGeoJson[spot.kommune.toLowerCase().trim()] || ''
+    }
+
+    let cleanLine = spot.csvLine && spot.csvLine.includes(';')
       ? spot.csvLine.trim()
-      : `${spot.id};${spot.name};${spot.lat.toFixed(6)};${spot.lng.toFixed(6)};${spot.alt !== null ? Math.round(spot.alt) : 0};${spot.fylke};${spot.kommune}`
+      : `${spot.id};${spot.name};${spot.lat.toFixed(6)};${spot.lng.toFixed(6)};${spot.alt !== null ? Math.round(spot.alt) : 0};${resolvedFylke};${spot.kommune}`
+
+    // Hvis csvLine manglet fylke (f.eks. ...;alt;;Kommune), fyll inn resolvedFylke
+    const lineParts = cleanLine.split(';')
+    if (lineParts.length >= 7 && !lineParts[5].trim() && resolvedFylke) {
+      lineParts[5] = resolvedFylke
+      cleanLine = lineParts.join(';')
+    }
 
     // Finn riktig alfabetisk posisjon (sammenlign TurpostNavn, indeks 1)
     const cleanNewName = spot.name.trim()

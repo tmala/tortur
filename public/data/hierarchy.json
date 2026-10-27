@@ -134,7 +134,7 @@
   {
     "name": "Akershus",
     "slug": "akershus",
-    "count": 222,
+    "count": 224,
     "kommuner": [
       {
         "name": "Asker",
@@ -225,6 +225,11 @@
         "name": "Ullensaker",
         "slug": "ullensaker",
         "count": 6
+      },
+      {
+        "name": "Vestby",
+        "slug": "vestby",
+        "count": 2
       },
       {
         "name": "Ås",
