@@ -302,7 +302,7 @@ describe('MapContextMenu', () => {
     expect(wrapper.find('.context-menu-card').exists()).toBe(false)
   })
 
-  it('renders correctly and emits events for both actions', async () => {
+  it('renders correctly and emits events for all actions', async () => {
     const wrapper = mount(MapContextMenu, {
       props: {
         isOpen: true,
@@ -315,6 +315,7 @@ describe('MapContextMenu', () => {
     expect(wrapper.text()).toContain('60.39123, 5.32456')
     expect(wrapper.text()).toContain('Opprett Turpost')
     expect(wrapper.text()).toContain('Vis turposter her')
+    expect(wrapper.text()).toContain('Skjul turposter')
 
     // Click "Opprett Turpost"
     await wrapper.find('.btn-primary').trigger('click')
@@ -325,6 +326,10 @@ describe('MapContextMenu', () => {
     await wrapper.find('.btn-secondary').trigger('click')
     expect(wrapper.emitted('show-turposter-here')).toBeTruthy()
     expect(wrapper.emitted('show-turposter-here')?.[0]).toEqual([{ lat: 60.39123, lng: 5.32456 }])
+
+    // Click "Skjul turposter"
+    await wrapper.find('.btn-danger').trigger('click')
+    expect(wrapper.emitted('hide-turposter')).toBeTruthy()
 
     // Click close button
     await wrapper.find('.btn-close').trigger('click')
@@ -645,6 +650,56 @@ describe('MapView Longpress Context Menu Integration', () => {
     // Skal IKKE ha satt feilmelding om utland/WiFi
     const locationControls = wrapper.findComponent({ name: 'LocationControls' })
     expect(locationControls.props('error')).toBeNull()
+  })
+
+  it('clears/hides all turposter when hide-turposter is triggered from context menu', async () => {
+    const { user } = useAuth()
+    user.value = {
+      userId: 'test-user-1',
+      userName: 'Ola Nordmann',
+      email: 'ola@example.com',
+      avatarUrl: '',
+      lastLogin: new Date().toISOString()
+    }
+
+    const wrapper = mount(MapView, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          MapViewer: true,
+          AppHeader: true,
+          RouterView: true,
+          TrackPlaybackPanel: true,
+          LocationControls: true,
+          TurposterPanel: true,
+          CheckinModal: true,
+          TurpostCheckinsModal: true,
+          UserProfileMenu: true,
+          AddTurpostModal: true
+        }
+      }
+    })
+
+    const mapViewer = wrapper.findComponent({ name: 'MapViewer' })
+    mapViewer.vm.$emit('map-longpress', { lat: 60.392, lng: 5.328 }, { x: 200, y: 300 })
+    await wrapper.vm.$nextTick()
+
+    // Trigger show-turposter-here first
+    const contextMenu = wrapper.findComponent(MapContextMenu)
+    contextMenu.vm.$emit('show-turposter-here', { lat: 60.392, lng: 5.328 })
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // Context menu reopened on longpress
+    mapViewer.vm.$emit('map-longpress', { lat: 60.392, lng: 5.328 }, { x: 200, y: 300 })
+    await wrapper.vm.$nextTick()
+
+    // Trigger hide-turposter
+    contextMenu.vm.$emit('hide-turposter')
+    await wrapper.vm.$nextTick()
+
+    // Turposter on mapViewer should now be cleared
+    expect(mapViewer.props('turposter')).toEqual([])
   })
 })
 
