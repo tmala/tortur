@@ -65,6 +65,43 @@ async function buildData() {
 
   await ensureGeoJson()
 
+  const FYLKE_NUMMER_MAP = {
+    '03': 'Oslo',
+    '11': 'Rogaland',
+    '15': 'Møre og Romsdal',
+    '18': 'Nordland',
+    '31': 'Østfold',
+    '32': 'Akershus',
+    '33': 'Buskerud',
+    '34': 'Innlandet',
+    '39': 'Vestfold',
+    '40': 'Telemark',
+    '42': 'Agder',
+    '46': 'Vestland',
+    '50': 'Trøndelag',
+    '55': 'Troms',
+    '56': 'Finnmark'
+  }
+
+  const kommuneToFylkeGeoJson = {}
+  try {
+    if (fs.existsSync(geojsonPath)) {
+      const geoRaw = JSON.parse(fs.readFileSync(geojsonPath, 'utf-8'))
+      for (const feat of geoRaw.features || []) {
+        const kName = feat.properties?.name || feat.properties?.kommunenavn
+        const knr = feat.properties?.kommunenummer || feat.properties?.id
+        if (kName && knr && String(knr).length >= 2) {
+          const fName = FYLKE_NUMMER_MAP[String(knr).slice(0, 2)]
+          if (fName) {
+            kommuneToFylkeGeoJson[kName.toLowerCase().trim()] = fName
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Kunne ikke bygge kommune-til-fylke-oppslag fra geojson:', err.message)
+  }
+
   const fileStream = fs.createReadStream(csvPath, { encoding: 'utf-8' })
   const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity })
 
@@ -87,10 +124,14 @@ async function buildData() {
     const lng = parseFloat(lngStr)
     const alt = parseInt(altStr, 10)
 
-    if (isNaN(lat) || isNaN(lng) || !fylke || !kommune) continue
+    let cleanFylke = (fylke || '').trim()
+    const cleanKommune = (kommune || '').trim()
 
-    const cleanFylke = fylke.trim()
-    const cleanKommune = kommune.trim()
+    if (!cleanFylke && cleanKommune) {
+      cleanFylke = kommuneToFylkeGeoJson[cleanKommune.toLowerCase()] || ''
+    }
+
+    if (isNaN(lat) || isNaN(lng) || !cleanFylke || !cleanKommune) continue
 
     if (!fylker[cleanFylke]) {
       fylker[cleanFylke] = {}

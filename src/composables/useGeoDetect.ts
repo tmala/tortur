@@ -17,8 +17,39 @@ export interface GeoResult {
 let geojsonCache: FeatureCollection | null = null
 let kommuneToFylke: Map<string, string> | null = null
 
+const FYLKE_NUMMER_MAP: Record<string, string> = {
+  '03': 'Oslo',
+  '11': 'Rogaland',
+  '15': 'Møre og Romsdal',
+  '18': 'Nordland',
+  '31': 'Østfold',
+  '32': 'Akershus',
+  '33': 'Buskerud',
+  '34': 'Innlandet',
+  '39': 'Vestfold',
+  '40': 'Telemark',
+  '42': 'Agder',
+  '46': 'Vestland',
+  '50': 'Trøndelag',
+  '55': 'Troms',
+  '56': 'Finnmark'
+}
+
+function resolveFylkeName(kommuneNavn: string, properties?: Record<string, unknown> | null): string {
+  const fromHierarchy = kommuneToFylke?.get(kommuneNavn.toLowerCase())
+  if (fromHierarchy) return fromHierarchy
+
+  const knr = String(properties?.['kommunenummer'] || properties?.['id'] || '').trim()
+  if (knr.length >= 2) {
+    const fylke = FYLKE_NUMMER_MAP[knr.slice(0, 2)]
+    if (fylke) return fylke
+  }
+  return ''
+}
+
 interface FeatureSpatialIndex {
   name: string
+  fylke: string
   minLat: number
   maxLat: number
   minLng: number
@@ -79,19 +110,20 @@ function buildSpatialIndex(features: FeatureCollection['features']): FeatureSpat
       }
     }
 
+    const fylke = resolveFylkeName(name, feature.properties as Record<string, unknown> | null)
     if (coords.length > 0) {
-      index.push({ name, minLat, maxLat, minLng, maxLng, coords })
+      index.push({ name, fylke, minLat, maxLat, minLng, maxLng, coords })
     }
   }
 
   return index
 }
 
-function findNearestKommuneName(pLat: number, pLng: number, maxKm = 25): string | null {
+function findNearestKommune(pLat: number, pLng: number, maxKm = 25): { name: string; fylke: string } | null {
   if (!spatialIndexCache || spatialIndexCache.length === 0) return null
 
   let bestDist = Infinity
-  let bestName: string | null = null
+  let bestItem: FeatureSpatialIndex | null = null
 
   for (const item of spatialIndexCache) {
     // Rask filtrering: beregn korteste avstand til kommunens ytterramme (bounding box)
@@ -104,13 +136,13 @@ function findNearestKommuneName(pLat: number, pLng: number, maxKm = 25): string 
       const d = distanceKm(pLat, pLng, vLat, vLng)
       if (d < bestDist) {
         bestDist = d
-        bestName = item.name
+        bestItem = item
       }
     }
   }
 
-  if (bestDist <= maxKm) {
-    return bestName
+  if (bestDist <= maxKm && bestItem) {
+    return { name: bestItem.name, fylke: bestItem.fylke }
   }
   return null
 }
@@ -156,7 +188,6 @@ async function loadGeoData(): Promise<void> {
   }
 
   geojsonCache = (await geoRes.json()) as FeatureCollection
-  spatialIndexCache = buildSpatialIndex(geojsonCache.features)
 
   const hierarchy = (await hierRes.json()) as Array<{
     name: string
@@ -169,6 +200,8 @@ async function loadGeoData(): Promise<void> {
       kommuneToFylke.set(kommune.name.toLowerCase(), fylke.name)
     }
   }
+
+  spatialIndexCache = buildSpatialIndex(geojsonCache.features)
 }
 
 export function _resetGeoDataCacheForTesting(): void {
@@ -189,7 +222,7 @@ export function useGeoDetect() {
       if (!feature.geometry) continue
       if (pointInGeometry(lat, lng, feature.geometry)) {
         const kommuneNavn: string = (feature.properties?.['name'] as string) || ''
-        const fylkeNavn = kommuneToFylke.get(kommuneNavn.toLowerCase()) || ''
+        const fylkeNavn = resolveFylkeName(kommuneNavn, feature.properties as Record<string, unknown> | null)
         return { fylke: fylkeNavn, kommune: kommuneNavn }
       }
     }
@@ -197,10 +230,10 @@ export function useGeoDetect() {
     // 2. Hvis punktet er i et kyst-/fjordområde eller like ved en kommune (opptil 25 km), finn nærmeste kommune
     // Dette sikrer at klikk eller GPS i fjorder (f.eks. Byfjorden) finner en relevant kommune i stedet for å feile
     if (lat >= 57.0 && lat <= 71.5 && lng >= 4.0 && lng <= 31.5) {
-      const nearestName = findNearestKommuneName(lat, lng, 25)
-      if (nearestName) {
-        const fylkeNavn = kommuneToFylke.get(nearestName.toLowerCase()) || ''
-        return { fylke: fylkeNavn, kommune: nearestName }
+      const nearest = findNearestKommune(lat, lng, 25)
+      if (nearest) {
+        const fylkeNavn = nearest.fylke || resolveFylkeName(nearest.name)
+        return { fylke: fylkeNavn, kommune: nearest.name }
       }
     }
 
