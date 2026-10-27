@@ -155,6 +155,11 @@ async function handleShowTurposterHereFromMenu(coords: { lat: number; lng: numbe
   await loadTurposterForCoordinates(coords, true, 'none', 'map')
 }
 
+function handleHideTurposterFromMenu() {
+  handleCloseContextMenu()
+  handleClearAllTurposter()
+}
+
 const loadMySpots = async () => {
   if (!isLoggedIn.value || !user.value) {
     appState.mySpots = []
@@ -462,11 +467,11 @@ const displayTurposter = computed(() => {
     return base
   }
   const selectedKommuneName = selectedKommune.value?.name?.toLowerCase().trim()
+  if (!selectedKommuneName) {
+    return base
+  }
   const approvedMatching = appState.approvedSpots.filter((appSpot) => {
-    if (selectedKommuneName) {
-      return appSpot.kommune?.toLowerCase().trim() === selectedKommuneName
-    }
-    return true
+    return appSpot.kommune?.toLowerCase().trim() === selectedKommuneName
   })
 
   const baseIds = new Set(base.map((p) => String(p.id)))
@@ -1211,13 +1216,14 @@ onUnmounted(() => {
       @map-longpress="handleMapLongpress"
     />
 
-    <!-- Kontekstmeny etter longpress på kartet (Opprett turpost / Vis turposter her) -->
+    <!-- Kontekstmeny etter longpress på kartet (Opprett turpost / Vis turposter her / Skjul turposter) -->
     <MapContextMenu
       :is-open="isContextMenuOpen"
       :coords="contextMenuCoords"
       :point="contextMenuPoint"
       @create-turpost="handleCreateTurpostFromMenu"
       @show-turposter-here="handleShowTurposterHereFromMenu"
+      @hide-turposter="handleHideTurposterFromMenu"
       @close="handleCloseContextMenu"
     />
 

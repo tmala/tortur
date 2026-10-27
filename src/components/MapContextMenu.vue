@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
-import { Mountain, MapPin, X } from 'lucide-vue-next'
+import { Mountain, MapPin, EyeOff, X } from 'lucide-vue-next'
 
 const props = withDefaults(
   defineProps<{
@@ -17,6 +17,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'create-turpost', coords: { lat: number; lng: number }): void
   (e: 'show-turposter-here', coords: { lat: number; lng: number }): void
+  (e: 'hide-turposter'): void
   (e: 'close'): void
 }>()
 
@@ -40,7 +41,7 @@ const menuStyle = computed(() => {
 
   const padding = 16
   const menuWidth = 270
-  const menuHeight = 180
+  const menuHeight = 240
 
   const vw = typeof window !== 'undefined' ? window.innerWidth : 400
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
@@ -76,6 +77,10 @@ function handleCreateTurpost() {
 function handleShowTurposterHere() {
   if (!props.coords) return
   emit('show-turposter-here', props.coords)
+}
+
+function handleHideTurposter() {
+  emit('hide-turposter')
 }
 
 function handleKeyDown(e: KeyboardEvent) {
@@ -163,6 +168,21 @@ onUnmounted(() => {
           <div class="btn-content">
             <span class="btn-title">Vis turposter her</span>
             <span class="btn-subtitle">Finn turposter i dette området</span>
+          </div>
+        </button>
+
+        <!-- Valg 3: Skjul turposter -->
+        <button
+          class="menu-btn btn-danger"
+          @click="handleHideTurposter"
+          aria-label="Skjul turposter"
+        >
+          <div class="btn-icon">
+            <EyeOff :size="18" />
+          </div>
+          <div class="btn-content">
+            <span class="btn-title">Skjul turposter</span>
+            <span class="btn-subtitle">Skjul alle turposter fra kartet</span>
           </div>
         </button>
       </div>
@@ -347,6 +367,17 @@ onUnmounted(() => {
 .btn-secondary:hover {
   border-color: rgba(52, 211, 153, 0.4);
   background: rgba(16, 185, 129, 0.12);
+}
+
+.btn-danger .btn-icon {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.btn-danger:hover {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .btn-content {
