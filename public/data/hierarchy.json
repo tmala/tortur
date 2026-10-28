@@ -1889,12 +1889,17 @@
   {
     "name": "Utlandet",
     "slug": "utlandet",
-    "count": 24,
+    "count": 31,
     "kommuner": [
       {
         "name": "Mallorca",
         "slug": "mallorca",
         "count": 16
+      },
+      {
+        "name": "Malmø",
+        "slug": "malmoe",
+        "count": 7
       },
       {
         "name": "Spania",
