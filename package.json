@@ -27,7 +27,7 @@
     "firebase": "^13.2.0",
     "leaflet": "^1.9.4",
     "lucide-vue-next": "^1.0.0",
-    "maplibre-gl": "^6.11.2",
+    "maplibre-gl": "^6.18.0",
     "piexifjs": "^1.0.6",
     "pinia": "^4.1.0",
     "vue": "^3.5.45",
