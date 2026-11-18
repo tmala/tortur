@@ -10,7 +10,7 @@ import {
 } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
-import { RotateCcw, X, Layers, Compass, Mountain } from 'lucide-vue-next'
+import { RotateCcw, X, Layers, Compass, Mountain } from '@lucide/vue'
 import {
   FLYOVER_TERRAIN_SOURCE,
   FLYOVER_LAYERS

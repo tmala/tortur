@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useAuth } from '@/composables/useAuth'
-import { Shield, User, Loader2, AlertCircle, X } from 'lucide-vue-next'
+import { Shield, User, Loader2, AlertCircle, X } from '@lucide/vue'
 
 const { user, isLoggedIn, isLoading, error, login } = useAuth()
 

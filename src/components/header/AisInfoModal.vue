@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Anchor, Radio } from 'lucide-vue-next'
+import { Anchor, Radio } from '@lucide/vue'
 
 defineProps<{
   isOpen: boolean

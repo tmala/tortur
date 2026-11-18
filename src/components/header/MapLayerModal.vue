@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Check, ExternalLink } from 'lucide-vue-next'
+import { Check, ExternalLink } from '@lucide/vue'
 import { MAP_LAYERS } from '@/config/mapLayers'
 
 const props = defineProps<{

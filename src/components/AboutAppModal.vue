@@ -7,7 +7,7 @@ import {
   MapPin,
   X,
   FolderHeart,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 
 defineProps<{
   isOpen: boolean

@@ -20,7 +20,7 @@ import {
   Users,
   Lock,
   X,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { useGpsTrackStore, type SavedTrack, type TrackVisibility } from '@/stores/gpsTrack'
 import { formatDistance, type TrackPoint } from '@/composables/useGeolocation'
 import TrackPhotosSection from '@/components/TrackPhotosSection.vue'

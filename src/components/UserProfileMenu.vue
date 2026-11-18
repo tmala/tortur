@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   RotateCw,
   ClipboardList,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { GoogleUser, FirebaseCheckinItem } from '@/composables/useAuth'
 import type { TurpostItem } from '@/composables/useTurposter'
 import type { FriendUser } from '@/composables/useFriends'

@@ -11,7 +11,7 @@ import {
   AlertTriangle,
   BookmarkPlus,
   FolderHeart,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import {
   type TrackPoint,
   calculateDistanceMeters,

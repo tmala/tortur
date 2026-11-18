@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { Camera, X, Loader2 } from 'lucide-vue-next'
+import { Camera, X, Loader2 } from '@lucide/vue'
 
 const emit = defineEmits<{
   (e: 'photo', file: File): void

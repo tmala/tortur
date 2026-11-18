@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted, nextTick } from 'vue'
-import { ThumbsUp, MessageSquare, Send, Trash2, User, Loader2, Pencil } from 'lucide-vue-next'
+import { ThumbsUp, MessageSquare, Send, Trash2, User, Loader2, Pencil } from '@lucide/vue'
 import type {
   FirebaseCheckinItem,
   CheckinReactionType,

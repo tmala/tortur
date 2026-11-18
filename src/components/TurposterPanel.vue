@@ -8,7 +8,7 @@ import {
   Loader2,
   Navigation2,
   Globe
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { FylkeInfo, KommuneInfo, TurpostItem } from '@/composables/useTurposter'
 
 const props = defineProps<{

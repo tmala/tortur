@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UserCheck, Users, Check, X, Loader2, Send } from 'lucide-vue-next'
+import { UserCheck, Users, Check, X, Loader2, Send } from '@lucide/vue'
 import type { FriendRequest } from '@/composables/useFriends'
 
 defineProps<{

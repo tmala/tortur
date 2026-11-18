@@ -13,7 +13,7 @@ import {
   AlertCircle,
   X,
   Users
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import { formatTrackKey } from '@/composables/useFirebaseTracks'
 import {

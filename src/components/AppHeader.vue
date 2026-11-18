@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { ChevronDown } from 'lucide-vue-next'
+import { ChevronDown } from '@lucide/vue'
 import AuthPanel from './AuthPanel.vue'
 import AboutAppModal from './AboutAppModal.vue'
 import HeaderActionsDropdown from './header/HeaderActionsDropdown.vue'

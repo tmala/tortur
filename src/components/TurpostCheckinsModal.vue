@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed, type Ref } from 'vue'
-import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Trash2, Globe, Users, Lock, ChevronDown, Route } from 'lucide-vue-next'
+import { Mountain, X, Check, Loader2, Calendar, MapPin, Plus, User, Trash2, Globe, Users, Lock, ChevronDown, Route } from '@lucide/vue'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'

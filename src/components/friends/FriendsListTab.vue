@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Users, UserPlus, User, UserMinus, Loader2 } from 'lucide-vue-next'
+import { Users, UserPlus, User, UserMinus, Loader2 } from '@lucide/vue'
 import type { FriendUser } from '@/composables/useFriends'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 

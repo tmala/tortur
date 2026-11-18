@@ -19,7 +19,7 @@ import {
   type GeoLocationState,
   type TrackPoint,
 } from '@/composables/useGeolocation'
-import { X as CloseIcon, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { X as CloseIcon, ChevronLeft, ChevronRight } from '@lucide/vue'
 import { useTrackPhotos, type TrackPhoto, isPhotoNearTrack } from '@/composables/useTrackPhotos'
 import { formatTrackKey } from '@/composables/useFirebaseTracks'
 import {

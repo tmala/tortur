@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Trophy, Route, Star, Users } from 'lucide-vue-next'
+import { Trophy, Route, Star, Users } from '@lucide/vue'
 import type { ProfileTab } from '@/types/profile'
 
 const activeTab = defineModel<ProfileTab>({ default: 'checkins' })

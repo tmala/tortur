@@ -8,7 +8,7 @@ import {
   MapPin,
   X,
   RefreshCw,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 
 defineProps<{
   isOpen: boolean

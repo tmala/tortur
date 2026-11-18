@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Globe, Users, Lock } from 'lucide-vue-next'
+import { Globe, Users, Lock } from '@lucide/vue'
 import type { TrackVisibility } from '@/stores/gpsTrack'
 
 withDefaults(
