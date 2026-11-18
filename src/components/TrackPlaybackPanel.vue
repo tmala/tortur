@@ -14,7 +14,7 @@ import {
   Clock,
   ChevronDown,
   Film
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { SavedTrack } from '@/stores/gpsTrack'
 import { formatDistance } from '@/composables/useGeolocation'
 import {

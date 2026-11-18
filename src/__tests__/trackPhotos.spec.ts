@@ -789,7 +789,7 @@ describe('useTrackPhotos', () => {
       vm.dragPosition.x = 150
       vm.dragPosition.y = 80
       await wrapper.vm.$nextTick()
-      expect(wrapper.attributes('style')).toContain('translate3d(150px, 80px, 0)')
+      expect(wrapper.attributes('style')).toMatch(/translate3d\(150px,\s*80px,\s*0(px)?\)/)
 
       await wrapper.find('.panel-drag-bar').trigger('dblclick')
       expect(vm.dragPosition).toEqual({ x: 0, y: 0 })
@@ -954,6 +954,7 @@ describe('useTrackPhotos', () => {
       localStorage.setItem('tortur.trackPanel.settingsCollapsed', 'true')
 
       const wrapper = mount(TrackPlaybackPanel, {
+        attachTo: document.body,
         props: {
           track: mockTrack,
           isReplaying: false,
@@ -969,6 +970,7 @@ describe('useTrackPhotos', () => {
       expect(wrapper.find('#track-panel-settings').isVisible()).toBe(false)
       expect(wrapper.find('.collapse-chevron').classes()).toContain('is-collapsed')
 
+      wrapper.unmount()
       localStorage.removeItem('tortur.trackPanel.settingsCollapsed')
     })
 

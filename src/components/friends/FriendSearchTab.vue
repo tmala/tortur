@@ -8,7 +8,7 @@ import {
   Clock,
   UserCheck,
   UserPlus
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { PublicUser } from '@/composables/useFriends'
 
 defineProps<{

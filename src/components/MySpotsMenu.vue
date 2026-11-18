@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { Star, X } from 'lucide-vue-next'
+import { Star, X } from '@lucide/vue'
 import type { TurpostItem } from '@/composables/useTurposter'
 
 const props = defineProps<{

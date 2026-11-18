@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, useTemplateRef } from 'vue'
-import { Layers } from 'lucide-vue-next'
+import { Layers } from '@lucide/vue'
 import MapLayerModal from './header/MapLayerModal.vue'
 
 withDefaults(

@@ -10,7 +10,7 @@ import {
   Calendar,
   Search,
   CheckCircle2,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'
 import { formatDistance } from '@/composables/useGeolocation'
 

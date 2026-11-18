@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, useTemplateRef } from 'vue'
-import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon, Route } from 'lucide-vue-next'
+import { Mountain, Camera, X, Check, Loader2, AlertCircle, Image as ImageIcon, Route } from '@lucide/vue'
 import type { TurpostItem } from '@/composables/useTurposter'
 import { useAuth, type GoogleUser, type CheckinResult } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'

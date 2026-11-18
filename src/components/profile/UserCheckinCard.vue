@@ -9,7 +9,7 @@ import {
   Pencil,
   Users,
   Route,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { FirebaseCheckinItem } from '@/composables/useAuth'
 import CheckinSocialSection from '../CheckinSocialSection.vue'
 

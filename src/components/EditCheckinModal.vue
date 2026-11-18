@@ -11,7 +11,7 @@ import {
   Trash2,
   Undo2,
   Route,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { useAuth, type FirebaseCheckinItem } from '@/composables/useAuth'
 import { usePrivateTurposter } from '@/composables/usePrivateTurposter'
 import type { CheckinVisibility } from '@/composables/useFriends'

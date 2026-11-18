@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Star, PlusCircle } from 'lucide-vue-next'
+import { Star, PlusCircle } from '@lucide/vue'
 import type { TurpostItem } from '@/composables/useTurposter'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 

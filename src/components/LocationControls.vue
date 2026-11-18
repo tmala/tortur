@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { watch, onUnmounted } from 'vue'
-import { AlertTriangle } from 'lucide-vue-next'
+import { AlertTriangle } from '@lucide/vue'
 import type { GeoLocationState } from '@/composables/useGeolocation'
 
 const props = defineProps<{

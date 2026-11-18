@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Globe, Users, Lock, Check } from 'lucide-vue-next'
+import { Globe, Users, Lock, Check } from '@lucide/vue'
 import type { CheckinVisibility } from '@/composables/useFriends'
 
 defineProps<{

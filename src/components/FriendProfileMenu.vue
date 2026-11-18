@@ -14,7 +14,7 @@ import {
   MapPin,
   Clock,
   Eye,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { FirebaseCheckinItem } from '@/composables/useAuth'
 import { useFriends, type FriendUser } from '@/composables/useFriends'
 import { useGpsTrackStore, type SavedTrack } from '@/stores/gpsTrack'

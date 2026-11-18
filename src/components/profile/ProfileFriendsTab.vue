@@ -7,7 +7,7 @@ import {
   Globe,
   Check,
   AlertCircle,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import {
   useFriends,
   type FriendUser,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
-import { Mountain, MapPin, EyeOff, X } from 'lucide-vue-next'
+import { Mountain, MapPin, EyeOff, X } from '@lucide/vue'
 
 const props = withDefaults(
   defineProps<{

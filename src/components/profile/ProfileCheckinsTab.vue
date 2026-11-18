@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Mountain, X } from 'lucide-vue-next'
+import { Mountain, X } from '@lucide/vue'
 import type { FirebaseCheckinItem } from '@/composables/useAuth'
 import EditCheckinModal from '../EditCheckinModal.vue'
 import UserCheckinCard from './UserCheckinCard.vue'

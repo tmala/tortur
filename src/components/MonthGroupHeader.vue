@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Calendar, ChevronDown } from 'lucide-vue-next'
+import { Calendar, ChevronDown } from '@lucide/vue'
 
 const props = withDefaults(
   defineProps<{

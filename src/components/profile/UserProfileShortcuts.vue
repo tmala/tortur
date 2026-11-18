@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Route, Star, Users, ClipboardList } from 'lucide-vue-next'
+import { Route, Star, Users, ClipboardList } from '@lucide/vue'
 
 defineProps<{
   isAdmin?: boolean
