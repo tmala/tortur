@@ -11,6 +11,7 @@ import TurpostCheckinsModal from '@/components/TurpostCheckinsModal.vue'
 import AddTurpostModal from '@/components/AddTurpostModal.vue'
 import MapContextMenu from '@/components/MapContextMenu.vue'
 import MapLayerButton from '@/components/MapLayerButton.vue'
+import ZoomableImage from '@/components/ZoomableImage.vue'
 
 const Map3DModal = defineAsyncComponent(() => import('@/components/map3d/Map3DModal.vue'))
 import {
@@ -1256,17 +1257,12 @@ onUnmounted(() => {
           <ChevronRight :size="24" />
         </button>
 
-        <img
+        <ZoomableImage
           :src="selectedPhotoForModal.url"
+          :fallback-src="selectedPhotoForModal.thumbnailUrl || selectedPhotoForModal.thumbnailDataUrl"
           :alt="selectedPhotoForModal.filename"
-          class="lightbox-image"
-          @error="(e) => {
-            const target = e.target as HTMLImageElement
-            const fallback = selectedPhotoForModal?.thumbnailUrl || selectedPhotoForModal?.thumbnailDataUrl
-            if (fallback && target.src !== fallback) {
-              target.src = fallback
-            }
-          }"
+          @swipe-prev="handlePrevPhoto"
+          @swipe-next="handleNextPhoto"
         />
 
         <!-- Miniatyrbilde-stripe hvis flere bilder i klyngen -->
@@ -1578,8 +1574,9 @@ onUnmounted(() => {
 
 .lightbox-content {
   position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
+  max-width: 96vw;
+  max-height: 94vh;
+  max-height: 94dvh;
   display: flex;
   flex-direction: column;
   align-items: center;

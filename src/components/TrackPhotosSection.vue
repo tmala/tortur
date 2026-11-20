@@ -21,6 +21,7 @@ import {
   type TrackPhoto,
   isFileWithinTrackTime
 } from '@/composables/useTrackPhotos'
+import ZoomableImage from '@/components/ZoomableImage.vue'
 
 const props = defineProps<{
   track: SavedTrack
@@ -392,17 +393,10 @@ onMounted(() => {
           <X :size="20" />
         </button>
 
-        <img
+        <ZoomableImage
           :src="selectedPhotoForModal.url"
+          :fallback-src="selectedPhotoForModal.thumbnailUrl || selectedPhotoForModal.thumbnailDataUrl"
           :alt="selectedPhotoForModal.filename"
-          class="lightbox-image"
-          @error="(e) => {
-            const target = e.target as HTMLImageElement
-            const fallback = selectedPhotoForModal?.thumbnailUrl || selectedPhotoForModal?.thumbnailDataUrl
-            if (fallback && target.src !== fallback) {
-              target.src = fallback
-            }
-          }"
         />
 
         <div class="lightbox-footer">
@@ -829,8 +823,9 @@ input:checked + .slider:before {
 
 .lightbox-content {
   position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
+  max-width: 96vw;
+  max-height: 94vh;
+  max-height: 94dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
