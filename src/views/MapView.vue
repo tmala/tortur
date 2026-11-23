@@ -672,6 +672,37 @@ const showPhotosOnMap = ref(true)
 const activeTrackPhotos = ref<TrackPhoto[]>([])
 const selectedPhotoForModal = ref<TrackPhoto | null>(null)
 const isTrackPhotoFullscreen = ref(false)
+let lastFullscreenClosedAt = 0
+
+const closeTrackPhotoModal = () => {
+  isTrackPhotoFullscreen.value = false
+  selectedPhotoForModal.value = null
+}
+
+const closeTrackPhotoFullscreen = () => {
+  lastFullscreenClosedAt = Date.now()
+  isTrackPhotoFullscreen.value = false
+}
+
+const handleCarouselImageClick = (e: MouseEvent) => {
+  if (Date.now() - lastFullscreenClosedAt < 400) {
+    return
+  }
+
+  const target = e.currentTarget as HTMLElement | null
+  if (target) {
+    const rect = target.getBoundingClientRect()
+    if (rect.width > 0 && rect.height > 0) {
+      // Sikkerhetssone rundt lukkeknappen oppe til høyre (72x72px): lukk karusellen i stedet for å åpne fullskjerm
+      if (e.clientX >= rect.right - 72 && e.clientY <= rect.top + 72) {
+        closeTrackPhotoModal()
+        return
+      }
+    }
+  }
+
+  isTrackPhotoFullscreen.value = true
+}
 
 const { fetchTrackPhotos } = useTrackPhotos()
 
@@ -1244,27 +1275,41 @@ onUnmounted(() => {
     <div
       v-if="selectedPhotoForModal"
       class="lightbox-backdrop"
-      @click.self="selectedPhotoForModal = null"
+      @click.self="closeTrackPhotoModal"
     >
       <div class="lightbox-content">
-        <button class="btn-lightbox-close" @click="selectedPhotoForModal = null" aria-label="Lukk bildevisning">
-          <CloseIcon :size="20" />
+        <button
+          type="button"
+          class="btn-lightbox-close"
+          aria-label="Lukk bildevisning"
+          title="Lukk bildevisning"
+          @pointerdown.stop
+          @touchstart.stop
+          @click.stop="closeTrackPhotoModal"
+        >
+          <CloseIcon :size="22" />
         </button>
 
         <button
           v-if="hasPrevPhoto"
+          type="button"
           class="btn-lightbox-nav prev"
           aria-label="Forrige bilde"
-          @click="handlePrevPhoto"
+          @pointerdown.stop
+          @touchstart.stop
+          @click.stop="handlePrevPhoto"
         >
           <ChevronLeft :size="24" />
         </button>
 
         <button
           v-if="hasNextPhoto"
+          type="button"
           class="btn-lightbox-nav next"
           aria-label="Neste bilde"
-          @click="handleNextPhoto"
+          @pointerdown.stop
+          @touchstart.stop
+          @click.stop="handleNextPhoto"
         >
           <ChevronRight :size="24" />
         </button>
@@ -1274,7 +1319,7 @@ onUnmounted(() => {
           :alt="selectedPhotoForModal.filename"
           class="lightbox-image is-clickable-fullscreen"
           title="Klikk på bildet for å åpne i fullskjerm"
-          @click="isTrackPhotoFullscreen = true"
+          @click="handleCarouselImageClick"
           @error="(e) => {
             const target = e.target as HTMLImageElement
             const fallback = selectedPhotoForModal?.thumbnailUrl || selectedPhotoForModal?.thumbnailDataUrl
@@ -1336,14 +1381,16 @@ onUnmounted(() => {
         <div
           v-if="isTrackPhotoFullscreen && selectedPhotoForModal"
           class="track-photo-fullscreen-overlay"
-          @click.self="isTrackPhotoFullscreen = false"
+          @click.self="closeTrackPhotoFullscreen"
         >
           <button
             type="button"
             class="btn-fullscreen-close"
             title="Lukk (Esc)"
             aria-label="Lukk fullskjermvisning"
-            @click.stop="isTrackPhotoFullscreen = false"
+            @pointerdown.stop
+            @touchstart.stop
+            @click.stop="closeTrackPhotoFullscreen"
           >
             <CloseIcon :size="24" />
           </button>
@@ -1353,6 +1400,8 @@ onUnmounted(() => {
             type="button"
             class="btn-lightbox-nav prev"
             aria-label="Forrige bilde"
+            @pointerdown.stop
+            @touchstart.stop
             @click.stop="handlePrevPhoto"
           >
             <ChevronLeft :size="24" />
@@ -1363,6 +1412,8 @@ onUnmounted(() => {
             type="button"
             class="btn-lightbox-nav next"
             aria-label="Neste bilde"
+            @pointerdown.stop
+            @touchstart.stop
             @click.stop="handleNextPhoto"
           >
             <ChevronRight :size="24" />
@@ -1384,7 +1435,9 @@ onUnmounted(() => {
             class="btn-fullscreen-close-bottom"
             title="Lukk bilde"
             aria-label="Lukk fullskjermvisning"
-            @click.stop="isTrackPhotoFullscreen = false"
+            @pointerdown.stop
+            @touchstart.stop
+            @click.stop="closeTrackPhotoFullscreen"
           >
             <CloseIcon :size="16" />
             <span>Lukk</span>
@@ -1671,22 +1724,34 @@ onUnmounted(() => {
   position: absolute;
   top: 10px;
   right: 10px;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  color: #f1f5f9;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #ffffff;
   border-radius: 50%;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 10;
+  z-index: 30;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+  touch-action: manipulation;
   transition: all 0.15s ease;
 }
 
+.btn-lightbox-close::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+}
+
+.btn-lightbox-close :deep(svg) {
+  pointer-events: none;
+}
+
 .btn-lightbox-close:hover {
-  background: rgba(239, 68, 68, 0.8);
+  background: rgba(239, 68, 68, 0.85);
   color: #ffffff;
 }
 
