@@ -671,6 +671,7 @@ const showKmMarkers = ref(true)
 const showPhotosOnMap = ref(true)
 const activeTrackPhotos = ref<TrackPhoto[]>([])
 const selectedPhotoForModal = ref<TrackPhoto | null>(null)
+const isTrackPhotoFullscreen = ref(false)
 
 const { fetchTrackPhotos } = useTrackPhotos()
 
@@ -725,6 +726,7 @@ const activePhotoCluster = ref<TrackPhoto[]>([])
 
 const handlePhotoClick = (photo: TrackPhoto, clusterPhotos?: TrackPhoto[]) => {
   selectedPhotoForModal.value = photo
+  isTrackPhotoFullscreen.value = false
 
   // Inkluder alle bildene fra turen i karusellen/stripen
   const allPhotos =
@@ -790,9 +792,19 @@ const handleLightboxKeydown = (e: KeyboardEvent) => {
   } else if (e.key === 'ArrowRight') {
     handleNextPhoto()
   } else if (e.key === 'Escape') {
-    selectedPhotoForModal.value = null
+    if (isTrackPhotoFullscreen.value) {
+      isTrackPhotoFullscreen.value = false
+    } else {
+      selectedPhotoForModal.value = null
+    }
   }
 }
+
+watch(selectedPhotoForModal, (val) => {
+  if (!val) {
+    isTrackPhotoFullscreen.value = false
+  }
+})
 
 // Håndter åpning og lukking av turpost-panel
 const handleToggleTurposter = () => {
@@ -1257,12 +1269,19 @@ onUnmounted(() => {
           <ChevronRight :size="24" />
         </button>
 
-        <ZoomableImage
+        <img
           :src="selectedPhotoForModal.url"
-          :fallback-src="selectedPhotoForModal.thumbnailUrl || selectedPhotoForModal.thumbnailDataUrl"
           :alt="selectedPhotoForModal.filename"
-          @swipe-prev="handlePrevPhoto"
-          @swipe-next="handleNextPhoto"
+          class="lightbox-image is-clickable-fullscreen"
+          title="Klikk på bildet for å åpne i fullskjerm"
+          @click="isTrackPhotoFullscreen = true"
+          @error="(e) => {
+            const target = e.target as HTMLImageElement
+            const fallback = selectedPhotoForModal?.thumbnailUrl || selectedPhotoForModal?.thumbnailDataUrl
+            if (fallback && target.src !== fallback) {
+              target.src = fallback
+            }
+          }"
         />
 
         <!-- Miniatyrbilde-stripe hvis flere bilder i klyngen -->
@@ -1311,6 +1330,67 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
+
+      <!-- Ren fullskjermvisning ved klikk på bildet i karusellen (uten miniatyrstripe, med pinch-zoom, forrige/neste og Lukk oppe/nede) -->
+      <Transition name="fade-slide">
+        <div
+          v-if="isTrackPhotoFullscreen && selectedPhotoForModal"
+          class="track-photo-fullscreen-overlay"
+          @click.self="isTrackPhotoFullscreen = false"
+        >
+          <button
+            type="button"
+            class="btn-fullscreen-close"
+            title="Lukk (Esc)"
+            aria-label="Lukk fullskjermvisning"
+            @click.stop="isTrackPhotoFullscreen = false"
+          >
+            <CloseIcon :size="24" />
+          </button>
+
+          <button
+            v-if="hasPrevPhoto"
+            type="button"
+            class="btn-lightbox-nav prev"
+            aria-label="Forrige bilde"
+            @click.stop="handlePrevPhoto"
+          >
+            <ChevronLeft :size="24" />
+          </button>
+
+          <button
+            v-if="hasNextPhoto"
+            type="button"
+            class="btn-lightbox-nav next"
+            aria-label="Neste bilde"
+            @click.stop="handleNextPhoto"
+          >
+            <ChevronRight :size="24" />
+          </button>
+
+          <div class="track-photo-fullscreen-wrapper" @click.stop>
+            <ZoomableImage
+              :src="selectedPhotoForModal.url"
+              :fallback-src="selectedPhotoForModal.thumbnailUrl || selectedPhotoForModal.thumbnailDataUrl"
+              :alt="selectedPhotoForModal.filename"
+              fullscreen
+              @swipe-prev="handlePrevPhoto"
+              @swipe-next="handleNextPhoto"
+            />
+          </div>
+
+          <button
+            type="button"
+            class="btn-fullscreen-close-bottom"
+            title="Lukk bilde"
+            aria-label="Lukk fullskjermvisning"
+            @click.stop="isTrackPhotoFullscreen = false"
+          >
+            <CloseIcon :size="16" />
+            <span>Lukk</span>
+          </button>
+        </div>
+      </Transition>
     </div>
 
     <AppHeader
@@ -1615,6 +1695,103 @@ onUnmounted(() => {
   max-height: 75vh;
   object-fit: contain;
   display: block;
+}
+
+.lightbox-image.is-clickable-fullscreen {
+  cursor: zoom-in;
+}
+
+.track-photo-fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20100;
+  background: rgba(0, 0, 0, 0.94);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: calc(max(16px, env(safe-area-inset-top, 0px)) + 64px);
+  padding-bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 64px);
+  padding-left: calc(max(16px, env(safe-area-inset-left, 0px)));
+  padding-right: calc(max(16px, env(safe-area-inset-right, 0px)));
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.track-photo-fullscreen-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+  cursor: default;
+}
+
+.btn-fullscreen-close {
+  position: absolute;
+  top: calc(max(16px, env(safe-area-inset-top, 0px)) + 12px);
+  right: calc(max(16px, env(safe-area-inset-right, 0px)) + 12px);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 20;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+}
+
+.btn-fullscreen-close:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.05);
+}
+
+.btn-fullscreen-close:active {
+  transform: scale(0.95);
+  background: rgba(56, 189, 248, 0.35);
+}
+
+.btn-fullscreen-close-bottom {
+  position: absolute;
+  bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 9999px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 20;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+}
+
+.btn-fullscreen-close-bottom:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.btn-fullscreen-close-bottom:active {
+  transform: translateX(-50%) scale(0.96);
+  background: rgba(56, 189, 248, 0.35);
 }
 
 .btn-lightbox-nav {

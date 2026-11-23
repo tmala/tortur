@@ -11,11 +11,13 @@ const props = withDefaults(
     fallbackSrc?: string
     alt: string
     maxScale?: number
+    fullscreen?: boolean
   }>(),
   {
     fullSrc: undefined,
     fallbackSrc: undefined,
     maxScale: 8,
+    fullscreen: false,
   },
 )
 
@@ -28,13 +30,15 @@ const emit = defineEmits<{
 const stageEl = useTemplateRef<HTMLDivElement>('stageEl')
 const imgEl = useTemplateRef<HTMLImageElement>('imgEl')
 
-const currentSrc = ref<string>(props.src)
-const fullSrcFailed = ref<boolean>(false)
-
 const effectiveFullSrc = computed(() => {
   if (props.fullSrc) return props.fullSrc
   return getFullSizePhotoUrl(props.src)
 })
+
+const currentSrc = ref<string>(
+  props.fullscreen && effectiveFullSrc.value ? effectiveFullSrc.value : props.src,
+)
+const fullSrcFailed = ref<boolean>(false)
 
 const {
   scale,
@@ -96,7 +100,8 @@ watch(
   () => props.src,
   (newSrc) => {
     fullSrcFailed.value = false
-    currentSrc.value = newSrc
+    const nextFull = props.fullSrc || getFullSizePhotoUrl(newSrc)
+    currentSrc.value = props.fullscreen && nextFull ? nextFull : newSrc
     reset()
   },
 )
@@ -129,7 +134,11 @@ defineExpose({
   <div
     ref="stageEl"
     class="zoomable-stage"
-    :class="{ 'is-zoomed': isZoomed, 'is-interacting': isInteracting }"
+    :class="{
+      'is-zoomed': isZoomed,
+      'is-interacting': isInteracting,
+      'is-fullscreen': fullscreen,
+    }"
     @pointerdown="handlePointerDown"
     @pointermove="handlePointerMove"
     @pointerup="handlePointerUp"
@@ -141,7 +150,7 @@ defineExpose({
       ref="imgEl"
       :src="currentSrc"
       :alt="alt"
-      class="zoomable-image lightbox-image"
+      class="zoomable-image lightbox-image lightbox-img"
       :style="{ transform: transformStyle }"
       draggable="false"
       @error="handleImageError"
@@ -202,6 +211,16 @@ defineExpose({
 
 .zoomable-stage.is-interacting .zoomable-image {
   transition: none;
+}
+
+.zoomable-stage.is-fullscreen .zoomable-image {
+  max-width: 96vw;
+  max-height: calc(100vh - 130px);
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 130px);
+  width: auto;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.85);
 }
 
 .btn-reset-zoom {

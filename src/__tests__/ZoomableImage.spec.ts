@@ -78,4 +78,19 @@ describe('ZoomableImage', () => {
       'https://lh3.googleusercontent.com/d/img2',
     )
   })
+
+  it('laster full oppløsning (=s0) umiddelbart og bruker is-fullscreen-klassen når fullscreen er true', () => {
+    const wrapper = mount(ZoomableImage, {
+      props: {
+        src: 'https://lh3.googleusercontent.com/d/full123',
+        alt: 'Fullskjermbilde',
+        fullscreen: true,
+      },
+    })
+
+    expect(wrapper.find('.zoomable-stage').classes()).toContain('is-fullscreen')
+    expect(wrapper.find('img.zoomable-image').attributes('src')).toBe(
+      'https://lh3.googleusercontent.com/d/full123=s0',
+    )
+  })
 })
