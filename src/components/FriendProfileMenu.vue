@@ -25,6 +25,7 @@ import CheckinSocialSection from './CheckinSocialSection.vue'
 import MonthGroupHeader from './MonthGroupHeader.vue'
 import { useMonthGroups } from '@/composables/useMonthGroups'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import ZoomableImage from '@/components/ZoomableImage.vue'
 
 const props = defineProps<{
   isOpen: boolean
@@ -46,8 +47,6 @@ const isLoading = ref(false)
 // Som standard er alle innsjekkinger minimert (ikke ekspandert).
 const expandedCheckinIds = ref<Set<string>>(new Set())
 const lightboxImage = ref<string | null>(null)
-
-
 
 async function loadCheckins() {
   if (!props.friend?.userId) {
@@ -77,12 +76,7 @@ const uniqueTurpostIds = computed(() => {
 })
 
 // Månedsgruppering av vennens innsjekkinger
-const {
-  monthGroups,
-  isMonthExpanded,
-  toggleMonth,
-  resetToLatest,
-} = useMonthGroups(checkins, {
+const { monthGroups, isMonthExpanded, toggleMonth, resetToLatest } = useMonthGroups(checkins, {
   getDate: (item) => item.timestamp,
 })
 
@@ -280,19 +274,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <transition
-    name="modal-fade"
-    appear
-    @after-leave="handleAfterLeave"
-  >
-      <div
-        v-if="isOpen && friend && !isClosing"
-        class="friend-profile-backdrop"
-        @click.self="requestClose"
-      >
-        <div
-          class="friend-profile-card glass-panel"
-        >
+  <transition name="modal-fade" appear @after-leave="handleAfterLeave">
+    <div
+      v-if="isOpen && friend && !isClosing"
+      class="friend-profile-backdrop"
+      @click.self="requestClose"
+    >
+      <div class="friend-profile-card glass-panel">
         <!-- Modal Header -->
         <div class="card-header">
           <div class="user-info-row">
@@ -369,7 +357,9 @@ onUnmounted(() => {
                 <MapPin :size="20" />
               </div>
               <div class="stat-content">
-                <span class="stat-num">{{ isLoadingTracks ? '…' : formatDistance(totalTracksDistanceMeters) }}</span>
+                <span class="stat-num">{{
+                  isLoadingTracks ? '…' : formatDistance(totalTracksDistanceMeters)
+                }}</span>
                 <span class="stat-label">Total distanse</span>
               </div>
             </div>
@@ -415,133 +405,131 @@ onUnmounted(() => {
               <p>{{ friend.userName }} har ingen delte innsjekkinger enda.</p>
             </div>
 
-          <div v-else class="checkins-month-groups">
-            <div
-              v-for="group in monthGroups"
-              :key="group.key"
-              class="month-group"
-            >
-              <MonthGroupHeader
-                :label="group.label"
-                :count="group.items.length"
-                :is-expanded="isMonthExpanded(group.key)"
-                accent-color="#38bdf8"
-                @toggle="toggleMonth(group.key)"
-              />
-
-              <div v-if="isMonthExpanded(group.key)" class="month-items-list checkins-accordion">
-                <div
-                  v-for="item in group.items"
-                  :key="item.id"
-                  class="checkin-item"
-                  :class="{ expanded: isExpanded(item.id) }"
-                >
-                  <!-- Overskriftsrad (klikkbar for ekspandering) -->
-                  <button type="button" class="checkin-header-btn" @click="toggleExpand(item.id)">
-                <div class="checkin-title-left">
-                  <span class="turpost-name">{{ item.turpostName || 'Navnløs turpost' }}</span>
-                  <span
-                    v-if="item.visibility === 'friends'"
-                    class="vis-tag friends"
-                    title="Delt med venner"
-                  >
-                    <Users :size="10" /> Venner
-                  </span>
-                  <span v-else class="vis-tag all" title="Offentlig tur">
-                    <Globe :size="10" /> Alle
-                  </span>
-                </div>
-
-                <div class="checkin-title-right">
-                  <button
-                    v-if="item.trackId"
-                    type="button"
-                    class="btn-friend-track-header"
-                    title="Vis tilknyttet GPS-spor på kart"
-                    aria-label="Vis GPS-spor på kart"
-                    @click.stop="handleViewTrack(item)"
-                  >
-                    <Route :size="11" />
-                    <span>GPS-spor</span>
-                  </button>
-                  <span class="checkin-date">
-                    <Calendar :size="11" />
-                    {{ formatDate(item.timestamp) }}
-                  </span>
-                  <ChevronDown
-                    :size="16"
-                    class="chevron-icon"
-                    :class="{ rotated: isExpanded(item.id) }"
-                  />
-                </div>
-              </button>
-
-              <!-- Ekspandert innhold -->
-              <div v-if="isExpanded(item.id)" class="checkin-expanded-content">
-                <!-- Beskrivelse / Turboknotat -->
-                <div v-if="item.description" class="checkin-desc-bubble">
-                  <p>{{ item.description }}</p>
-                </div>
-
-                <!-- Bilde -->
-                <div v-if="item.imageUrl" class="checkin-photo-wrap">
-                  <button
-                    type="button"
-                    class="photo-btn"
-                    title="Klikk for fullskjermvisning"
-                    @click="lightboxImage = item.imageUrl"
-                  >
-                    <img
-                      :src="item.imageUrl"
-                      alt="Turbilde"
-                      class="checkin-photo-thumb"
-                      loading="lazy"
-                    />
-                    <div class="photo-overlay">
-                      <Maximize2 :size="16" />
-                    </div>
-                  </button>
-                </div>
-
-                <p v-if="!item.description && !item.imageUrl" class="checkin-empty-detail">
-                  Ingen turboknotat eller bilde registrert på denne turen.
-                </p>
-
-                <!-- Handlingsknapper (Vis på kart og GPS-spor) -->
-                <div class="checkin-actions-bar">
-                  <button
-                    type="button"
-                    class="btn-checkin-action"
-                    title="Vis og flytt kartet til denne turposten"
-                    @click.stop="handleViewOnMap(item)"
-                  >
-                    <MapIcon :size="12" />
-                    <span>Vis på kart</span>
-                  </button>
-                  <button
-                    v-if="item.trackId"
-                    type="button"
-                    class="btn-checkin-action track-action"
-                    title="Vis tilknyttet GPS-spor på kart"
-                    @click.stop="handleViewTrack(item)"
-                  >
-                    <Route :size="12" />
-                    <span>GPS-spor</span>
-                  </button>
-                </div>
-
-                <!-- Reaksjoner og kommentarer -->
-                <CheckinSocialSection
-                  :checkin="item"
-                  :current-user-id="currentUserId"
-                  @updated="handleSocialUpdated"
+            <div v-else class="checkins-month-groups">
+              <div v-for="group in monthGroups" :key="group.key" class="month-group">
+                <MonthGroupHeader
+                  :label="group.label"
+                  :count="group.items.length"
+                  :is-expanded="isMonthExpanded(group.key)"
+                  accent-color="#38bdf8"
+                  @toggle="toggleMonth(group.key)"
                 />
-              </div>
-            </div>
+
+                <div v-if="isMonthExpanded(group.key)" class="month-items-list checkins-accordion">
+                  <div
+                    v-for="item in group.items"
+                    :key="item.id"
+                    class="checkin-item"
+                    :class="{ expanded: isExpanded(item.id) }"
+                  >
+                    <!-- Overskriftsrad (klikkbar for ekspandering) -->
+                    <button type="button" class="checkin-header-btn" @click="toggleExpand(item.id)">
+                      <div class="checkin-title-left">
+                        <span class="turpost-name">{{
+                          item.turpostName || 'Navnløs turpost'
+                        }}</span>
+                        <span
+                          v-if="item.visibility === 'friends'"
+                          class="vis-tag friends"
+                          title="Delt med venner"
+                        >
+                          <Users :size="10" /> Venner
+                        </span>
+                        <span v-else class="vis-tag all" title="Offentlig tur">
+                          <Globe :size="10" /> Alle
+                        </span>
+                      </div>
+
+                      <div class="checkin-title-right">
+                        <button
+                          v-if="item.trackId"
+                          type="button"
+                          class="btn-friend-track-header"
+                          title="Vis tilknyttet GPS-spor på kart"
+                          aria-label="Vis GPS-spor på kart"
+                          @click.stop="handleViewTrack(item)"
+                        >
+                          <Route :size="11" />
+                          <span>GPS-spor</span>
+                        </button>
+                        <span class="checkin-date">
+                          <Calendar :size="11" />
+                          {{ formatDate(item.timestamp) }}
+                        </span>
+                        <ChevronDown
+                          :size="16"
+                          class="chevron-icon"
+                          :class="{ rotated: isExpanded(item.id) }"
+                        />
+                      </div>
+                    </button>
+
+                    <!-- Ekspandert innhold -->
+                    <div v-if="isExpanded(item.id)" class="checkin-expanded-content">
+                      <!-- Beskrivelse / Turboknotat -->
+                      <div v-if="item.description" class="checkin-desc-bubble">
+                        <p>{{ item.description }}</p>
+                      </div>
+
+                      <!-- Bilde -->
+                      <div v-if="item.imageUrl" class="checkin-photo-wrap">
+                        <button
+                          type="button"
+                          class="photo-btn"
+                          title="Klikk for fullskjermvisning"
+                          @click="lightboxImage = item.imageUrl"
+                        >
+                          <img
+                            :src="item.imageUrl"
+                            alt="Turbilde"
+                            class="checkin-photo-thumb"
+                            loading="lazy"
+                          />
+                          <div class="photo-overlay">
+                            <Maximize2 :size="16" />
+                          </div>
+                        </button>
+                      </div>
+
+                      <p v-if="!item.description && !item.imageUrl" class="checkin-empty-detail">
+                        Ingen turboknotat eller bilde registrert på denne turen.
+                      </p>
+
+                      <!-- Handlingsknapper (Vis på kart og GPS-spor) -->
+                      <div class="checkin-actions-bar">
+                        <button
+                          type="button"
+                          class="btn-checkin-action"
+                          title="Vis og flytt kartet til denne turposten"
+                          @click.stop="handleViewOnMap(item)"
+                        >
+                          <MapIcon :size="12" />
+                          <span>Vis på kart</span>
+                        </button>
+                        <button
+                          v-if="item.trackId"
+                          type="button"
+                          class="btn-checkin-action track-action"
+                          title="Vis tilknyttet GPS-spor på kart"
+                          @click.stop="handleViewTrack(item)"
+                        >
+                          <Route :size="12" />
+                          <span>GPS-spor</span>
+                        </button>
+                      </div>
+
+                      <!-- Reaksjoner og kommentarer -->
+                      <CheckinSocialSection
+                        :checkin="item"
+                        :current-user-id="currentUserId"
+                        @updated="handleSocialUpdated"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
         </template>
 
         <!-- Fane 2: GPS-spor seksjon -->
@@ -559,11 +547,7 @@ onUnmounted(() => {
             </div>
 
             <div v-else class="checkins-month-groups">
-              <div
-                v-for="group in trackMonthGroups"
-                :key="group.key"
-                class="month-group"
-              >
+              <div v-for="group in trackMonthGroups" :key="group.key" class="month-group">
                 <MonthGroupHeader
                   :label="group.label"
                   :count="group.items.length"
@@ -580,7 +564,10 @@ onUnmounted(() => {
                   </template>
                 </MonthGroupHeader>
 
-                <div v-if="isTrackMonthExpanded(group.key)" class="month-items-list tracks-accordion">
+                <div
+                  v-if="isTrackMonthExpanded(group.key)"
+                  class="month-items-list tracks-accordion"
+                >
                   <div
                     v-for="track in group.items"
                     :key="track.id"
@@ -588,13 +575,19 @@ onUnmounted(() => {
                     :class="{ expanded: isTrackExpanded(track.id) }"
                   >
                     <!-- Overskriftsrad (klikkbar) -->
-                    <button type="button" class="track-header-btn" @click="toggleTrackExpand(track.id)">
+                    <button
+                      type="button"
+                      class="track-header-btn"
+                      @click="toggleTrackExpand(track.id)"
+                    >
                       <div class="track-title-left">
                         <span class="track-name" :title="track.name">{{ track.name }}</span>
                         <span
                           class="vis-tag"
                           :class="track.visibility === 'all' ? 'all' : 'friends'"
-                          :title="track.visibility === 'all' ? 'Synlig for alle' : 'Delt med venner'"
+                          :title="
+                            track.visibility === 'all' ? 'Synlig for alle' : 'Delt med venner'
+                          "
                         >
                           <Globe v-if="track.visibility === 'all'" :size="10" />
                           <Users v-else :size="10" />
@@ -621,7 +614,11 @@ onUnmounted(() => {
                       </div>
                       <div class="meta-item">
                         <Calendar :size="12" class="meta-icon" />
-                        <span>{{ formatDate(new Date(track.startTime || track.createdAt).toISOString()).split(',')[0] }}</span>
+                        <span>{{
+                          formatDate(
+                            new Date(track.startTime || track.createdAt).toISOString(),
+                          ).split(',')[0]
+                        }}</span>
                       </div>
                     </div>
 
@@ -654,11 +651,12 @@ onUnmounted(() => {
                 type="button"
                 class="btn-lightbox-close"
                 title="Lukk bildevisning"
+                aria-label="Lukk bildevisning"
                 @click="lightboxImage = null"
               >
                 <X :size="20" />
               </button>
-              <img :src="lightboxImage" alt="Fullskjerm turbilde" class="lightbox-img" />
+              <ZoomableImage :src="lightboxImage" alt="Fullskjerm turbilde" fullscreen />
             </div>
           </div>
         </transition>
@@ -714,7 +712,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 14px calc(20px + env(safe-area-inset-left, 0px));
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 14px
+    calc(20px + env(safe-area-inset-left, 0px));
   background: rgba(15, 23, 42, 0.7);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -1010,7 +1009,9 @@ onUnmounted(() => {
 
 .track-chevron {
   color: #64748b;
-  transition: transform 0.2s ease, color 0.15s ease;
+  transition:
+    transform 0.2s ease,
+    color 0.15s ease;
   flex-shrink: 0;
 }
 
@@ -1154,7 +1155,8 @@ onUnmounted(() => {
 .checkins-scroll-area {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 20px calc(24px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
+  padding: 12px 20px calc(24px + env(safe-area-inset-bottom, 0px))
+    calc(20px + env(safe-area-inset-left, 0px));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1455,6 +1457,7 @@ onUnmounted(() => {
   position: absolute;
   top: -14px;
   right: -14px;
+  z-index: 20;
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;

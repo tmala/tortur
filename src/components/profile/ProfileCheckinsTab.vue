@@ -7,6 +7,7 @@ import UserCheckinCard from './UserCheckinCard.vue'
 import MonthGroupHeader from '../MonthGroupHeader.vue'
 import { useMonthGroups } from '@/composables/useMonthGroups'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import ZoomableImage from '@/components/ZoomableImage.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -177,12 +178,11 @@ function handleCheckinDeleted(deletedId: string) {
         >
           <X :size="24" />
         </button>
-        <div class="lightbox-content" @click="lightboxImage = null">
-          <img
+        <div class="lightbox-content" @click.stop>
+          <ZoomableImage
             :src="lightboxImage"
             alt="Turbilde fullskjerm"
-            class="lightbox-img"
-            title="Trykk hvor som helst for å lukke"
+            fullscreen
           />
         </div>
         <button
@@ -349,6 +349,7 @@ function handleCheckinDeleted(deletedId: string) {
   position: absolute;
   top: calc(max(16px, env(safe-area-inset-top, 0px)) + 12px);
   right: calc(max(16px, env(safe-area-inset-right, 0px)) + 12px);
+  z-index: 20;
   background: rgba(15, 23, 42, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #ffffff;

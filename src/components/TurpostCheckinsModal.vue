@@ -10,6 +10,7 @@ import { useAppStateStore } from '@/stores/appState'
 import { useFirebaseTracks } from '@/composables/useFirebaseTracks'
 import EditCheckinModal from './EditCheckinModal.vue'
 import CheckinSocialSection from './CheckinSocialSection.vue'
+import ZoomableImage from './ZoomableImage.vue'
 import {
   type GeoLocationState,
   calculateDistanceMeters,
@@ -773,12 +774,11 @@ onUnmounted(() => {
             >
               <X :size="24" />
             </button>
-            <div class="lightbox-img-wrapper" @click="selectedImage = null">
-              <img
+            <div class="lightbox-img-wrapper" @click.stop>
+              <ZoomableImage
                 :src="selectedImage"
                 alt="Forstørret turbilde"
-                class="lightbox-img"
-                title="Trykk hvor som helst for å lukke"
+                fullscreen
               />
             </div>
             <button
