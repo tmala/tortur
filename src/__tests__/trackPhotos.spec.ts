@@ -845,6 +845,10 @@ describe('useTrackPhotos', () => {
       const elapsed = wrapper.find('.timeline-elapsed')
       expect(elapsed.text()).toBe('1:15:00')
 
+      const distance = wrapper.find('.timeline-distance')
+      expect(distance.exists()).toBe(true)
+      expect(distance.text()).toContain('km')
+
       const duration = wrapper.find('.timeline-duration')
       expect(duration.text()).toBe('2:30:00')
 

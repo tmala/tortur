@@ -127,12 +127,17 @@ const totalDurationFormatted = computed(() => {
   return formatPlaybackTime(effectiveDurationMs.value)
 })
 
+const currentInterpolatedPos = computed(() => {
+  const points = props.track.points
+  if (!points || points.length < 2) return null
+  return interpolatePositionAtElapsedMs(points, currentElapsedMs.value, effectiveDurationMs.value)
+})
+
 const currentClockTime = computed(() => {
   const points = props.track.points
   if (points && points.length >= 2 && hasTrackTimestamps(points)) {
-    const pos = interpolatePositionAtElapsedMs(points, currentElapsedMs.value, effectiveDurationMs.value)
-    if (pos?.timestamp) {
-      return formatClockTime(pos.timestamp, true)
+    if (currentInterpolatedPos.value?.timestamp) {
+      return formatClockTime(currentInterpolatedPos.value.timestamp, true)
     }
   }
 
@@ -142,6 +147,21 @@ const currentClockTime = computed(() => {
   }
 
   return null
+})
+
+const hasTrackDistance = computed(() => {
+  return (props.track.distanceMeters ?? 0) > 0 || (props.track.points?.length ?? 0) >= 2
+})
+
+const currentDistanceMeters = computed(() => {
+  if (currentInterpolatedPos.value) {
+    return currentInterpolatedPos.value.distanceMeters
+  }
+  return Math.max(0, currentProgress.value * (props.track.distanceMeters ?? 0))
+})
+
+const currentDistanceFormatted = computed(() => {
+  return formatDistance(currentDistanceMeters.value)
 })
 
 function onSliderPointerDown() {
@@ -783,6 +803,14 @@ defineExpose({
           <span class="timeline-elapsed" title="Medgått spilletid">
             {{ elapsedFormatted }}
           </span>
+          <!-- Tilbakelagt distanse til nå -->
+          <span
+            v-if="hasTrackDistance"
+            class="timeline-distance"
+            title="Tilbakelagt distanse til nå"
+          >
+            · {{ currentDistanceFormatted }}
+          </span>
         </div>
         <!-- Total varighet -->
         <span class="timeline-duration" title="Total varighet">
@@ -1344,6 +1372,14 @@ input:checked + .slider:before {
   font-weight: 600;
   color: #f1f5f9;
   font-variant-numeric: tabular-nums;
+}
+
+.timeline-distance {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #34d399;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .timeline-duration {

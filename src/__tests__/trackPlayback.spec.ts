@@ -89,6 +89,14 @@ describe('trackPlayback', () => {
       expect(pos!.lng).toBeCloseTo(5.0000, 4)
       expect(pos!.bearing).toBeCloseTo(0, 0) // beveget seg nordover
       expect(pos!.timestamp).toBe(15000)
+      expect(pos!.distanceMeters).toBeGreaterThan(500)
+      expect(pos!.distanceMeters).toBeLessThan(600)
+
+      // Ved start er distansen 0, ved slutt er den summen av begge segmentene (> 2000 m)
+      const posStart = interpolatePositionAtElapsedMs(testPoints, 0, 20000)
+      expect(posStart!.distanceMeters).toBe(0)
+      const posEnd = interpolatePositionAtElapsedMs(testPoints, 20000, 20000)
+      expect(posEnd!.distanceMeters).toBeGreaterThan(2000)
     })
 
     it('spiller av ekte Rollandsoksen GPX (3.8 km)', () => {
