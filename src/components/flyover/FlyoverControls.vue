@@ -51,10 +51,10 @@ const speedOptions = [
   { label: '2x', value: 2.0 }
 ]
 
-const cameraModes: { id: FlyoverCameraMode; label: string; icon: string }[] = [
-  { id: 'follow', label: 'Følg sporet', icon: '🎬' },
-  { id: 'orbit', label: 'Orbit', icon: '🔄' },
-  { id: 'birdsEye', label: 'Oversikt', icon: '🦅' }
+const cameraModes: { id: FlyoverCameraMode; label: string; icon: string; title: string }[] = [
+  { id: 'follow', label: 'Følg sporet', icon: '🎬', title: 'Følger kjøreretningen med automatisk høydejustering over terrenget' },
+  { id: 'orbit', label: 'Sveip', icon: '🔄', title: 'Sveiper mykt ±50° frem og tilbake med fri sikt til sporet' },
+  { id: 'birdsEye', label: 'Oversikt', icon: '🦅', title: 'Høyt fugleperspektiv mot nord' }
 ]
 
 const currentProgressPercent = computed(() => {
@@ -99,7 +99,7 @@ const handleSliderChange = (e: Event) => {
             type="button"
             class="toggle-btn"
             :class="{ active: cameraMode === mode.id }"
-            :title="mode.label"
+            :title="mode.title"
             :aria-label="mode.label"
             @click="emit('set-camera-mode', mode.id)"
           >

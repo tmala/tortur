@@ -89,6 +89,40 @@ describe('useFlyoverCamera', () => {
     updateCamera(mockPt, 0.1)
     expect(jumpToCalls.length).toBe(2)
   })
+
+  it('sveiper frem og tilbake i orbit-modus og løfter pitch ved terrenghinder i både Sveip og Følg sporet', () => {
+    const jumpToCalls: Array<{ bearing: number; pitch: number }> = []
+    const mockMap = {
+      jumpTo: (opts: { bearing: number; pitch: number }) => {
+        jumpToCalls.push(opts)
+      },
+      setZoom: vi.fn(),
+      setPitch: vi.fn(),
+      getTerrain: () => ({ source: 'aws-terrain', exaggeration: 1.3 }),
+      // Terreng som stiger kraftig i vest (lavere lng) slik at kameraet får et hinder bak seg når det ser østover (bearing 90°)
+      queryTerrainElevation: ([lng]: [number, number]) => (lng < 5.099 ? 400 : 100),
+    } as unknown as MapLibreMap
+
+    const { setCameraMode, updateCamera } = useFlyoverCamera(() => mockMap)
+    const mockPt = {
+      lat: 60.1,
+      lng: 5.1,
+      bearing: 90,
+      distanceMeters: 50,
+      progress: 0.1,
+    }
+
+    // Følg sporet (bearing 90°, hinder i vest) -> pitch må løftes (lavere enn 65°)
+    updateCamera(mockPt, 0.1)
+    expect(jumpToCalls[0]!.pitch).toBeLessThan(50)
+
+    // Sveip (orbit) -> finner den åpne siden (øst, dvs. ser vestover ~270°) og pendler innenfor ±50°
+    setCameraMode('orbit')
+    updateCamera(mockPt, 0.1)
+    const firstSweepBearing = jumpToCalls[1]!.bearing
+    expect(firstSweepBearing).toBeGreaterThan(215)
+    expect(firstSweepBearing).toBeLessThan(325)
+  })
 })
 
 describe('ElevationProfile', () => {
