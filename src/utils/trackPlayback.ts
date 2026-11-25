@@ -6,6 +6,7 @@ export interface InterpolatedTrackPosition {
   lng: number
   bearing: number
   progress: number // 0.0 til 1.0
+  distanceMeters: number // Tilbakelagt avstand langs sporet i meter
   timestamp?: number
 }
 
@@ -88,12 +89,14 @@ export function interpolatePositionAtElapsedMs(
   if (hasTrackTimestamps(points)) {
     const firstTime = points[0]!.timestamp!
     const targetTime = firstTime + clampedElapsed
+    let accumulatedDist = 0
 
     for (let i = 1; i < points.length; i++) {
       const pPrev = points[i - 1]!
       const pCurr = points[i]!
       const tPrev = pPrev.timestamp ?? firstTime
       const tCurr = pCurr.timestamp ?? firstTime
+      const segDist = calculateDistanceMeters(pPrev.lat, pPrev.lng, pCurr.lat, pCurr.lng)
 
       if (tCurr >= targetTime || i === points.length - 1) {
         const segDuration = tCurr - tPrev
@@ -101,9 +104,12 @@ export function interpolatePositionAtElapsedMs(
         const lat = pPrev.lat + fraction * (pCurr.lat - pPrev.lat)
         const lng = pPrev.lng + fraction * (pCurr.lng - pPrev.lng)
         const bearing = calculateBearingDegrees(pPrev.lat, pPrev.lng, pCurr.lat, pCurr.lng)
+        const distanceMeters = accumulatedDist + fraction * segDist
 
-        return { lat, lng, bearing, progress, timestamp: Math.round(targetTime) }
+        return { lat, lng, bearing, progress, distanceMeters, timestamp: Math.round(targetTime) }
       }
+
+      accumulatedDist += segDist
     }
   }
 
@@ -128,7 +134,8 @@ export function interpolatePositionAtProgress(
       lat: p0.lat,
       lng: p0.lng,
       bearing: calculateBearingDegrees(p0.lat, p0.lng, p1.lat, p1.lng),
-      progress: 0
+      progress: 0,
+      distanceMeters: 0
     }
   }
 
@@ -145,7 +152,7 @@ export function interpolatePositionAtProgress(
 
   if (totalDist === 0) {
     const p0 = points[0]!
-    return { lat: p0.lat, lng: p0.lng, bearing: 0, progress: 0 }
+    return { lat: p0.lat, lng: p0.lng, bearing: 0, progress: 0, distanceMeters: 0 }
   }
 
   const targetDist = clampedProgress * totalDist
@@ -164,7 +171,7 @@ export function interpolatePositionAtProgress(
       const lng = pPrev.lng + fraction * (pCurr.lng - pPrev.lng)
       const bearing = calculateBearingDegrees(pPrev.lat, pPrev.lng, pCurr.lat, pCurr.lng)
 
-      return { lat, lng, bearing, progress: clampedProgress }
+      return { lat, lng, bearing, progress: clampedProgress, distanceMeters: targetDist }
     }
   }
 
@@ -174,7 +181,8 @@ export function interpolatePositionAtProgress(
     lat: pLast.lat,
     lng: pLast.lng,
     bearing: calculateBearingDegrees(pPenultimate.lat, pPenultimate.lng, pLast.lat, pLast.lng),
-    progress: 1
+    progress: 1,
+    distanceMeters: totalDist
   }
 }
 
