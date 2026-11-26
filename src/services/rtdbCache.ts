@@ -151,6 +151,9 @@ class IndexedDbCacheStorage implements IRtdbCacheStorage {
       try {
         const tx = db.transaction('entries', 'readwrite')
         const store = tx.objectStore('entries')
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => resolve()
+        tx.onabort = () => resolve()
         const req = store.getAllKeys()
         req.onsuccess = () => {
           const keys = req.result as string[]
@@ -159,7 +162,6 @@ class IndexedDbCacheStorage implements IRtdbCacheStorage {
               store.delete(k)
             }
           }
-          resolve()
         }
         req.onerror = () => resolve()
       } catch {
@@ -423,7 +425,5 @@ export async function clearRtdbCache(): Promise<void> {
 }
 
 // Koble til automatisk ugyldiggjøring ved skrivinger via fetchFirebase
-setFirebaseMutationHook((url) => {
-  invalidateRtdbPath(url).catch(() => {})
-})
+setFirebaseMutationHook((url) => invalidateRtdbPath(url).catch(() => {}))
 

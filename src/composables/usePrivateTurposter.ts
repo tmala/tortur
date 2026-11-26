@@ -716,14 +716,15 @@ export function usePrivateTurposter() {
     }
 
     // Opprett innsjekk og lagre bildet i Google Drive via Cloud Function backend.
-    // Vi setter visibility: 'private' til submitCheckin så backend/useAuth ikke oppretter offentlig turpost-/vennekopi.
+    // Vi setter skipFirebaseSync: true slik at useAuth ikke skriver til offentlig/privat-noder som vi måtte slettet etterpå.
     const backendResult = await submitCheckin({
       turpostId: String(params.post.id),
       turpostName: params.post.name,
       description: params.description || '',
       imageFile: params.imageFile || undefined,
       trackId: params.trackId || undefined,
-      visibility: 'private'
+      visibility: 'private',
+      skipFirebaseSync: true
     })
 
     const checkinId = backendResult.id || `checkin_${Date.now()}`
@@ -765,25 +766,6 @@ export function usePrivateTurposter() {
       throw new Error(`Kunne ikke lagre privat innsjekking (status ${res.status})`)
     }
 
-    // Backend synkroniserer automatisk alle innsjekkinger til offentlig turpost- og bruker-indeks.
-    // For private turposter skal innsjekkingen kun ligge under my_spots_checkins; rydd derfor opp eventuelle andre noder:
-    try {
-      const cleanupTurpostUrl = `${config.dbUrl}/${config.prefix}/turposter/${encodeURIComponent(String(params.post.id))}/${checkinId}.json`
-      const cleanupUserUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(cleanUserId)}/checkins/${checkinId}.json`
-      const cleanupLegacyUserUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(cleanUserId)}/${checkinId}.json`
-      const cleanupFriendsUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(cleanUserId)}/friends_checkins/${checkinId}.json`
-      const cleanupPrivateUrl = `${config.dbUrl}/${config.prefix}/brukere/${encodeURIComponent(cleanUserId)}/private_checkins/${checkinId}.json`
-      await Promise.all([
-        fetchFirebase(cleanupTurpostUrl, { method: 'DELETE' }),
-        fetchFirebase(cleanupUserUrl, { method: 'DELETE' }),
-        fetchFirebase(cleanupFriendsUrl, { method: 'DELETE' }).catch(() => {}),
-        fetchFirebase(cleanupPrivateUrl, { method: 'DELETE' }).catch(() => {}),
-        fetchFirebase(cleanupLegacyUserUrl, { method: 'DELETE' }).catch(() => {})
-      ])
-    } catch {
-      // Ignorer eventuelle nettverksfeil ved opprydding
-    }
-
     return {
       id: checkinId,
       userId: cleanUserId,
@@ -792,7 +774,12 @@ export function usePrivateTurposter() {
       timestamp: nowIso,
       description: params.description || '',
       imageUrl: photoUrl,
-      userName: params.userName || backendResult.userName
+      userName: params.userName || backendResult.userName,
+      userAvatar: backendResult.userAvatar || '',
+      visibility,
+      isPrivate: true,
+      spotId: String(params.post.id),
+      trackId: params.trackId || backendResult.trackId || undefined
     }
   }
 

@@ -293,6 +293,47 @@ describe('rtdbCache service', () => {
       expect(result.fromCache).toBe(false)
       expect(fetchSpy).toHaveBeenCalledTimes(3)
     })
+
+    it('fetchFirebase venter på asynkron lagringsinvalidering før kallet returnerer', async () => {
+      let deleteCompleted = false
+      const delayedStorage: IRtdbCacheStorage = {
+        get: <T>(key: string) => testStorage.get<T>(key),
+        set: <T>(key: string, entry: CacheEntry<T>) => testStorage.set(key, entry),
+        delete: (key: string) => testStorage.delete(key),
+        clear: () => testStorage.clear(),
+        deleteMatching: async (predicate: (key: string) => boolean) => {
+          await new Promise((resolve) => setTimeout(resolve, 25))
+          await testStorage.deleteMatching(predicate)
+          deleteCompleted = true
+        },
+      }
+      setRtdbCacheStorageForTest(delayedStorage)
+
+      const listUrl = 'https://db.firebaseio.com/prefix/brukere/user_1/my_spots_checkins.json'
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ ETag: 'etag_priv_1' }),
+        json: async () => ({ spot_1: { c_1: { description: 'Gammel' } } }),
+      } as unknown as Response)
+
+      await cachedFetchJson(listUrl, { userId: 'user_1', freshMs: 30_000 })
+
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      } as unknown as Response)
+
+      await fetchFirebase('https://db.firebaseio.com/prefix/brukere/user_1/my_spots_checkins/spot_1/c_2.json', {
+        method: 'PUT',
+        body: JSON.stringify({ description: 'Ny' }),
+      })
+
+      expect(deleteCompleted).toBe(true)
+      const storedAfterMutation = await testStorage.get('user_1:/prefix/brukere/user_1/my_spots_checkins.json')
+      expect(storedAfterMutation).toBeNull()
+    })
   })
 
   describe('clearRtdbCache', () => {
