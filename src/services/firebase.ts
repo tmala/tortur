@@ -220,7 +220,7 @@ export async function getFirebaseIdToken(): Promise<string | null> {
   return sessionStorage.getItem('tortur_firebase_token')
 }
 
-export type FirebaseMutationHook = (url: string) => void
+export type FirebaseMutationHook = (url: string) => void | Promise<void>
 let onMutationHook: FirebaseMutationHook | null = null
 
 export function setFirebaseMutationHook(hook: FirebaseMutationHook | null): void {
@@ -240,7 +240,7 @@ export async function fetchFirebase(url: string, init?: RequestInit): Promise<Re
   const res = await fetch(authedUrl, init)
   if (res.ok && init?.method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(init.method.toUpperCase())) {
     try {
-      onMutationHook?.(url)
+      await onMutationHook?.(url)
     } catch {}
   }
   return res

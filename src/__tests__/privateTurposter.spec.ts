@@ -249,11 +249,14 @@ describe('usePrivateTurposter', () => {
     expect(suggestionCall).toBeUndefined()
   })
 
-  it('submitPrivateCheckin uploads image via backend and saves Google Drive URL to Firebase', async () => {
+  it('submitPrivateCheckin uploads image via backend and saves Google Drive URL to Firebase without redundant DELETE calls', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({})
     } as unknown as Response)
+
+    const { useAuth } = await import('../composables/useAuth')
+    const submitCheckinMock = useAuth().submitCheckin
 
     const { submitPrivateCheckin } = usePrivateTurposter()
     const mockPost: TurpostItem = {
@@ -277,8 +280,17 @@ describe('usePrivateTurposter', () => {
       imageFile: mockFile
     })
 
+    expect(submitCheckinMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        turpostId: 'spot_123',
+        skipFirebaseSync: true
+      })
+    )
+
     expect(result.imageUrl).toBe('https://lh3.googleusercontent.com/d/mock_img')
     expect(result.id).toBe('mock_checkin_id')
+    expect(result.isPrivate).toBe(true)
+    expect(result.spotId).toBe('spot_123')
 
     const putCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('my_spots_checkins/spot_123/mock_checkin_id.json'))
     expect(putCall).toBeDefined()
@@ -287,14 +299,9 @@ describe('usePrivateTurposter', () => {
     expect(savedPayload.imageUrl).toBe('https://lh3.googleusercontent.com/d/mock_img')
     expect(savedPayload.turpostId).toBe('spot_123')
 
-    // Verifiser at backends automatiske offentlige noder ryddes opp (inkludert friends_checkins)
-    const deleteTurpostCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('turposter/spot_123/mock_checkin_id.json'))
-    expect(deleteTurpostCall).toBeDefined()
-    expect(deleteTurpostCall![1]?.method).toBe('DELETE')
-
-    const deleteFriendsCall = fetchSpy.mock.calls.find(c => String(c[0]).includes('friends_checkins/mock_checkin_id.json'))
-    expect(deleteFriendsCall).toBeDefined()
-    expect(deleteFriendsCall![1]?.method).toBe('DELETE')
+    // Skal ikke sende unødvendige eller ulovlige DELETE-kall ved privat innsjekk
+    const deleteCalls = fetchSpy.mock.calls.filter(c => c[1]?.method === 'DELETE')
+    expect(deleteCalls).toHaveLength(0)
   })
 
   it('syncAndCleanApprovedSpotCheckins flytter innsjekking til friends_checkins og sletter fra my_spots_checkins', async () => {

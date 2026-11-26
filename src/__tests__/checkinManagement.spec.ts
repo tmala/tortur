@@ -65,6 +65,12 @@ describe('Checkin deletion and image updates', () => {
       String(c[0]).includes('/brukere/test_user_sub/checkins/c_101.json') && c[1]?.method === 'DELETE'
     )
     expect(fbUserDelete).toBeDefined()
+
+    // Skal ikke sende DELETE til ugyldig legacy-sti direkte under brukere/<userId>/<checkinId>.json
+    const fbLegacyDelete = fetchSpy.mock.calls.find(c =>
+      String(c[0]).includes('/brukere/test_user_sub/c_101.json') && c[1]?.method === 'DELETE'
+    )
+    expect(fbLegacyDelete).toBeUndefined()
   })
 
   it('updatePublicCheckinImage calls Apps Script and Firebase PATCH', async () => {

@@ -38,6 +38,7 @@ export interface CheckinParams {
   imageFile?: File | null
   trackId?: string
   visibility?: 'all' | 'friends' | 'private'
+  skipFirebaseSync?: boolean
 }
 
 export interface CheckinResult {
@@ -51,6 +52,8 @@ export interface CheckinResult {
   userName?: string
   userAvatar?: string
   visibility?: 'all' | 'friends' | 'private'
+  isPrivate?: boolean
+  spotId?: string
   trackId?: string
 }
 
@@ -517,47 +520,50 @@ async function submitCheckin(params: CheckinParams): Promise<CheckinResult> {
   }
 
   // Synkroniser innsjekkingen direkte til Firebase Realtime Database fra webappen
-  const fbConfig = await getFirebaseConfig()
-  if (fbConfig && checkinResult.id && user.value && isValidUserId(user.value.userId)) {
-    try {
-      const cleanUserId = normalizeUserId(user.value.userId)
-      const visibility = params.visibility || checkinResult.visibility || 'all'
-      checkinResult.visibility = visibility
-      const firebaseItem: FirebaseCheckinItem = {
-        id: checkinResult.id,
-        userId: cleanUserId,
-        userName: user.value.userName,
-        userAvatar: user.value.avatarUrl || '',
-        turpostId: String(params.turpostId),
-        turpostName: params.turpostName || '',
-        timestamp: checkinResult.timestamp || new Date().toISOString(),
-        description: params.description || '',
-        imageUrl: checkinResult.imageUrl || '',
-        trackId: params.trackId || checkinResult.trackId || undefined,
-        visibility
-      }
-      const itemJson = JSON.stringify(firebaseItem)
-      const promises: Promise<unknown>[] = []
-
-      if (visibility === 'private') {
-        const privateUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/private_checkins/${encodeURIComponent(checkinResult.id)}.json`
-        promises.push(fetchFirebase(privateUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }))
-      } else {
-        const friendsUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/friends_checkins/${encodeURIComponent(checkinResult.id)}.json`
-        promises.push(fetchFirebase(friendsUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }))
-
-        if (visibility === 'all') {
-          const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(checkinResult.id)}.json`
-          promises.push(fetchFirebase(turpostUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }))
+  // (hoppes over for private turposter som lagres under my_spots_checkins i stedet)
+  if (!params.skipFirebaseSync) {
+    const fbConfig = await getFirebaseConfig()
+    if (fbConfig && checkinResult.id && user.value && isValidUserId(user.value.userId)) {
+      try {
+        const cleanUserId = normalizeUserId(user.value.userId)
+        const visibility = params.visibility || checkinResult.visibility || 'all'
+        checkinResult.visibility = visibility
+        const firebaseItem: FirebaseCheckinItem = {
+          id: checkinResult.id,
+          userId: cleanUserId,
+          userName: user.value.userName,
+          userAvatar: user.value.avatarUrl || '',
+          turpostId: String(params.turpostId),
+          turpostName: params.turpostName || '',
+          timestamp: checkinResult.timestamp || new Date().toISOString(),
+          description: params.description || '',
+          imageUrl: checkinResult.imageUrl || '',
+          trackId: params.trackId || checkinResult.trackId || undefined,
+          visibility
         }
+        const itemJson = JSON.stringify(firebaseItem)
+        const promises: Promise<unknown>[] = []
+
+        if (visibility === 'private') {
+          const privateUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/private_checkins/${encodeURIComponent(checkinResult.id)}.json`
+          promises.push(fetchFirebase(privateUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }))
+        } else {
+          const friendsUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/friends_checkins/${encodeURIComponent(checkinResult.id)}.json`
+          promises.push(fetchFirebase(friendsUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }))
+
+          if (visibility === 'all') {
+            const turpostUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/turposter/${encodeURIComponent(String(params.turpostId))}/${encodeURIComponent(checkinResult.id)}.json`
+            promises.push(fetchFirebase(turpostUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: itemJson }))
+          }
+        }
+
+        const visUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/checkins_visibility/${encodeURIComponent(checkinResult.id)}.json`
+        promises.push(fetchFirebase(visUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(visibility) }))
+
+        await Promise.all(promises)
+      } catch (fbErr) {
+        console.warn('[useAuth] Feil ved direkte lagring av innsjekking i Firebase:', fbErr)
       }
-
-      const visUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/checkins_visibility/${encodeURIComponent(checkinResult.id)}.json`
-      promises.push(fetchFirebase(visUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(visibility) }))
-
-      await Promise.all(promises)
-    } catch (fbErr) {
-      console.warn('[useAuth] Feil ved direkte lagring av innsjekking i Firebase:', fbErr)
     }
   }
 
@@ -620,14 +626,12 @@ async function deletePublicCheckin(params: {
       const userFriendsUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/friends_checkins/${encodeURIComponent(cleanCheckinId)}.json`
       const userPrivateUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/private_checkins/${encodeURIComponent(cleanCheckinId)}.json`
       const userUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/checkins/${encodeURIComponent(cleanCheckinId)}.json`
-      const legacyUserUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/brukere/${encodeURIComponent(cleanUserId)}/${encodeURIComponent(cleanCheckinId)}.json`
       const visUrl = `${fbConfig.dbUrl}/${fbConfig.prefix}/checkins_visibility/${encodeURIComponent(cleanCheckinId)}.json`
       await Promise.all([
         fetchFirebase(turpostUrl, { method: 'DELETE' }),
         fetchFirebase(userFriendsUrl, { method: 'DELETE' }).catch(() => {}),
         fetchFirebase(userPrivateUrl, { method: 'DELETE' }).catch(() => {}),
         fetchFirebase(userUrl, { method: 'DELETE' }).catch(() => {}),
-        fetchFirebase(legacyUserUrl, { method: 'DELETE' }).catch(() => {}),
         fetchFirebase(visUrl, { method: 'DELETE' }).catch(() => {})
       ])
     } catch (err) {
